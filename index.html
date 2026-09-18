@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#6366f1" />
+<title>抽检数量统计</title>
+<style>
+  html,body{margin:0;padding:0;background:#f8fafc;color:#1e293b;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  #boot-fallback{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:8px;z-index:2147483647;padding:24px;text-align:center}
+  #boot-fallback .bf-icon{font-size:40px;line-height:1}
+  #boot-fallback h3{margin:0;font-size:16px;color:#dc2626}
+  #boot-fallback p{margin:0;font-size:13px;line-height:1.6;color:#475569}
+</style>
+</head>
+<body>
+  <div id="boot-fallback">
+    <div class="bf-icon">⏳</div>
+    <div style="font-size:15px;font-weight:600">正在加载…</div>
+  </div>
+  <div id="app"></div>
+  <script>
+    (function () {
+      var fb = document.getElementById('boot-fallback');
+      window.addEventListener('error', function (e) {
+        if (fb && fb.style.display !== 'none') {
+          var m = (e && e.message) ? String(e.message) : '未知错误';
+          m = m.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          fb.innerHTML = '<div class="bf-icon">⚠️</div><h3>页面加载失败</h3><p>' + m + '</p>'
+            + '<p>请刷新重试，或检查浏览器是否支持现代 JavaScript。</p>';
+        }
+      });
+      window.__appMounted = function () {
+        if (fb) fb.style.display = 'none';
+      };
+    })();
+  </script>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
