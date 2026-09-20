@@ -2,7 +2,7 @@
   import Dialog from './Dialog.svelte';
   import {
     app, setSetting, setExperience, setThemeMode,
-    pushToast, storage, applyPayload,
+    storage,
     cleanupOrphanData, clearLocalCache, scheduleSave, clearOperationLogs,
     MANUAL_SECTIONS,
     setShowTopNavText, setShowMainTips, setShowZeroQty,
@@ -35,48 +35,6 @@
   const currentManualHtml = $derived.by(
     () => MANUAL_SECTIONS.find((s) => s.id === manualActive)?.content || '',
   );
-
-  function exportAll() {
-    const payload = {
-      app: 'category-counts', version: 5,
-      exportedAt: new Date().toISOString(),
-      products: app.products, globalPresets: app.globalPresets,
-      mergeSelectedIds: app.mergeSelectedIds, currentProductId: app.currentProductId,
-      dataPresets: app.dataPresets, settings: app.settings,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `抽检数量统计_${Date.now()}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
-    pushToast('已导出');
-  }
-
-  function importFull() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json,application/json';
-    input.onchange = () => {
-      const f = input.files?.[0];
-      if (!f) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const data = JSON.parse(String(reader.result));
-          if (!data || typeof data !== 'object') throw new Error('无效数据');
-          if (!confirm('合并导入？现有数据保留，重复项跳过。')) return;
-          applyPayload(data);
-          pushToast('导入完成');
-        } catch (e: any) {
-          pushToast('导入失败：' + (e?.message || '未知错误'), 'error');
-        }
-      };
-      reader.readAsText(f);
-    };
-    input.click();
-  }
 
   function factoryReset() {
     if (!confirm('⚠️ 恢复出厂设置会清空所有数据，确定继续？')) return;
@@ -220,16 +178,8 @@
 
     {#if tab === 'backup'}
       <p class="backup-note">导出时可选择要包含的模块；导入合并模式会跳过重复项。</p>
-      <button class="backup-action" onclick={exportAll}>💾 导出全部数据</button>
-      <button class="backup-action" onclick={importFull}>📥 导入全部数据（合并）</button>
-
-      <div class="sub-section">
-        <div class="panel-head-row">
-          <span class="panel-head-text">选择性导入导出</span>
-        </div>
-        <button class="backup-action" onclick={() => (exportOpen = true)}>📤 部分导出…</button>
-        <button class="backup-action" onclick={() => (importOpen = true)}>📥 部分导入…</button>
-      </div>
+      <button class="backup-action" onclick={() => (exportOpen = true)}>💾 导出数据</button>
+      <button class="backup-action" onclick={() => (importOpen = true)}>📥 导入数据</button>
 
       <div class="sub-section">
         <button class="backup-action" onclick={() => cleanupOrphanData()}>🧹 一键清理孤儿数据</button>
