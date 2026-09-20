@@ -4,6 +4,12 @@
     app, setSetting, setExperience, setThemeMode, applyFontSize,
     pushToast, storage, applyPayload, effectiveLevel,
     cleanupOrphanData, clearLocalCache, scheduleSave, clearOperationLogs,
+    MANUAL_SECTIONS,
+    // 任务 D 新增
+    setShowTopNavText, setShowMainTips, setShowZeroQty,
+    setMergeMultiProductSummary, setShowVoice, setShowOcr,
+    setFontSize, setAnimationLevel,
+    fontSizeLabel, animationLevelLabel, experienceLevelLabel, experienceHint,
   } from '../lib/stores/app.svelte';
   import ExportDialog from './ExportDialog.svelte';
   import ImportDialog from './ImportDialog.svelte';
@@ -24,19 +30,6 @@
     { key: 'logs', label: '操作日志' },
     { key: 'manual', label: '📖 说明书' },
     { key: 'about', label: '关于' },
-  ];
-
-  const MANUAL_SECTIONS = [
-    { id: 'quickstart', title: '快速开始', content: '<h4>快速开始</h4><p>请在左侧添加产品，然后在分组内添加分类并录入数量。支持批量添加与拖拽排序。</p>' },
-    { id: 'product', title: '产品管理', content: '<h4>产品管理</h4><p>可以添加、重命名、复制和删除产品。勾选“样品”标记后，特殊分组负责人规则将生效。</p>' },
-    { id: 'group', title: '分组与分类', content: '<h4>分组与分类</h4><p>支持添加分组和分类，批量添加，序号排序，折叠预览，以及预分组一键应用到分组。</p>' },
-    { id: 'drag', title: '拖拽排序', content: '<h4>拖拽排序</h4><p>长按 ⠿ 260ms 后拖动分组；键盘聚焦 ⠿ 按 Enter 后可用 ↑/↓ 移动。兼容模式禁用。</p>' },
-    { id: 'preset', title: '数据预设', content: '<h4>数据预设</h4><p>可以设置客户、供应商、负责人等预设数据，并关联产品与负责人。特殊分组支持关联产品筛选与负责人联动。</p>' },
-    { id: 'merge', title: '多产品汇总', content: '<h4>多产品汇总</h4><p>选择同供应商同客户的产品进行汇总，支持“合并描述”与“逐料号拆分”。负责人会根据客户与特殊分组自动带出。</p>' },
-    { id: 'work', title: '工时计算', content: '<h4>工时计算</h4><p>点击顶部 ⏱️ 按钮，设置上下班时间与休息时间段，自动计算实际工作时长与加班时长。</p>' },
-    { id: 'io', title: '导入导出', content: '<h4>导入导出</h4><p>支持选择性导出产品、预设或设置，导入时支持合并或覆盖模式。.js 文件也会被解析。</p>' },
-    { id: 'shortcut', title: '快捷键', content: '<h4>快捷键</h4><p>Ctrl+Z 撤回，Ctrl+Shift+Z 恢复，Alt+↑/↓ 移动分类。</p>' },
-    { id: 'faq', title: '常见问题', content: '<h4>常见问题</h4><p>数据保存在浏览器本地存储中。换浏览器或清除数据前请先导出备份。</p>' },
   ];
 
   let manualActive = $state(MANUAL_SECTIONS[0].id);
@@ -137,26 +130,113 @@
     {/if}
 
     {#if tab === 'display'}
+      <!-- 1. 体验等级 -->
       <div class="setting-row">
-        <label>✨ 体验等级（当前：{effectiveLevel()}）</label>
+        <label>✨ 体验等级（当前：{experienceLevelLabel()}）</label>
         <div class="theme-toggle" style="margin-bottom:0">
           <button class:active={app.settings.experienceLevel === 'auto'} onclick={() => setExperience('auto')}>自动</button>
           <button class:active={app.settings.experienceLevel === 'elegant'} onclick={() => setExperience('elegant')}>优雅</button>
           <button class:active={app.settings.experienceLevel === 'standard'} onclick={() => setExperience('standard')}>标准</button>
           <button class:active={app.settings.experienceLevel === 'compat'} onclick={() => setExperience('compat')}>兼容</button>
         </div>
+        <p class="backup-note" style="margin-top:6px">{experienceHint()}</p>
       </div>
+
+      <!-- 2. 全局字体大小 -->
       <div class="setting-row">
-        <label>🔤 全局字体大小</label>
+        <label>🔤 全局字体大小（当前：{fontSizeLabel()}）</label>
         <div class="theme-toggle" style="margin-bottom:0">
           {#each ['small', 'standard', 'large'] as k (k)}
             <button
               class:active={app.settings.fontSize === k}
-              onclick={() => { setSetting('fontSize', k as any); applyFontSize(); }}
+              onclick={() => setFontSize(k as any)}
             >{k === 'small' ? '小' : k === 'standard' ? '标准' : '大'}</button>
           {/each}
         </div>
       </div>
+
+      <!-- 3. 动画强度 -->
+      <div class="setting-row">
+        <label>🎬 动画强度（当前：{animationLevelLabel()}）</label>
+        <div class="theme-toggle" style="margin-bottom:0">
+          {#each ['normal', 'reduced', 'none'] as k (k)}
+            <button
+              class:active={app.settings.animationLevel === k}
+              onclick={() => setAnimationLevel(k as any)}
+            >{k === 'normal' ? '标准' : k === 'reduced' ? '柔和' : '关闭'}</button>
+          {/each}
+        </div>
+      </div>
+
+      <!-- 4. 显示导航栏文字 -->
+      <label class="display-toggle">
+        <input
+          type="checkbox"
+          checked={app.settings.showTopNavText !== false}
+          onchange={(e) => setShowTopNavText((e.target as HTMLInputElement).checked)}
+        />
+        <span>🔤 显示导航栏文字描述</span>
+        <small>{app.settings.showTopNavText !== false ? '已显示' : '仅显示图标（更紧凑）'}</small>
+      </label>
+
+      <!-- 5. 显示主界面文字 -->
+      <label class="display-toggle">
+        <input
+          type="checkbox"
+          checked={app.settings.showMainTips !== false}
+          onchange={(e) => setShowMainTips((e.target as HTMLInputElement).checked)}
+        />
+        <span>💬 显示主界面文字描述</span>
+        <small>{app.settings.showMainTips !== false ? '已显示' : '已隐藏（更紧凑）'}</small>
+      </label>
+
+      <!-- 6. 显示 0 数量分类 -->
+      <label class="display-toggle">
+        <input
+          type="checkbox"
+          checked={app.settings.showZeroQtyItems !== false}
+          onchange={(e) => setShowZeroQty((e.target as HTMLInputElement).checked)}
+        />
+        <span>📊 汇总与预览中显示数量为 0 的分类</span>
+        <small>{app.settings.showZeroQtyItems !== false ? '已开启' : '已隐藏'}</small>
+      </label>
+
+      <!-- 7. 合并描述 -->
+      <label class="display-toggle">
+        <input
+          type="checkbox"
+          checked={app.settings.mergeMultiProductSummary !== false}
+          onchange={(e) => setMergeMultiProductSummary((e.target as HTMLInputElement).checked)}
+        />
+        <span>📊 多产品汇总时合并「问题描述」</span>
+        <small>
+          {app.settings.mergeMultiProductSummary !== false
+            ? '按分组名聚合，适合关联分析'
+            : '每个产品独立一行，适合逐料号追溯'}
+        </small>
+      </label>
+
+      <!-- 8. 显示语音 -->
+      <label class="display-toggle">
+        <input
+          type="checkbox"
+          checked={app.settings.showVoice !== false}
+          onchange={(e) => setShowVoice((e.target as HTMLInputElement).checked)}
+        />
+        <span>🎤 显示语音输入功能</span>
+        <small>{app.settings.showVoice !== false ? '已开启' : '已隐藏'}</small>
+      </label>
+
+      <!-- 9. 显示 OCR -->
+      <label class="display-toggle">
+        <input
+          type="checkbox"
+          checked={app.settings.showImageOcr !== false}
+          onchange={(e) => setShowOcr((e.target as HTMLInputElement).checked)}
+        />
+        <span>📷 显示图片识别功能</span>
+        <small>{app.settings.showImageOcr !== false ? '已开启' : '已隐藏'}</small>
+      </label>
     {/if}
 
     {#if tab === 'backup'}
@@ -212,7 +292,7 @@
     {/if}
 
     {#if tab === 'about'}
-      <p class="backup-note"><b>版本：</b>v3.1（Svelte 5 重构版）</p>
+      <p class="backup-note"><b>版本：</b>v3.3（Svelte 5 重构版）</p>
       <p class="backup-note">本版本使用 Svelte 5 编译时框架，运行时开销极低，产物体积缩小 60%+。</p>
     {/if}
   </div>
