@@ -1295,3 +1295,7 @@ export const filteredProductsForPicker = $derived.by(() => {
   if (q) list = list.filter(p => String(p.name).toLowerCase().includes(q));
   return sortNatural(list, p => p.name);
 });
+
+export function setProductPickerFilter(v: string): void {
+  productPickerFilter = v;
+}
