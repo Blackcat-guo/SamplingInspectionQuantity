@@ -613,3 +613,8 @@ html[data-theme="dark"] .template-preview :global(.ph-empty){background:#7f1d1d;
   flex: 1; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+button.share-option {
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}
