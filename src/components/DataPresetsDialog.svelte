@@ -7,7 +7,7 @@
     productPickerFilter, toggleCustomerResp, toggleCustomerRespFor, toggleCustomerProducts,
     toggleSupplierProducts, toggleCustomerProduct, toggleSupplierProduct,
     selectAllProductsForCustomer, selectAllProductsForSupplier,
-    countSupplierProducts, countCustomerProducts, filteredProductsForPicker
+    countSupplierProducts, countCustomerProducts, filteredProductsForPicker,setProductPickerFilter
   } from '../lib/stores/app.svelte';
 
   let { open = $bindable(false), onOpenSettings } = $props<{ open: boolean; onOpenSettings: () => void }>();
