@@ -1342,3 +1342,13 @@ export function batchDeleteItems(g: any): void {
   scheduleSave();
   pushToast(`已删除 ${removedItems.length} 个分类`, 'success');
 }
+
+// ===== 补全数据预设相关的缺失导出 =====
+export function toggleCustomerRespFor(c: any, respId: string): void {
+  const ids = c.responsibleIds.slice();
+  const idx = ids.indexOf(respId);
+  if (idx >= 0) ids.splice(idx, 1);
+  else ids.push(respId);
+  c.responsibleIds = ids;
+  scheduleSave();
+}
