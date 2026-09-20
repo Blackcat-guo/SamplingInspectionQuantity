@@ -3,6 +3,7 @@
   import {
     app, setSetting, setExperience, setThemeMode, applyFontSize,
     pushToast, storage, applyPayload, effectiveLevel, autoLevel,
+    cleanupOrphanData, clearLocalCache
   } from '../lib/stores/app.svelte';
 
   let { open = $bindable(false), onOpenDataPresets } = $props<{
@@ -15,9 +16,29 @@
   const tabs = [
     { key: 'general', label: '通用' },
     { key: 'display', label: '显示' },
-    { key: 'backup', label: '备份' },
+    { key: 'backup', label: '备份与恢复' },
     { key: 'about', label: '关于' },
+    { key: 'manual', label: '📖 说明书' }
   ];
+
+  const MANUAL_SECTIONS = [
+    { id: 'quickstart', title: '第一章 · 快速开始', content: '<h4>快速开始</h4><p>请在左侧添加产品，然后在分组内添加分类并录入数量。</p>' },
+    { id: 'product', title: '第二章 · 产品管理', content: '<h4>产品管理</h4><p>可以添加、重命名、复制和删除产品。</p>' },
+    { id: 'group', title: '第三章 · 分组与分类', content: '<h4>分组与分类</h4><p>可以添加分组和分类，支持批量添加和排序。</p>' },
+    { id: 'preset', title: '第四章 · 数据预设', content: '<h4>数据预设</h4><p>可以设置客户、供应商、负责人等预设数据。</p>' },
+    { id: 'merge', title: '第五章 · 多产品汇总', content: '<h4>多产品汇总</h4><p>选择同供应商同客户的产品进行汇总。</p>' },
+    { id: 'work', title: '第六章 · 工时计算', content: '<h4>工时计算</h4><p>可以计算工作时长和加班时长。</p>' },
+    { id: 'io', title: '第七章 · 导入导出', content: '<h4>导入导出</h4><p>支持导出 JSON 和导入 JSON/JS 文件。</p>' },
+    { id: 'shortcut', title: '第八章 · 快捷键', content: '<h4>快捷键</h4><p>Ctrl+Z 撤回，Ctrl+Shift+Z 恢复。</p>' },
+    { id: 'faq', title: '第九章 · 常见问题', content: '<h4>常见问题</h4><p>数据保存在浏览器本地存储中。</p>' }
+  ];
+
+  let manualActive = $state(MANUAL_SECTIONS[0].id);
+
+  const currentManualHtml = $derived.by(() => {
+    const sec = MANUAL_SECTIONS.find(s => s.id === manualActive);
+    return sec ? sec.content : '';
+  });
 
   function exportData() {
     const payload = {
@@ -80,7 +101,7 @@
   }
 </script>
 
-<Dialog bind:open title="⚙️ 设置" subtitle="通用 · 显示 · 备份 · 关于" wide>
+<Dialog bind:open title="⚙️ 设置" subtitle="通用 · 显示 · 备份与恢复 · 说明书 · 关于" wide>
   <div class="dp-tabs-wrap">
     {#each tabs as t (t.key)}
       <button class="dp-tab" class:active={tab === t.key} onclick={() => tab = t.key}>{t.label}</button>
@@ -107,17 +128,6 @@
         <span>🗑 删除前二次确认</span>
       </label>
 
-      <div class="setting-row">
-        <label>⚠️ 批量添加确认阈值</label>
-        <select value={String(app.settings.bulkAddConfirmThreshold)}
-                onchange={(e) => setSetting('bulkAddConfirmThreshold', parseInt((e.target as HTMLSelectElement).value, 10))}>
-          <option value="0">从不提示</option>
-          <option value="3">3 条以上</option>
-          <option value="5">5 条以上（推荐）</option>
-          <option value="10">10 条以上</option>
-        </select>
-      </div>
-
       <button class="backup-action" onclick={onOpenDataPresets}>📚 打开数据预设</button>
     {/if}
 
@@ -130,9 +140,6 @@
           <button class:active={app.settings.experienceLevel === 'standard'} onclick={() => setExperience('standard')}>标准</button>
           <button class:active={app.settings.experienceLevel === 'compat'} onclick={() => setExperience('compat')}>兼容</button>
         </div>
-        <small style="font-size:11px;color:var(--c-text-3)">
-          自动模式当前判定为「{autoLevel() === 'compat' ? '低端' : '标准'}」。
-        </small>
       </div>
 
       <div class="setting-row">
@@ -146,39 +153,6 @@
           {/each}
         </div>
       </div>
-
-      <div class="setting-row">
-        <label>🎬 动画强度</label>
-        <div class="theme-toggle" style="margin-bottom:0">
-          {#each ['normal', 'reduced', 'none'] as k (k)}
-            <button class:active={app.settings.animationLevel === k}
-                    onclick={() => setSetting('animationLevel', k as any)}>
-              {k === 'normal' ? '标准' : k === 'reduced' ? '舒缓' : '关闭'}
-            </button>
-          {/each}
-        </div>
-      </div>
-
-      <label class="display-toggle">
-        <input type="checkbox" checked={app.settings.showTopNavText}
-               onchange={(e) => setSetting('showTopNavText', (e.target as HTMLInputElement).checked)} />
-        <span>🔤 显示导航栏文字</span>
-      </label>
-      <label class="display-toggle">
-        <input type="checkbox" checked={app.settings.showMainTips}
-               onchange={(e) => setSetting('showMainTips', (e.target as HTMLInputElement).checked)} />
-        <span>💬 显示主界面文字描述</span>
-      </label>
-      <label class="display-toggle">
-        <input type="checkbox" checked={app.settings.showZeroQtyItems}
-               onchange={(e) => setSetting('showZeroQtyItems', (e.target as HTMLInputElement).checked)} />
-        <span>📊 汇总中显示数量为 0 的分类</span>
-      </label>
-      <label class="display-toggle">
-        <input type="checkbox" checked={app.settings.mergeMultiProductSummary}
-               onchange={(e) => setSetting('mergeMultiProductSummary', (e.target as HTMLInputElement).checked)} />
-        <span>📊 多产品汇总时按分组名合并</span>
-      </label>
     {/if}
 
     {#if tab === 'backup'}
@@ -186,31 +160,31 @@
       <button class="backup-action" onclick={exportData}>💾 导出全部数据</button>
       <button class="backup-action" onclick={importData}>📥 导入数据（合并）</button>
 
-      <label class="display-toggle" style="margin-top:6px">
-        <input type="checkbox" checked={app.settings.autoBackup}
-               onchange={(e) => setSetting('autoBackup', (e.target as HTMLInputElement).checked)} />
-        <span>🔁 数据自动备份</span>
-        <small>最近 3 个版本</small>
-      </label>
+      <button class="backup-action" onclick={() => cleanupOrphanData()}>🧹 一键清理孤儿数据</button>
+      <button class="backup-action" onclick={() => clearLocalCache()}>🧽 清理本地缓存</button>
 
       <div class="sub-section">
         <button class="backup-action danger" onclick={factoryReset}>⚠️ 恢复出厂设置</button>
       </div>
     {/if}
 
+    {#if tab === 'manual'}
+      <div class="manual-layout-vertical">
+        <div class="manual-tabs-wrap">
+          <div class="manual-tabs-scroll">
+            {#each MANUAL_SECTIONS as sec (sec.id)}
+              <button class="manual-tab" class:active={manualActive === sec.id} onclick={() => manualActive = sec.id}>{sec.title}</button>
+            {/each}
+          </div>
+        </div>
+        <article class="manual-content">{@html currentManualHtml}</article>
+      </div>
+    {/if}
+
     {#if tab === 'about'}
       <p class="backup-note"><b>版本：</b>v3.1（Svelte 5 重构版）</p>
       <p class="backup-note">
-        本版本使用 Svelte 5 编译时框架，运行时开销远低于虚拟 DOM 方案；
-        单文件构建产物约 60~80KB（gzip 后约 25~35KB），比 Vue 版本减少 60%+。
-      </p>
-      <p class="backup-note">
-        <b>数据存储位置：</b>浏览器 localStorage（键名以 <code>category_counts_v5</code> 开头）。
-        清除浏览器数据会导致本地数据丢失，请定期导出备份。
-      </p>
-      <p class="backup-note">
-        <b>分享能力：</b>合并结果支持系统分享（Web Share API）与微信 / 钉钉 / 飞书 / QQ / 邮件 URL Scheme；
-        第三方 App 不开放传入文本接口，分享前会先复制到剪贴板。
+        本版本使用 Svelte 5 编译时框架，运行时开销远低于虚拟 DOM 方案。
       </p>
     {/if}
   </div>
