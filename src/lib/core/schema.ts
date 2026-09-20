@@ -36,7 +36,9 @@ export interface DataPresets {
 
 export interface Settings {
   summaryTemplate: string;
-  showVoice: boolean; showImageOcr: boolean;
+  showVoice: boolean; 
+  showImageOcr: boolean;
+  showRecognizeTools: boolean;
   experienceLevel: 'auto' | 'elegant' | 'standard' | 'compat';
   animationLevel: 'normal' | 'reduced' | 'none';
   showZeroQtyItems: boolean;
