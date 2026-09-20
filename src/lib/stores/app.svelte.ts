@@ -1338,7 +1338,7 @@ export type {
   SpecialGroup, PresetGroup, GlobalPreset, Shortcut,
 };
 
-/* ---------------- UI 状态（Svelte 5 安全写法） ---------------- */
+/* ---------------- UI 状态 ---------------- */
 export const uiState = $state({
   expandedCustomerProductsId: '',
   expandedSupplierProductsName: '',
@@ -1560,18 +1560,20 @@ export function applyPresetGroupToGroup(g: Group, presetGroupId: string): number
     );
     if (usedElsewhere) return;
     seen.add(k);
-    g.items.push({ name, qty: 0 });
     added.push(name);
   });
-  if (added.length) {
-    scheduleSave();
-    logOperation(`将预分组「${pg.name}」应用到「${g.name}」（+${added.length}）`);
-  }
+  if (!added.length) return 0;
+
+  // ✅ Bug 3 修复：推入历史栈
+  history.pushSnapshot(app.products, p.id);
+  added.forEach((name) => g.items.push({ name, qty: 0 }));
+  scheduleSave();
+  logOperation(`将预分组「${pg.name}」应用到「${g.name}」（+${added.length}）`);
   return added.length;
 }
 
 /* ============================================================
-   模块 K：数据预设分页
+   模块 K：数据预设分页（只读，不在 render 期改状态）
    ============================================================ */
 export function pageSizeFor(): number {
   try {
@@ -1600,6 +1602,19 @@ export function setPresetPage(key: string, page: number): void {
   presetPages[key] = Math.max(1, page);
 }
 
+// ✅ Bug 7 修复：只读函数，不在 render 期间修改状态
+export function getPresetPage(key: string, total: number): number {
+  const size = pageSizeFor();
+  const pages = Math.max(1, Math.ceil(total / size));
+  const cur = presetPages[key] || 1;
+  return Math.min(cur, pages);
+}
+
+export function getPresetPages(key: string, total: number): number {
+  const size = pageSizeFor();
+  return Math.max(1, Math.ceil(total / size));
+}
+
 /* ============================================================
    模块 E：负责人自动联动
    ============================================================ */
@@ -1609,17 +1624,12 @@ export const autoRespState = $state({
   lastSignature: '',
 });
 
-function computeAutoResponsibleSignature(): string {
-  return app.mergeSelectedIds.slice().sort().join('|');
-}
-
 export function computeAutoResponsibles(): string[] {
   const list = mergedProducts();
   if (!list.length) return [];
   const rejected = new Set(autoRespState.rejected.map(nameKey));
   const out = new Set<string>();
 
-  // 1. 客户绑定的负责人
   const custNames = new Set(list.map((p) => (p.customer || '').trim()).filter(Boolean));
   app.dataPresets.customers.forEach((c) => {
     if (!custNames.has(c.name)) return;
@@ -1629,7 +1639,6 @@ export function computeAutoResponsibles(): string[] {
     });
   });
 
-  // 2. 特殊分组负责人
   app.dataPresets.specialGroups.forEach((sg) => {
     let hit = false;
     list.forEach((p) => {
@@ -1688,7 +1697,7 @@ export function scheduleAutoRespSync(): void {
   if (autoRespTimer) clearTimeout(autoRespTimer);
   autoRespTimer = setTimeout(() => {
     autoRespTimer = null;
-    const sig = computeAutoResponsibleSignature();
+    const sig = app.mergeSelectedIds.slice().sort().join('|');
     if (sig !== autoRespState.lastSignature) {
       autoRespState.lastSignature = sig;
       autoRespState.rejected = [];
@@ -1760,6 +1769,7 @@ export function renameSpecialGroup(id: string, name: string): void {
   scheduleSave();
 }
 
+/** 切换特殊分组与某负责人的关联（勾选/取消） */
 export function toggleSpecialGroupResp(sgId: string, respId: string): void {
   const sg = app.dataPresets.specialGroups.find((x) => x.id === sgId);
   if (!sg) return;
@@ -1800,7 +1810,8 @@ export function toggleSpecialGroupProducts(id: string): void {
   specialUIState.filter = '';
 }
 
-export function toggleSpecialGroupResp(id: string): void {
+// ✅ Bug 1 修复：原 toggleSpecialGroupResp(id) 重命名为 toggleSpecialRespPanel
+export function toggleSpecialRespPanel(id: string): void {
   specialUIState.expandedRespId = specialUIState.expandedRespId === id ? '' : id;
   specialUIState.expandedProductsId = '';
 }
@@ -1918,6 +1929,8 @@ export function importPartialPayload(
         presetGroups: cleanPresetGroups(dp.presetGroups),
       };
       replaced += 1;
+      // ✅ Bug 5 修复：覆盖 dataPresets 后清理产品上的失效绑定
+      cleanupOrphanProductBindings();
     } else {
       const sup = new Set(app.dataPresets.suppliers.map(nameKey));
       (dp.suppliers || []).forEach((s: string) => {
@@ -1995,9 +2008,17 @@ export function importPartialPayload(
 export function parseJsData(text: string): any {
   const trimmed = String(text || '').trim();
   if (!trimmed) throw new Error('空文件');
-  if (/\b(import|require|eval|Function|fetch|XMLHttpRequest|WebSocket)\b/.test(trimmed)) {
+
+  // ✅ Bug 6 修复：先剥离字符串/模板字面量，再检测危险关键字
+  const stripped = trimmed
+    .replace(/'(?:[^'\\]|\\.)*'/g, "''")
+    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+    .replace(/`(?:[^`\\]|\\.)*`/g, '``');
+
+  if (/\b(import|require|eval|Function|fetch|XMLHttpRequest|WebSocket)\b/.test(stripped)) {
     throw new Error('文件包含不安全的关键字，已拒绝');
   }
+
   let jsonText = trimmed;
   jsonText = jsonText.replace(/^\s*export\s+default\s+/, '');
   jsonText = jsonText.replace(/^\s*(const|let|var)\s+\w+\s*=\s*/, '');
