@@ -2,7 +2,7 @@
   import {
     app, currentProduct, scheduleSave, pushToast, logOperation,
     setQty, commitQtyDraft, addItem, removeItem, nameKey,
-    groupSum, groupRate,
+    groupSum, groupRate, setGroupTotal,
     bulkQtyDialog, openBulkQtyDialog, closeBulkQtyDialog, applyBulkQty,
     groupSelection, batchGroupId,
     toggleItemSelect, toggleAllItems, batchDeleteItems, cancelBatchItems, enterBatchItems,
@@ -17,13 +17,16 @@
   const qtyTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 
   const collapsed = $derived(
-    Array.isArray(app.settings.collapsedGroups) && app.settings.collapsedGroups.includes(g.id)
+    Array.isArray(app.settings.collapsedGroups) && app.settings.collapsedGroups.includes(g.id),
   );
 
   function toggleCollapse() {
-    const arr = Array.isArray(app.settings.collapsedGroups) ? app.settings.collapsedGroups.slice() : [];
+    const arr = Array.isArray(app.settings.collapsedGroups)
+      ? app.settings.collapsedGroups.slice()
+      : [];
     const k = arr.indexOf(g.id);
-    if (k >= 0) arr.splice(k, 1); else arr.push(g.id);
+    if (k >= 0) arr.splice(k, 1);
+    else arr.push(g.id);
     app.settings.collapsedGroups = arr;
     scheduleSave();
   }
@@ -39,6 +42,7 @@
       commitQtyDraft(g, itemName, raw);
     }, 300);
   }
+
   function displayQty(itemName: string, qty: number): string {
     const key = g.id + '|' + nameKey(itemName);
     return key in qtyDrafts ? qtyDrafts[key] : String(qty);
@@ -53,9 +57,7 @@
     const raw = (e.target as HTMLInputElement).value.replace(/\D/g, '');
     (e.target as HTMLInputElement).value = raw;
     const n = raw === '' ? 0 : parseInt(raw, 10);
-    g.total = Number.isFinite(n) ? Math.max(0, n) : 0;
-    g.totalIsAuto = false;
-    scheduleSave();
+    setGroupTotal(g, Number.isFinite(n) ? Math.max(0, n) : 0);
   }
 
   function renameGroup(e: Event) {
@@ -79,7 +81,10 @@
     const cur = currentProduct();
     if (!cur) return;
     const at = realIndex;
-    if (!Number.isFinite(v) || v < 1 || v > cur.groups.length) { input.value = String(at + 1); return; }
+    if (!Number.isFinite(v) || v < 1 || v > cur.groups.length) {
+      input.value = String(at + 1);
+      return;
+    }
     if (v - 1 === at) return;
     const [x] = cur.groups.splice(at, 1);
     cur.groups.splice(v - 1, 0, x);
@@ -95,7 +100,7 @@
     if (!confirm(`重置分组「${g.name}」？`)) return;
     g.total = 0;
     g.totalIsAuto = undefined;
-    g.items.forEach(it => { it.qty = 0; });
+    g.items.forEach((it) => { it.qty = 0; });
     scheduleSave();
     logOperation(`重置分组「${g.name}」`);
   }
@@ -112,9 +117,9 @@
   function onBulkAddItems() {
     const raw = prompt(`向「${g.name}」批量添加分类（每行一个）：`);
     if (!raw) return;
-    const arr = raw.split(/[\n,，、;；]+/).map(s => s.trim()).filter(Boolean);
+    const arr = raw.split(/[\n,，、;；]+/).map((s) => s.trim()).filter(Boolean);
     let added = 0;
-    arr.forEach(n => { if (addItem(g, n)) added++; });
+    arr.forEach((n) => { if (addItem(g, n)) added++; });
     if (added) {
       pushToast(`已添加 ${added} 个分类`);
       logOperation(`向「${g.name}」添加 ${added} 个分类`);
@@ -124,8 +129,11 @@
   function onTransferItem(itemName: string) {
     const p = currentProduct();
     if (!p) return;
-    const others = p.groups.filter(x => x.id !== g.id);
-    if (!others.length) { pushToast('没有其他分组可转移', 'error'); return; }
+    const others = p.groups.filter((x) => x.id !== g.id);
+    if (!others.length) {
+      pushToast('没有其他分组可转移', 'error');
+      return;
+    }
     const names = others.map((g2, idx) => `${idx + 1}. ${g2.name}`).join('\n');
     const choice = prompt(`转移到哪个分组？\n${names}\n\n请输入序号：`);
     if (choice == null) return;
@@ -145,11 +153,21 @@
       {collapsed ? '▸' : '▾'}
     </button>
     <span class="drag-handle" title="长按拖动排序">⠿</span>
-    <input class="seq-input" type="text" inputmode="numeric"
-           value={realIndex + 1} onblur={applySeq}
-           aria-label="分组序号" />
-    <input class="group-name" value={g.name} maxlength="30"
-           onblur={renameGroup} aria-label="分组名称" />
+    <input
+      class="seq-input"
+      type="text"
+      inputmode="numeric"
+      value={realIndex + 1}
+      onblur={applySeq}
+      aria-label="分组序号"
+    />
+    <input
+      class="group-name"
+      value={g.name}
+      maxlength="30"
+      onblur={renameGroup}
+      aria-label="分组名称"
+    />
     <button class="group-reset" title="重置该组" onclick={onResetGroup}>↻</button>
     <button class="group-del" title="删除该组" onclick={onDeleteGroup}>✕</button>
     {#if collapsed}
@@ -157,7 +175,7 @@
         {#if !g.items.length}
           <span style="color:var(--c-text-disabled);font-style:italic">暂无分类</span>
         {:else}
-          {g.items.map(x => x.name).join('、')}
+          {g.items.map((x) => x.name).join('、')}
         {/if}
       </div>
     {/if}
@@ -166,9 +184,14 @@
   <div class="group-body">
     <div class="group-total-row">
       <span>总数量</span>
-      <input class="group-total" type="text" inputmode="numeric"
-             value={String(g.total)} oninput={onTotalInput}
-             aria-label="分组总数量" />
+      <input
+        class="group-total"
+        type="text"
+        inputmode="numeric"
+        value={String(g.total)}
+        oninput={onTotalInput}
+        aria-label="分组总数量"
+      />
       <span>PCS</span>
       {#if g.totalIsAuto === false}
         <span class="manual-tag">· 已手改</span>
@@ -183,18 +206,26 @@
       {#if batchGroupId.value === g.id}
         <div class="batch-bar">
           <label>
-            <input type="checkbox" checked={allItemsSelected(g)}
-                   onchange={(e) => toggleAllItems(g.id, (e.target as HTMLInputElement).checked, g.items)} />
+            <input
+              type="checkbox"
+              checked={allItemsSelected(g)}
+              onchange={(e) =>
+                toggleAllItems(g.id, (e.target as HTMLInputElement).checked, g.items)}
+            />
             全选
           </label>
           <span class="info">已选 {(groupSelection[g.id] || []).length} / {g.items.length}</span>
           <div class="actions">
-            <button class="qty-btn"
-                    disabled={!(groupSelection[g.id] || []).length}
-                    onclick={() => openBulkQtyDialog(g.id)}>改量</button>
-            <button class="del-btn"
-                    disabled={!(groupSelection[g.id] || []).length}
-                    onclick={() => batchDeleteItems(g)}>删除</button>
+            <button
+              class="qty-btn"
+              disabled={!(groupSelection[g.id] || []).length}
+              onclick={() => openBulkQtyDialog(g.id)}
+            >改量</button>
+            <button
+              class="del-btn"
+              disabled={!(groupSelection[g.id] || []).length}
+              onclick={() => batchDeleteItems(g)}
+            >删除</button>
             <button class="cancel-btn" onclick={cancelBatchItems}>取消</button>
           </div>
         </div>
@@ -202,8 +233,12 @@
     </div>
 
     <div class="group-add-item">
-      <input bind:value={itemInput} placeholder="添加分类，回车…" maxlength="30"
-             onkeydown={(e) => { if (e.key === 'Enter') onAddItem(); }} />
+      <input
+        bind:value={itemInput}
+        placeholder="添加分类，回车…"
+        maxlength="30"
+        onkeydown={(e) => { if (e.key === 'Enter') onAddItem(); }}
+      />
       <button onclick={onAddItem}>添加</button>
     </div>
 
@@ -211,33 +246,42 @@
       {#each g.items as item, idx (item.name)}
         <div class="item">
           {#if batchGroupId.value === g.id}
-            <input type="checkbox" class="item-check"
-                   checked={(groupSelection[g.id] || []).includes(item.name)}
-                   onchange={() => toggleItemSelect(g.id, item.name)}
-                   aria-label={'选择 ' + item.name} />
+            <input
+              type="checkbox"
+              class="item-check"
+              checked={(groupSelection[g.id] || []).includes(item.name)}
+              onchange={() => toggleItemSelect(g.id, item.name)}
+              aria-label={'选择 ' + item.name}
+            />
           {:else}
             <div class="sort-btns">
               <button onclick={() => moveItem(idx, -1)} disabled={idx === 0} aria-label="上移">▲</button>
-              <button onclick={() => moveItem(idx, 1)} disabled={idx === g.items.length - 1} aria-label="下移">▼</button>
+              <button
+                onclick={() => moveItem(idx, 1)}
+                disabled={idx === g.items.length - 1}
+                aria-label="下移"
+              >▼</button>
             </div>
           {/if}
           <span class="name" title={item.name}>{item.name}</span>
           <div class="counter">
             <button class="btn" onclick={() => setQty(g, idx, item.qty - 1)} aria-label="减一">−</button>
-            <input class="qty" type="text" inputmode="numeric"
-                   value={displayQty(item.name, item.qty)}
-                   oninput={(e) => onQtyInput(item.name, e)}
-                   onblur={(e) => {
-                     const raw = (e.target as HTMLInputElement).value.replace(/\D/g, '');
-                     commitQtyDraft(g, item.name, raw);
-                   }}
-                   aria-label={'数量 ' + item.name} />
+            <input
+              class="qty"
+              type="text"
+              inputmode="numeric"
+              value={displayQty(item.name, item.qty)}
+              oninput={(e) => onQtyInput(item.name, e)}
+              onblur={(e) => {
+                const raw = (e.target as HTMLInputElement).value.replace(/\D/g, '');
+                commitQtyDraft(g, item.name, raw);
+              }}
+              aria-label={'数量 ' + item.name}
+            />
             <button class="btn" onclick={() => setQty(g, idx, item.qty + 1)} aria-label="加一">+</button>
           </div>
-          <button class="move" title="转移到其他分组"
-                  onclick={() => onTransferItem(item.name)}>↔</button>
-          <button class="del" onclick={() => removeItem(g, idx)}
-                  aria-label={'删除 ' + item.name}>✕</button>
+          <button class="move" title="转移到其他分组" onclick={() => onTransferItem(item.name)}>↔</button>
+          <button class="del" onclick={() => removeItem(g, idx)} aria-label={'删除 ' + item.name}>✕</button>
         </div>
       {/each}
     </div>
@@ -250,18 +294,22 @@
   </div>
 </div>
 
-<!-- 批量改量弹窗 -->
 {#if bulkQtyDialog.show && bulkQtyDialog.gid === g.id}
-  <div class="dialog-overlay sub-dialog" role="presentation"
-       onclick={(e) => { if (e.target === e.currentTarget) closeBulkQtyDialog(); }}>
+  <div
+    class="dialog-overlay sub-dialog"
+    role="presentation"
+    onclick={(e) => { if (e.target === e.currentTarget) closeBulkQtyDialog(); }}
+  >
     <div class="dialog-box" role="presentation">
       <h3>🔢 批量修改数量</h3>
       <p class="sub">将对已勾选的 <b>{(groupSelection[g.id] || []).length}</b> 个分类生效。</p>
       <div class="theme-toggle">
-        <button class:active={bulkQtyDialog.mode === 'multiply'}
-                onclick={() => bulkQtyDialog.mode = 'multiply'}>× 乘以系数</button>
-        <button class:active={bulkQtyDialog.mode === 'set'}
-                onclick={() => bulkQtyDialog.mode = 'set'}>＝ 设为定值</button>
+        <button class:active={bulkQtyDialog.mode === 'multiply'} onclick={() => (bulkQtyDialog.mode = 'multiply')}>
+          × 乘以系数
+        </button>
+        <button class:active={bulkQtyDialog.mode === 'set'} onclick={() => (bulkQtyDialog.mode = 'set')}>
+          ＝ 设为定值
+        </button>
       </div>
       <div class="info-field">
         <div class="field-label">
