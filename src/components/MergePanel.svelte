@@ -3,7 +3,7 @@
     app, currentProduct, mergedProducts, groupedProducts, canSelectProduct,
     isMergeSelected, toggleMergeSelect, selectAllSameCombination, clearMergeSelection,
     buildMergedText, templatePreviewHtml, getProductSamplingDisplay,
-    copyText as _copy, pushToast, scheduleSave, uid,
+    pushToast, scheduleSave,
   } from '../lib/stores/app.svelte';
   import { copyText } from '../lib/utils/copy';
 
