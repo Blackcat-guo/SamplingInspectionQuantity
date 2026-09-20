@@ -45,8 +45,10 @@
   {/if}
 
   <div class="merge-actions">
-    <button onclick={selectAllSameCombination}
-            disabled={!currentProduct()?.supplier}>选中本组合全部</button>
+    <button
+      onclick={selectAllSameCombination}
+      disabled={!currentProduct()?.supplier}
+    >选中本组合全部</button>
     <button onclick={clearMergeSelection} disabled={!app.mergeSelectedIds.length}>清空选择</button>
   </div>
 
@@ -58,12 +60,20 @@
       </div>
       <div class="merge-list">
         {#each grp.list as p (p.id)}
-          <label class="merge-item" class:selected={isMergeSelected(p.id)}
-                 class:disabled={!canSelectProduct(p)}>
-            <input type="checkbox" checked={isMergeSelected(p.id)}
-                   disabled={!canSelectProduct(p)}
-                   onchange={() => toggleMergeSelect(p.id)} />
-            <span class="pname">{p.name}{#if p.isSample}<span class="product-sample"> · 样品</span>{/if}</span>
+          <label
+            class="merge-item"
+            class:selected={isMergeSelected(p.id)}
+            class:disabled={!canSelectProduct(p)}
+          >
+            <input
+              type="checkbox"
+              checked={isMergeSelected(p.id)}
+              disabled={!canSelectProduct(p)}
+              onchange={() => toggleMergeSelect(p.id)}
+            />
+            <span class="pname">
+              {p.name}{#if p.isSample}<span class="product-sample"> · 样品</span>{/if}
+            </span>
             <span class="meta">来料 {p.incomingQty || 0} · 抽检 {getProductSamplingDisplay(p)}</span>
           </label>
         {/each}
@@ -75,8 +85,15 @@
   {#if list.length}
     <div class="merge-soft-field">
       <span class="field-tag">临时处理方式</span>
-      <input value={app.settings.tempHandling} maxlength="80" placeholder="如：返工、让步接收…"
-             oninput={(e) => { app.settings.tempHandling = (e.target as HTMLInputElement).value; scheduleSave(); }} />
+      <input
+        value={app.settings.tempHandling}
+        maxlength="80"
+        placeholder="如：返工、让步接收…"
+        oninput={(e) => {
+          app.settings.tempHandling = (e.target as HTMLInputElement).value;
+          scheduleSave();
+        }}
+      />
     </div>
   {:else}
     <div class="merge-soft-field merge-soft-field--hint">
@@ -86,8 +103,11 @@
   {/if}
 
   <div class="template-label">汇总模板</div>
-  <textarea class="template-textarea" bind:value={app.settings.summaryTemplate}
-            oninput={() => scheduleSave()}></textarea>
+  <textarea
+    class="template-textarea"
+    bind:value={app.settings.summaryTemplate}
+    oninput={() => scheduleSave()}
+  ></textarea>
   <div class="template-preview">{@html preview}</div>
   {#if app.settings.showMainTips !== false}
     <div class="template-hint">
@@ -102,8 +122,11 @@
     <span class="label">合并结果预览</span>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <label class="mini-switch-label">
-        <input type="checkbox" checked={app.settings.mergeMultiProductSummary !== false}
-               onchange={(e) => setMergeSummary((e.target as HTMLInputElement).checked)} />
+        <input
+          type="checkbox"
+          checked={app.settings.mergeMultiProductSummary !== false}
+          onchange={(e) => setMergeSummary((e.target as HTMLInputElement).checked)}
+        />
         <span>合并描述</span>
       </label>
       <button class="copy-btn" class:copied={copyOk} disabled={!mergedPlain} onclick={onCopy}>
