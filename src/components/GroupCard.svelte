@@ -7,6 +7,8 @@
     groupSelection, batchGroupId,
     toggleItemSelect, toggleAllItems, batchDeleteItems, cancelBatchItems, enterBatchItems,
     transferItemToGroup,
+    dragState, moveGroupTo, effectiveLevel,
+    applyPresetGroupToGroup,
   } from '../lib/stores/app.svelte';
   import type { Group } from '../lib/core/schema';
 
@@ -20,6 +22,7 @@
     Array.isArray(app.settings.collapsedGroups) && app.settings.collapsedGroups.includes(g.id),
   );
 
+  /* ---------- 折叠 ---------- */
   function toggleCollapse() {
     const arr = Array.isArray(app.settings.collapsedGroups)
       ? app.settings.collapsedGroups.slice()
@@ -31,6 +34,7 @@
     scheduleSave();
   }
 
+  /* ---------- 分类数量 ---------- */
   function onQtyInput(itemName: string, e: Event) {
     const key = g.id + '|' + nameKey(itemName);
     const raw = (e.target as HTMLInputElement).value.replace(/\D/g, '');
@@ -42,31 +46,26 @@
       commitQtyDraft(g, itemName, raw);
     }, 300);
   }
-
   function displayQty(itemName: string, qty: number): string {
     const key = g.id + '|' + nameKey(itemName);
     return key in qtyDrafts ? qtyDrafts[key] : String(qty);
   }
-
   function onAddItem() {
     if (!itemInput.trim()) return;
     if (addItem(g, itemInput)) itemInput = '';
   }
-
   function onTotalInput(e: Event) {
     const raw = (e.target as HTMLInputElement).value.replace(/\D/g, '');
     (e.target as HTMLInputElement).value = raw;
     const n = raw === '' ? 0 : parseInt(raw, 10);
     setGroupTotal(g, Number.isFinite(n) ? Math.max(0, n) : 0);
   }
-
   function renameGroup(e: Event) {
     const v = (e.target as HTMLInputElement).value;
     if (g.name === v) return;
     g.name = v || '未命名分组';
     scheduleSave();
   }
-
   function moveItem(idx: number, delta: number) {
     const j = idx + delta;
     if (j < 0 || j >= g.items.length) return;
@@ -74,7 +73,6 @@
     g.items.splice(j, 0, it);
     scheduleSave();
   }
-
   function applySeq(e: Event) {
     const input = e.target as HTMLInputElement;
     const v = parseInt(input.value, 10);
@@ -86,16 +84,12 @@
       return;
     }
     if (v - 1 === at) return;
-    const [x] = cur.groups.splice(at, 1);
-    cur.groups.splice(v - 1, 0, x);
-    scheduleSave();
+    moveGroupTo(at, v - 1);
   }
-
   function allItemsSelected(group: Group) {
     const sel = groupSelection[group.id] || [];
     return group.items.length > 0 && sel.length === group.items.length;
   }
-
   function onResetGroup() {
     if (!confirm(`重置分组「${g.name}」？`)) return;
     g.total = 0;
@@ -104,7 +98,6 @@
     scheduleSave();
     logOperation(`重置分组「${g.name}」`);
   }
-
   function onDeleteGroup() {
     const cur = currentProduct();
     if (!cur) return;
@@ -113,7 +106,6 @@
     scheduleSave();
     logOperation(`删除分组「${g.name}」`);
   }
-
   function onBulkAddItems() {
     const raw = prompt(`向「${g.name}」批量添加分类（每行一个）：`);
     if (!raw) return;
@@ -125,7 +117,6 @@
       logOperation(`向「${g.name}」添加 ${added} 个分类`);
     }
   }
-
   function onTransferItem(itemName: string) {
     const p = currentProduct();
     if (!p) return;
@@ -145,14 +136,158 @@
       logOperation(`分类「${itemName}」转移到「${target.name}」`);
     }
   }
+
+  /* ---------- 模块 R：拖拽排序 ---------- */
+  let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+  let pressing = false;
+  let startY = 0;
+  let startX = 0;
+  let kbMode = $state(false);
+
+  function onDragKeydown(e: KeyboardEvent) {
+    if (effectiveLevel() === 'compat') return;
+    if (e.key === 'Enter') {
+      kbMode = !kbMode;
+      e.preventDefault();
+      return;
+    }
+    if (!kbMode) return;
+    const p = currentProduct();
+    if (!p) return;
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      moveGroupTo(realIndex, Math.max(0, realIndex - 1));
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      moveGroupTo(realIndex, Math.min(p.groups.length - 1, realIndex + 1));
+    } else if (e.key === 'Escape') {
+      kbMode = false;
+      e.preventDefault();
+    }
+  }
+
+  function onHandlePointerDown(e: PointerEvent) {
+    if (effectiveLevel() === 'compat') {
+      pushToast('兼容模式已禁用拖拽，请使用序号框', 'error', 2400);
+      return;
+    }
+    if (e.button !== undefined && e.button !== 0) return;
+    pressing = true;
+    startY = e.clientY;
+    startX = e.clientX;
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    longPressTimer = setTimeout(() => {
+      longPressTimer = null;
+      if (!pressing) return;
+      startDrag();
+    }, 260);
+  }
+
+  function onHandlePointerMove(e: PointerEvent) {
+    if (!pressing) return;
+    if (!dragState.dragging && longPressTimer) {
+      const dx = Math.abs(e.clientX - startX);
+      const dy = Math.abs(e.clientY - startY);
+      if (dx > 8 || dy > 8) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+        pressing = false;
+      }
+      return;
+    }
+    if (dragState.dragging) updateOverIndex(e.clientY);
+  }
+
+  function onHandlePointerUp() {
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    pressing = false;
+    if (dragState.dragging) endDrag();
+  }
+
+  function startDrag() {
+    dragState.dragging = true;
+    dragState.activeId = g.id;
+    dragState.overIndex = realIndex;
+    window.addEventListener('pointermove', onWindowMove);
+    window.addEventListener('pointerup', onWindowUp);
+    window.addEventListener('pointercancel', onWindowUp);
+  }
+
+  function onWindowMove(e: PointerEvent) {
+    if (!dragState.dragging) return;
+    updateOverIndex(e.clientY);
+  }
+  function onWindowUp() {
+    endDrag();
+  }
+
+  function updateOverIndex(clientY: number) {
+    const p = currentProduct();
+    if (!p) return;
+    const cards = document.querySelectorAll<HTMLElement>('.group[data-group-id]');
+    let targetId = '';
+    cards.forEach((card) => {
+      const rect = card.getBoundingClientRect();
+      if (clientY >= rect.top && clientY <= rect.bottom) {
+        targetId = card.dataset.groupId || '';
+      }
+    });
+    if (!targetId) return;
+    const idx = p.groups.findIndex((x) => x.id === targetId);
+    if (idx >= 0) dragState.overIndex = idx;
+  }
+
+  function endDrag() {
+    window.removeEventListener('pointermove', onWindowMove);
+    window.removeEventListener('pointerup', onWindowUp);
+    window.removeEventListener('pointercancel', onWindowUp);
+    const p = currentProduct();
+    if (p && dragState.overIndex >= 0 && dragState.activeId) {
+      const from = p.groups.findIndex((x) => x.id === dragState.activeId);
+      const to = dragState.overIndex;
+      if (from >= 0 && from !== to) {
+        moveGroupTo(from, to);
+        pushToast(`已移动到第 ${to + 1} 位`);
+      }
+    }
+    dragState.dragging = false;
+    dragState.activeId = '';
+    dragState.overIndex = -1;
+  }
+
+  /* ---------- 模块 S：预分组下拉菜单 ---------- */
+  let presetMenuOpen = $state(false);
+  function onApplyPreset(pgId: string, pgName: string) {
+    presetMenuOpen = false;
+    const n = applyPresetGroupToGroup(g, pgId);
+    if (n > 0) pushToast(`已从「${pgName}」添加 ${n} 个分类`);
+    else pushToast('没有新分类可添加（均已存在）', 'info', 2400);
+  }
 </script>
 
-<div class="group" class:collapsed={collapsed}>
+<div
+  class="group"
+  class:collapsed={collapsed}
+  class:dragging={dragState.activeId === g.id}
+  class:drag-over={dragState.dragging && dragState.overIndex === realIndex && dragState.activeId !== g.id}
+  data-group-id={g.id}
+>
   <div class="group-head">
     <button class="group-collapse" onclick={toggleCollapse} aria-label={collapsed ? '展开' : '折叠'}>
       {collapsed ? '▸' : '▾'}
     </button>
-    <span class="drag-handle" title="长按拖动排序">⠿</span>
+    <span
+      class="drag-handle"
+      class:kb-active={kbMode}
+      title="长按拖动排序（Enter 键进入键盘排序）"
+      tabindex="0"
+      role="button"
+      aria-label="拖动或键盘排序"
+      onpointerdown={onHandlePointerDown}
+      onpointermove={onHandlePointerMove}
+      onpointerup={onHandlePointerUp}
+      onkeydown={onDragKeydown}
+    >⠿</span>
     <input
       class="seq-input"
       type="text"
@@ -200,6 +335,30 @@
 
     <div class="group-toolbar">
       <button class="mini-btn" onclick={onBulkAddItems}>＋ 批量添加</button>
+
+      <!-- 模块 S：预分组下拉 -->
+      {#if app.dataPresets.presetGroups.length}
+        <div class="preset-wrap">
+          <button class="preset-btn pg" onclick={() => (presetMenuOpen = !presetMenuOpen)}>
+            📦 预分组 ▾
+          </button>
+          {#if presetMenuOpen}
+            <div class="preset-menu" role="menu">
+              {#each app.dataPresets.presetGroups as pg (pg.id)}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onclick={() => onApplyPreset(pg.id, pg.name)}
+                >
+                  {pg.name}
+                  <span style="color:var(--c-text-3);font-size:11px">（{pg.items.length}）</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
+
       {#if g.items.length && batchGroupId.value !== g.id}
         <button class="mini-btn" onclick={() => enterBatchItems(g.id)}>批量删除/改量</button>
       {/if}
@@ -304,12 +463,14 @@
       <h3>🔢 批量修改数量</h3>
       <p class="sub">将对已勾选的 <b>{(groupSelection[g.id] || []).length}</b> 个分类生效。</p>
       <div class="theme-toggle">
-        <button class:active={bulkQtyDialog.mode === 'multiply'} onclick={() => (bulkQtyDialog.mode = 'multiply')}>
-          × 乘以系数
-        </button>
-        <button class:active={bulkQtyDialog.mode === 'set'} onclick={() => (bulkQtyDialog.mode = 'set')}>
-          ＝ 设为定值
-        </button>
+        <button
+          class:active={bulkQtyDialog.mode === 'multiply'}
+          onclick={() => (bulkQtyDialog.mode = 'multiply')}
+        >× 乘以系数</button>
+        <button
+          class:active={bulkQtyDialog.mode === 'set'}
+          onclick={() => (bulkQtyDialog.mode = 'set')}
+        >＝ 设为定值</button>
       </div>
       <div class="info-field">
         <div class="field-label">
