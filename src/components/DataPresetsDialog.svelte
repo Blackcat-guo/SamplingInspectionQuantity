@@ -3,7 +3,7 @@
   import {
     app, addDataPreset, removeCustomerById, removeSupplierByName, renameSupplier, renameCustomerById,
     normalResponsibles, specialResponsibles, pushToast, scheduleSave, uid, nameKey,
-    expandedCustomerId, toggleCustomerResp, toggleCustomerRespFor, 
+    toggleCustomerResp, toggleCustomerRespFor, 
     uiState, toggleCustomerProducts, toggleSupplierProducts, 
     toggleCustomerProduct, toggleSupplierProduct,
     selectAllProductsForCustomer, selectAllProductsForSupplier,
