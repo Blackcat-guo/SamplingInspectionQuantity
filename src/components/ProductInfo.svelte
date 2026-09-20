@@ -6,7 +6,7 @@
   } from '../lib/stores/app.svelte';
 
   const p = $derived(currentProduct());
-  const incomingText = $state('');
+  let incomingText = $state('');
   $effect(() => {
     const cur = p?.incomingQty ?? 0;
     incomingText = cur > 0 ? String(cur) : '';
