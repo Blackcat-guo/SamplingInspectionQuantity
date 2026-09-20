@@ -67,7 +67,7 @@
             <button class="del" onclick={() => removeCustomerById(c.id)}>✕</button>
           </div>
         </div>
-        {#if expandedCustomerId === c.id}
+        {#if uiState.expandedCustomerId === c.id}
           <div class="resp-panel">
             <div class="panel-title">选择该客户的负责人</div>
             {#each normalResponsibles() as r (r.id)}
