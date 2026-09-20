@@ -3,11 +3,12 @@
   import {
     app, addDataPreset, removeCustomerById, removeSupplierByName, renameSupplier, renameCustomerById,
     normalResponsibles, specialResponsibles, pushToast, scheduleSave, uid, nameKey, sortNatural,
-    expandedCustomerId, expandedCustomerProductsId, expandedSupplierProductsName,
-    productPickerFilter, toggleCustomerResp, toggleCustomerRespFor, toggleCustomerProducts,
-    toggleSupplierProducts, toggleCustomerProduct, toggleSupplierProduct,
+    expandedCustomerId, toggleCustomerResp, toggleCustomerRespFor, 
+    uiState, toggleCustomerProducts, toggleSupplierProducts, 
+    toggleCustomerProduct, toggleSupplierProduct,
     selectAllProductsForCustomer, selectAllProductsForSupplier,
-    countSupplierProducts, countCustomerProducts, filteredProductsForPicker,setProductPickerFilter
+    countSupplierProducts, countCustomerProducts, filteredProductsForPicker,
+    setProductPickerFilter
   } from '../lib/stores/app.svelte';
 
   let { open = $bindable(false), onOpenSettings } = $props<{ open: boolean; onOpenSettings: () => void }>();
@@ -29,6 +30,7 @@
   let newSpecialResp = $state('');
 
   function save() { scheduleSave(); }
+
   function bulkText() {
     const raw = prompt('批量添加（每行一个 / 逗号分隔）：');
     if (!raw) return [];
@@ -73,11 +75,13 @@
             {/each}
           </div>
         {/if}
-        {#if expandedCustomerProductsId === c.id}
+        {#if uiState.expandedCustomerProductsId === c.id}
           <div class="resp-panel">
             <div class="panel-title">勾选后，这些产品的客户将变更为「{c.name}」</div>
             <div class="panel-toolbar">
-              <input value={productPickerFilter} oninput={(e) => setProductPickerFilter((e.target as HTMLInputElement).value)} placeholder="🔍 过滤产品…" />
+              <input value={uiState.productPickerFilter} 
+                     oninput={(e) => setProductPickerFilter((e.target as HTMLInputElement).value)} 
+                     placeholder="🔍 过滤产品…" />
               <button onclick={() => selectAllProductsForCustomer(c, true)}>全选</button>
               <button onclick={() => selectAllProductsForCustomer(c, false)}>清空</button>
             </div>
@@ -118,12 +122,13 @@
             <button class="del" onclick={() => removeSupplierByName(s)}>✕</button>
           </div>
         </div>
-        {#if expandedSupplierProductsName === s}
+        {#if uiState.expandedSupplierProductsName === s}
           <div class="resp-panel">
             <div class="panel-title">勾选后，这些产品的供应商将变更为「{s}」</div>
             <div class="panel-toolbar">
-              <input value={productPickerFilter} oninput={(e) => setProductPickerFilter((e.target as HTMLInputElement).value)} 
- placeholder="🔍 过滤产品…" />
+              <input value={uiState.productPickerFilter} 
+                     oninput={(e) => setProductPickerFilter((e.target as HTMLInputElement).value)} 
+                     placeholder="🔍 过滤产品…" />
               <button onclick={() => selectAllProductsForSupplier(s, true)}>全选</button>
               <button onclick={() => selectAllProductsForSupplier(s, false)}>清空</button>
             </div>
