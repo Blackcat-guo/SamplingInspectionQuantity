@@ -79,6 +79,11 @@
     cur.groups.splice(v - 1, 0, x);
     scheduleSave();
   }
+
+  function allItemsSelected(g: Group) {
+    const sel = groupSelection[g.id] || [];
+    return g.items.length > 0 && sel.length === g.items.length;
+  }
 </script>
 
 <div class="group" class:collapsed={collapsed}>
@@ -125,16 +130,20 @@
         arr.forEach(n => { if (addItem(g, n)) added++; });
         if (added) pushToast(`已添加 ${added} 个分类`);
       }}>＋ 批量添加</button>
-      <button v-if="g.items.length && batchGroupId.value !== g.id" class="mini-btn" onclick={() => enterBatchItems(g.id)}>批量删除/改量</button>
-      <div v-if="batchGroupId.value === g.id" class="batch-bar">
-        <label><input type="checkbox" checked={allItemsSelected(g)} onchange={(e) => toggleAllItems(g.id, (e.target as HTMLInputElement).checked, g.items)} /> 全选</label>
-        <span class="info">已选 {(groupSelection[g.id] || []).length} / {g.items.length}</span>
-        <div class="actions">
-          <button class="qty-btn" disabled={!(groupSelection[g.id] || []).length} onclick={() => openBulkQtyDialog(g.id)}>改量</button>
-          <button class="del-btn" disabled={!(groupSelection[g.id] || []).length} onclick={() => batchDeleteItems(g)}>删除</button>
-          <button class="cancel-btn" onclick={cancelBatchItems}>取消</button>
+      {#if g.items.length && batchGroupId.value !== g.id}
+        <button class="mini-btn" onclick={() => enterBatchItems(g.id)}>批量删除/改量</button>
+      {/if}
+      {#if batchGroupId.value === g.id}
+        <div class="batch-bar">
+          <label><input type="checkbox" checked={allItemsSelected(g)} onchange={(e) => toggleAllItems(g.id, (e.target as HTMLInputElement).checked, g.items)} /> 全选</label>
+          <span class="info">已选 {(groupSelection[g.id] || []).length} / {g.items.length}</span>
+          <div class="actions">
+            <button class="qty-btn" disabled={!(groupSelection[g.id] || []).length} onclick={() => openBulkQtyDialog(g.id)}>改量</button>
+            <button class="del-btn" disabled={!(groupSelection[g.id] || []).length} onclick={() => batchDeleteItems(g)}>删除</button>
+            <button class="cancel-btn" onclick={cancelBatchItems}>取消</button>
+          </div>
         </div>
-      </div>
+      {/if}
     </div>
 
     <div class="group-add-item">
@@ -177,8 +186,10 @@
 
 <!-- 批量改量弹窗 -->
 {#if bulkQtyDialog.show && bulkQtyDialog.gid === g.id}
-  <div class="dialog-overlay sub-dialog" onclick={() => closeBulkQtyDialog()}>
-    <div class="dialog-box" onclick={(e) => e.stopPropagation()}>
+  <div class="dialog-overlay sub-dialog" role="presentation"
+       onclick={(e) => { if (e.target === e.currentTarget) closeBulkQtyDialog(); }}
+       onkeydown={(e) => { if (e.key === 'Escape') closeBulkQtyDialog(); }}>
+    <div class="dialog-box" role="presentation">
       <h3>🔢 批量修改数量</h3>
       <p class="sub">将对已勾选的 <b>{(groupSelection[g.id] || []).length}</b> 个分类生效。</p>
       <div class="theme-toggle">
