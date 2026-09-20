@@ -13,6 +13,10 @@
   import AddProductDialog from './components/AddProductDialog.svelte';
   import ShareMenu from './components/ShareMenu.svelte';
   import Toast from './components/Toast.svelte';
+  import ConfirmDialog from './components/ConfirmDialog.svelte';
+  import SpeechInput from './components/SpeechInput.svelte';
+  import OcrPanel from './components/OcrPanel.svelte';
+  import RecognizePanel from './components/RecognizePanel.svelte';
 
   let cleanup: (() => void) | null = null;
 
@@ -21,7 +25,6 @@
     return () => { if (cleanup) cleanup(); };
   });
 
-  /* 让根节点 class 跟随体验等级 */
   $effect(() => {
     const el = document.documentElement;
     const lv = effectiveLevel();
@@ -40,28 +43,52 @@
   let addProductOpen = $state(false);
   let workTimeOpen = $state(false);
   let shareMenuOpen = $state(false);
+  let recognizeOpen = $state(false);
+
+  // 识别文本面板的桥接：语音 / OCR 填入文本
+  let recognizeRef = $state<{ appendText: (t: string) => void } | null>(null);
+  let pendingText = $state('');
+
+  function fillRecognizeText(t: string) {
+    if (recognizeRef) {
+      recognizeRef.appendText(t);
+    } else {
+      pendingText = pendingText ? pendingText + '\n' + t : t;
+    }
+    recognizeOpen = true;
+  }
 </script>
 
-<div class="layout" class:exp-elegant={effectiveLevel() === 'elegant'}
-     class:exp-standard={effectiveLevel() === 'standard'}
-     class:exp-compat={effectiveLevel() === 'compat'}
-     class:compat-mode={effectiveLevel() === 'compat'}
-     class:compact-mode={app.settings.compactMode}
-     class:no-animation={app.settings.animationLevel === 'none'}
-     class:anim-reduced={app.settings.animationLevel === 'reduced'}>
-
-  <Sidebar onOpenAddProduct={() => addProductOpen = true}
-           onOpenSettings={() => settingsOpen = true} />
+<div
+  class="layout"
+  class:exp-elegant={effectiveLevel() === 'elegant'}
+  class:exp-standard={effectiveLevel() === 'standard'}
+  class:exp-compat={effectiveLevel() === 'compat'}
+  class:compat-mode={effectiveLevel() === 'compat'}
+  class:compact-mode={app.settings.compactMode}
+  class:no-animation={app.settings.animationLevel === 'none'}
+  class:anim-reduced={app.settings.animationLevel === 'reduced'}
+>
+  <Sidebar
+    onOpenAddProduct={() => (addProductOpen = true)}
+    onOpenSettings={() => (settingsOpen = true)}
+  />
 
   {#if app.sidebarOpen}
-    <div class="overlay show" onclick={() => app.sidebarOpen = false} role="presentation"></div>
+    <div
+      class="overlay show"
+      onclick={() => (app.sidebarOpen = false)}
+      role="presentation"
+    ></div>
   {/if}
 
   <main class="main">
-    <TopNav onOpenSidebar={() => app.sidebarOpen = true}
-            onOpenDataPresets={() => dataPresetsOpen = true}
-            onOpenSettings={() => settingsOpen = true}
-            onOpenWorkTime={() => workTimeOpen = true} />
+    <TopNav
+      onOpenSidebar={() => (app.sidebarOpen = true)}
+      onOpenDataPresets={() => (dataPresetsOpen = true)}
+      onOpenSettings={() => (settingsOpen = true)}
+      onOpenWorkTime={() => (workTimeOpen = true)}
+    />
 
     {#if !currentProduct()}
       <div class="app">
@@ -72,7 +99,31 @@
       <div class="app">
         <ProductInfo />
         <PresetPanel />
-        <MergePanel onOpenShare={() => shareMenuOpen = true} />
+
+        <!-- 识别工具入口 -->
+        <section class="box">
+          <div class="box-head">
+            <span class="box-title">🎯 识别工具（语音 / OCR）</span>
+            <button
+              class="mini-batch-btn"
+              onclick={() => (recognizeOpen = !recognizeOpen)}
+            >{recognizeOpen ? '收起' : '展开'}</button>
+          </div>
+          {#if app.settings.showMainTips !== false}
+            <div class="merge-supplier-tip">
+              语音与 OCR 均需 HTTPS 或 localhost。识别结果可一键生成候选列表。
+            </div>
+          {/if}
+          <SpeechInput onFillText={fillRecognizeText} />
+          <OcrPanel onFillText={fillRecognizeText} />
+          {#if recognizeOpen}
+            <div bind:this={recognizeRef} style="display:contents">
+              <RecognizePanel />
+            </div>
+          {/if}
+        </section>
+
+        <MergePanel onOpenShare={() => (shareMenuOpen = true)} />
         <GroupList />
       </div>
     {/if}
@@ -80,8 +131,15 @@
 </div>
 
 <WorkTimeDialog bind:open={workTimeOpen} />
-<SettingsDialog bind:open={settingsOpen} onOpenDataPresets={() => dataPresetsOpen = true} />
-<DataPresetsDialog bind:open={dataPresetsOpen} onOpenSettings={() => settingsOpen = true} />
+<SettingsDialog
+  bind:open={settingsOpen}
+  onOpenDataPresets={() => (dataPresetsOpen = true)}
+/>
+<DataPresetsDialog
+  bind:open={dataPresetsOpen}
+  onOpenSettings={() => (settingsOpen = true)}
+/>
 <AddProductDialog bind:open={addProductOpen} />
 <ShareMenu bind:open={shareMenuOpen} />
 <Toast />
+<ConfirmDialog />
