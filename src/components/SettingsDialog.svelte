@@ -3,8 +3,10 @@
   import {
     app, setSetting, setExperience, setThemeMode, applyFontSize,
     pushToast, storage, applyPayload, effectiveLevel,
-    cleanupOrphanData, clearLocalCache, scheduleSave,
+    cleanupOrphanData, clearLocalCache, scheduleSave, clearOperationLogs,
   } from '../lib/stores/app.svelte';
+  import ExportDialog from './ExportDialog.svelte';
+  import ImportDialog from './ImportDialog.svelte';
 
   let { open = $bindable(false), onOpenDataPresets } = $props<{
     open: boolean;
@@ -12,6 +14,8 @@
   }>();
 
   let tab = $state('general');
+  let exportOpen = $state(false);
+  let importOpen = $state(false);
 
   const tabs = [
     { key: 'general', label: '通用' },
@@ -25,11 +29,12 @@
   const MANUAL_SECTIONS = [
     { id: 'quickstart', title: '快速开始', content: '<h4>快速开始</h4><p>请在左侧添加产品，然后在分组内添加分类并录入数量。支持批量添加与拖拽排序。</p>' },
     { id: 'product', title: '产品管理', content: '<h4>产品管理</h4><p>可以添加、重命名、复制和删除产品。勾选“样品”标记后，特殊分组负责人规则将生效。</p>' },
-    { id: 'group', title: '分组与分类', content: '<h4>分组与分类</h4><p>支持添加分组和分类，批量添加，序号排序，以及折叠预览。</p>' },
-    { id: 'preset', title: '数据预设', content: '<h4>数据预设</h4><p>可以设置客户、供应商、负责人等预设数据，并关联产品与负责人。</p>' },
-    { id: 'merge', title: '多产品汇总', content: '<h4>多产品汇总</h4><p>选择同供应商同客户的产品进行汇总，支持“合并描述”与“逐料号拆分”。</p>' },
+    { id: 'group', title: '分组与分类', content: '<h4>分组与分类</h4><p>支持添加分组和分类，批量添加，序号排序，折叠预览，以及预分组一键应用到分组。</p>' },
+    { id: 'drag', title: '拖拽排序', content: '<h4>拖拽排序</h4><p>长按 ⠿ 260ms 后拖动分组；键盘聚焦 ⠿ 按 Enter 后可用 ↑/↓ 移动。兼容模式禁用。</p>' },
+    { id: 'preset', title: '数据预设', content: '<h4>数据预设</h4><p>可以设置客户、供应商、负责人等预设数据，并关联产品与负责人。特殊分组支持关联产品筛选与负责人联动。</p>' },
+    { id: 'merge', title: '多产品汇总', content: '<h4>多产品汇总</h4><p>选择同供应商同客户的产品进行汇总，支持“合并描述”与“逐料号拆分”。负责人会根据客户与特殊分组自动带出。</p>' },
     { id: 'work', title: '工时计算', content: '<h4>工时计算</h4><p>点击顶部 ⏱️ 按钮，设置上下班时间与休息时间段，自动计算实际工作时长与加班时长。</p>' },
-    { id: 'io', title: '导入导出', content: '<h4>导入导出</h4><p>支持选择性导出产品、预设或设置，导入时支持合并或覆盖模式。</p>' },
+    { id: 'io', title: '导入导出', content: '<h4>导入导出</h4><p>支持选择性导出产品、预设或设置，导入时支持合并或覆盖模式。.js 文件也会被解析。</p>' },
     { id: 'shortcut', title: '快捷键', content: '<h4>快捷键</h4><p>Ctrl+Z 撤回，Ctrl+Shift+Z 恢复，Alt+↑/↓ 移动分类。</p>' },
     { id: 'faq', title: '常见问题', content: '<h4>常见问题</h4><p>数据保存在浏览器本地存储中。换浏览器或清除数据前请先导出备份。</p>' },
   ];
@@ -39,17 +44,13 @@
     () => MANUAL_SECTIONS.find((s) => s.id === manualActive)?.content || '',
   );
 
-  function exportData() {
+  function exportAll() {
     const payload = {
-      app: 'category-counts',
-      version: 5,
+      app: 'category-counts', version: 5,
       exportedAt: new Date().toISOString(),
-      products: app.products,
-      globalPresets: app.globalPresets,
-      mergeSelectedIds: app.mergeSelectedIds,
-      currentProductId: app.currentProductId,
-      dataPresets: app.dataPresets,
-      settings: app.settings,
+      products: app.products, globalPresets: app.globalPresets,
+      mergeSelectedIds: app.mergeSelectedIds, currentProductId: app.currentProductId,
+      dataPresets: app.dataPresets, settings: app.settings,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -61,7 +62,7 @@
     pushToast('已导出');
   }
 
-  function importData() {
+  function importFull() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json,application/json';
@@ -92,18 +93,12 @@
       const keys: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (
-          k &&
-          (k.startsWith(storage.ROOT_KEY) ||
-            k === storage.THEME_KEY ||
-            k === storage.WORK_TIME_KEY)
-        )
+        if (k && (k.startsWith(storage.ROOT_KEY) || k === storage.THEME_KEY || k === storage.WORK_TIME_KEY)) {
           keys.push(k);
+        }
       }
       keys.forEach((k) => localStorage.removeItem(k));
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
     location.reload();
   }
 </script>
@@ -157,10 +152,7 @@
           {#each ['small', 'standard', 'large'] as k (k)}
             <button
               class:active={app.settings.fontSize === k}
-              onclick={() => {
-                setSetting('fontSize', k as any);
-                applyFontSize();
-              }}
+              onclick={() => { setSetting('fontSize', k as any); applyFontSize(); }}
             >{k === 'small' ? '小' : k === 'standard' ? '标准' : '大'}</button>
           {/each}
         </div>
@@ -169,11 +161,16 @@
 
     {#if tab === 'backup'}
       <p class="backup-note">导出时可选择要包含的模块；导入合并模式会跳过重复项。</p>
-      <button class="backup-action" onclick={exportData}>💾 导出全部数据</button>
-      <button class="backup-action" onclick={importData}>📥 导入数据（合并）</button>
-      <button class="backup-action" onclick={() => cleanupOrphanData()}>🧹 一键清理孤儿数据</button>
-      <button class="backup-action" onclick={() => clearLocalCache()}>🧽 清理本地缓存</button>
+      <button class="backup-action" onclick={exportAll}>💾 导出全部数据</button>
+      <button class="backup-action" onclick={importFull}>📥 导入全部数据（合并）</button>
       <div class="sub-section">
+        <div class="panel-head-row"><span class="panel-head-text">选择性导入导出</span></div>
+        <button class="backup-action" onclick={() => (exportOpen = true)}>📤 部分导出…</button>
+        <button class="backup-action" onclick={() => (importOpen = true)}>📥 部分导入…</button>
+      </div>
+      <div class="sub-section">
+        <button class="backup-action" onclick={() => cleanupOrphanData()}>🧹 一键清理孤儿数据</button>
+        <button class="backup-action" onclick={() => clearLocalCache()}>🧽 清理本地缓存</button>
         <button class="backup-action danger" onclick={factoryReset}>⚠️ 恢复出厂设置</button>
       </div>
     {/if}
@@ -181,13 +178,7 @@
     {#if tab === 'logs'}
       <div class="panel-head-row">
         <span class="panel-head-text">操作日志（最近 50 条）</span>
-        <button
-          class="mini-batch-btn"
-          onclick={() => {
-            app.operationLogs.length = 0;
-            scheduleSave();
-          }}
-        >清空</button>
+        <button class="mini-batch-btn" onclick={clearOperationLogs}>清空</button>
       </div>
       <div class="log-list">
         {#if !app.operationLogs.length}
@@ -230,3 +221,6 @@
     <button class="cancel" onclick={() => (open = false)}>关闭</button>
   </div>
 </Dialog>
+
+<ExportDialog bind:open={exportOpen} />
+<ImportDialog bind:open={importOpen} />
