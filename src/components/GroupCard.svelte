@@ -8,7 +8,6 @@
     toggleItemSelect, toggleAllItems, batchDeleteItems, cancelBatchItems, enterBatchItems,
     transferItemToGroup,
     dragState, moveGroupTo, effectiveLevel,
-    applyPresetGroupToGroup,
   } from '../lib/stores/app.svelte';
   import type { Group } from '../lib/core/schema';
   import { tick } from 'svelte';
@@ -258,14 +257,6 @@
   dragState.overIndex = -1;
 }
 
-  /* ---------- 预分组下拉 ---------- */
-  let presetMenuOpen = $state(false);
-  function onApplyPreset(pgId: string, pgName: string) {
-    presetMenuOpen = false;
-    const n = applyPresetGroupToGroup(g, pgId);
-    if (n > 0) pushToast(`已从「${pgName}」添加 ${n} 个分类`);
-    else pushToast('没有新分类可添加（均已存在）', 'info', 2400);
-  }
 </script>
 
 <div
@@ -338,28 +329,6 @@
 
     <div class="group-toolbar">
       <button class="mini-btn" onclick={onBulkAddItems}>＋ 批量添加</button>
-
-      {#if app.dataPresets.presetGroups.length}
-        <div class="preset-wrap">
-          <button class="preset-btn pg" onclick={() => (presetMenuOpen = !presetMenuOpen)}>
-            📦 预分组 ▾
-          </button>
-          {#if presetMenuOpen}
-            <div class="preset-menu" role="menu">
-              {#each app.dataPresets.presetGroups as pg (pg.id)}
-                <button
-                  type="button"
-                  role="menuitem"
-                  onclick={() => onApplyPreset(pg.id, pg.name)}
-                >
-                  {pg.name}
-                  <span style="color:var(--c-text-3);font-size:11px">（{pg.items.length}）</span>
-                </button>
-              {/each}
-            </div>
-          {/if}
-        </div>
-      {/if}
 
       {#if g.items.length && batchGroupId.value !== g.id}
         <button class="mini-btn" onclick={() => enterBatchItems(g.id)}>批量删除/改量</button>
