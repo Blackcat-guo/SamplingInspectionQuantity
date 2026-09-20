@@ -216,4 +216,8 @@
       >📋 复制加班时长</button>
     </div>
   </div>
+    <div class="dialog-actions" style="margin-top:12px">
+      <button class="cancel" onclick={() => (open = false)}>关闭</button>
+    </div>
+  </div>
 </Dialog>
