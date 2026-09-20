@@ -120,6 +120,18 @@ h1{font-size:19px;margin:0 0 6px}
 .info-field input[readonly]{background:var(--c-bg-soft);color:var(--c-text-3)}
 .req{color:var(--c-danger)}
 
+/* 修复：样品开关样式 */
+.info-field label.sample-toggle{
+  display:flex;align-items:center;gap:8px;min-height:38px;padding:8px 10px;
+  font-size:13px;font-weight:600;color:var(--c-text-2);cursor:pointer;user-select:none;
+  border:1.5px solid var(--c-border);border-radius:9px;background:var(--c-surface);
+  transition:all .2s;flex-wrap:wrap;
+}
+.info-field label.sample-toggle:hover{border-color:var(--c-primary-border);background:var(--c-primary-soft)}
+.info-field label.sample-toggle input[type=checkbox]{width:18px;height:18px;accent-color:var(--c-primary);cursor:pointer;flex-shrink:0;margin:0}
+.info-field label.sample-toggle span{flex-shrink:0;font-weight:600}
+.info-field label.sample-toggle small{flex:1;min-width:0;text-align:right;font-size:11.5px;font-weight:500;color:var(--c-text-3)}
+
 /* 抽样显示 */
 .sampling-display{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;
   background:var(--c-surface);border:1.5px solid var(--c-info-border);border-radius:10px;
@@ -440,6 +452,69 @@ html[data-theme="dark"] .template-preview :global(.ph-empty){background:#7f1d1d;
   border-radius:10px;background:var(--c-surface);color:var(--c-primary-dark);font-size:12.5px;font-weight:700}
 .work-copy-row .work-copy-btn.primary{background:linear-gradient(135deg,var(--c-primary),var(--c-primary-2));color:#fff;border-color:transparent}
 
+/* ===== 修复：说明书导航栏 ===== */
+.manual-layout-vertical {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 12px;
+}
+.manual-layout-vertical .manual-content {
+  overflow-y: auto;
+  padding-right: 4px;
+  font-size: 13.5px;
+  line-height: 1.8;
+  color: var(--c-text-2);
+  min-height: 0;
+}
+.manual-tabs-wrap {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  border-bottom: 1.5px solid var(--c-border);
+}
+.manual-tabs-scroll {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 1px;
+}
+.manual-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+.manual-tab {
+  flex: 0 0 auto;
+  padding: 9px 12px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  border: none;
+  background: transparent;
+  color: var(--c-text-3);
+  border-bottom: 2.5px solid transparent;
+  margin-bottom: -2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all .2s;
+  cursor: pointer;
+}
+.manual-tab:hover {
+  color: var(--c-primary-dark);
+  background: var(--c-primary-soft);
+}
+.manual-tab.active {
+  color: var(--c-primary-dark);
+  border-bottom-color: var(--c-primary);
+}
+
 /* 兼容 / 动画 */
 .compat-mode *, .compat-mode *::before, .compat-mode *::after{animation:none!important;transition:none!important}
 .layout.no-animation *,.layout.no-animation *::before,.layout.no-animation *::after{
@@ -448,13 +523,32 @@ html[data-theme="dark"] .template-preview :global(.ph-empty){background:#7f1d1d;
   transition-duration:calc(var(--t-base,.35s) * 1.5)!important;animation-duration:calc(var(--t-base,.35s) * 1.5)!important;
   transition-timing-function:ease-in-out!important}
 
-/* 响应式 */
-@media (max-width:768px){
+/* ===== 修复：移动端触控目标大小 ===== */
+@media (max-width: 768px) {
   .sidebar{position:fixed;top:0;left:0;height:100vh;z-index:9999;transform:translateX(-100%);
     box-shadow:0 0 40px -10px rgba(15,23,42,.3);transition:transform .3s var(--ease)}
   .sidebar.open{transform:translateX(0)}
   .main{padding:64px 10px 40px}
   .dialog-overlay{padding:12px}
+  .product-edit, .product-copy, .product-del {
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
+  }
+  .group-collapse, .drag-handle, .seq-input,
+  .group-reset, .group-del {
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .counter .btn {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+  .item .move, .item .del {
+    width: 36px;
+    height: 36px;
+  }
 }
 @media (min-width:769px){.sidebar-close{display:none}.main-top-actions{left:266px}}
 @media (max-width:480px){
