@@ -1291,12 +1291,12 @@ export function toggleSupplierProducts(name: string): void {
   uiState.productPickerFilter = '';
 }
 
-export const filteredProductsForPicker = $derived.by(() => {
+export function getFilteredProductsForPicker() {
   const q = uiState.productPickerFilter.trim().toLowerCase();
   let list = app.products;
   if (q) list = list.filter(p => String(p.name).toLowerCase().includes(q));
   return sortNatural(list, p => p.name);
-});
+}
 
 export function setProductPickerFilter(v: string): void {
   uiState.productPickerFilter = v;
