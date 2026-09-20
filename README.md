@@ -224,10 +224,3 @@ jobs:
 ```
 
 ---
-
-### 📝 如何使用这份 README：
-
-1. 在手机 GitHub 仓库页面，点击 **Add file** → **Create new file**。
-2. 文件名填写 `README.md`。
-3. 将上面的全部 Markdown 内容粘贴进去。
-4. 提交 Commit。
