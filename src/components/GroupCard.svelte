@@ -186,7 +186,7 @@
         <button class:active={bulkQtyDialog.mode === 'set'} onclick={() => bulkQtyDialog.mode = 'set'}>＝ 设为定值</button>
       </div>
       <div class="info-field">
-        <label>{bulkQtyDialog.mode === 'multiply' ? '系数（2 = 翻倍，0.5 = 减半）' : '目标数量（PCS）'}</label>
+        <div class="field-label">{bulkQtyDialog.mode === 'multiply' ? '系数（2 = 翻倍，0.5 = 减半）' : '目标数量（PCS）'}</div>
         <input bind:value={bulkQtyDialog.value} type="text" inputmode="decimal" placeholder="如 2" />
       </div>
       <div class="dialog-actions" style="margin-top:12px">
