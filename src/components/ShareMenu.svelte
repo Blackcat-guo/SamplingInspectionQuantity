@@ -45,30 +45,33 @@
 <Dialog bind:open title="📤 选择分享方式"
         subtitle="微信 / 钉钉 / 飞书等第三方 App 不开放“直接传入文本”的 URL Scheme，因此选择后会先复制到剪贴板，再尝试打开目标 App，请手动粘贴。">
   <div class="dialog-list">
-    <div class="share-option" class:disabled={!shareable}
+    <button type="button" class="share-option" class:disabled={!shareable}
+         disabled={!shareable}
          onclick={() => { if (shareable) doSystem(); }}>
       <span class="so-icon">📱</span>
       <span class="so-label">
         系统分享（推荐）
         <div class="so-hint">{shareable ? '调起系统分享面板，可直接选目标 App' : '当前浏览器不支持 Web Share API'}</div>
       </span>
-    </div>
+    </button>
+
     {#each ['weixin', 'dingtalk', 'feishu', 'qq', 'mail'] as key (key)}
-      <div class="share-option" onclick={() => doApp(key)}>
+      <button type="button" class="share-option" onclick={() => doApp(key)}>
         <span class="so-icon">{key === 'weixin' ? '💬' : key === 'dingtalk' ? '💼' : key === 'feishu' ? '🚀' : key === 'qq' ? '🐧' : '📧'}</span>
         <span class="so-label">
           {APP_LABELS[key] || key}
           <div class="so-hint">复制并尝试打开 {APP_LABELS[key] || key}</div>
         </span>
-      </div>
+      </button>
     {/each}
-    <div class="share-option" onclick={doCopy}>
+
+    <button type="button" class="share-option" onclick={doCopy}>
       <span class="so-icon">🔗</span>
       <span class="so-label">
         仅复制到剪贴板
         <div class="so-hint">不跳转，只把文本复制好</div>
       </span>
-    </div>
+    </button>
   </div>
   <div class="dialog-actions">
     <button class="cancel" onclick={() => open = false}>关闭</button>
