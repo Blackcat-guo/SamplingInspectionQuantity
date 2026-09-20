@@ -77,7 +77,7 @@
           <div class="resp-panel">
             <div class="panel-title">勾选后，这些产品的客户将变更为「{c.name}」</div>
             <div class="panel-toolbar">
-              <input bind:value={productPickerFilter} placeholder="🔍 过滤产品…" />
+              <input value={productPickerFilter} oninput={(e) => setProductPickerFilter((e.target as HTMLInputElement).value)} placeholder="🔍 过滤产品…" />
               <button onclick={() => selectAllProductsForCustomer(c, true)}>全选</button>
               <button onclick={() => selectAllProductsForCustomer(c, false)}>清空</button>
             </div>
