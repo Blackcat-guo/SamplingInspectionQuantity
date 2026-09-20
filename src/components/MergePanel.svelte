@@ -5,7 +5,7 @@
     buildMergedText, templatePreviewHtml, getProductSamplingDisplay,
     pushToast, scheduleSave,
     scheduleAutoRespSync, rejectAutoResponsible, addManualResponsible,
-    normalResponsibles,
+    normalResponsibles, autoRespState,
   } from '../lib/stores/app.svelte';
   import { copyText } from '../lib/utils/copy';
 
@@ -22,9 +22,10 @@
   const mergedText = $derived(buildMergedText(true));
   const mergedPlain = $derived(buildMergedText(false));
 
-  // 模块 E：选择变化时防抖同步负责人
+  // ✅ Bug 2 修复：读取数组内容（join），建立真正的响应式依赖
   $effect(() => {
-    app.mergeSelectedIds.length;
+    const sig = app.mergeSelectedIds.slice().sort().join('|');
+    void sig;
     scheduleAutoRespSync();
   });
 
@@ -126,7 +127,6 @@
     </div>
   {/if}
 
-  <!-- 模块 E：负责人标签区 -->
   {#if list.length}
     <div class="merge-soft-field" style="align-items:flex-start;flex-wrap:wrap">
       <span class="field-tag" style="padding-top:6px">负责人</span>
@@ -159,7 +159,7 @@
         <div class="panel-title">选择负责人</div>
         <div class="panel-toolbar">
           <input
-            bind:value={respFilter}
+            value={respFilter}
             placeholder="🔍 过滤…"
             oninput={(e) => (respFilter = (e.target as HTMLInputElement).value)}
           />
@@ -169,7 +169,7 @@
             <button
               type="button"
               class="responsible-item"
-              style="width:100%;text-align:left;background:none;border:none"
+              style="width:100%;text-align:left;background:none;border:none;cursor:pointer"
               onclick={() => pickResp(name)}
             >
               <span>@{name}</span>
