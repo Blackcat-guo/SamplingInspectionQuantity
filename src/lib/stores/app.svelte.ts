@@ -12,7 +12,7 @@ import type {
   SpecialGroup, PresetGroup, GlobalPreset, Shortcut, Payload as _P,
 } from '../core/schema';
 import { calcSampling } from '../core/sampling';
-import { createHistory, CMD } from '../core/history';
+import { createHistory, CMD } from '../core/history.svelte';
 import * as storage from '../core/storage';
 import { renderTemplate } from '../core/template';
 
