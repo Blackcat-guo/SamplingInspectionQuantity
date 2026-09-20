@@ -1211,3 +1211,87 @@ export function cleanupOrphanData(): void {
   logOperation('清理孤儿数据');
   pushToast(`已清理 ${total} 项孤儿数据`);
 }
+
+// ==================== 以下为新增补全功能 ====================
+
+// 批量修改数量状态
+export const bulkQtyDialog = $state({
+  show: false,
+  gid: '',
+  mode: 'multiply' as 'multiply' | 'set',
+  value: '2',
+});
+
+export function openBulkQtyDialog(gid: string): void {
+  const sel = groupSelection[gid] || [];
+  if (!sel.length) { pushToast('请先勾选要修改的分类', 'error'); return; }
+  bulkQtyDialog.gid = gid;
+  bulkQtyDialog.mode = 'multiply';
+  bulkQtyDialog.value = '2';
+  bulkQtyDialog.show = true;
+}
+
+export function closeBulkQtyDialog(): void {
+  bulkQtyDialog.show = false;
+  bulkQtyDialog.gid = '';
+}
+
+export function applyBulkQty(): void {
+  const p = currentProduct();
+  const g = p?.groups.find(x => x.id === bulkQtyDialog.gid);
+  if (!p || !g) { closeBulkQtyDialog(); return; }
+  const sel = groupSelection[bulkQtyDialog.gid] || [];
+  if (!sel.length) { closeBulkQtyDialog(); return; }
+
+  const n = Number(bulkQtyDialog.value);
+  if (!bulkQtyDialog.value.trim() || !Number.isFinite(n) || n < 0) {
+    pushToast('请输入有效的数值', 'error'); return;
+  }
+
+  const set = new Set(sel);
+  const changes: { item: any; from: number; to: number }[] = [];
+  g.items.forEach(it => {
+    if (!set.has(it.name)) return;
+    const oldV = it.qty || 0;
+    const nv = clampInt(bulkQtyDialog.mode === 'multiply' ? Math.round(oldV * n) : Math.round(n), 0);
+    if (nv !== oldV) changes.push({ item: it, from: oldV, to: nv });
+  });
+
+  if (!changes.length) { closeBulkQtyDialog(); pushToast('数量没有变化'); return; }
+  history.pushSnapshot(app.products, p.id);
+  changes.forEach(c => { c.item.qty = c.to; });
+  scheduleSave();
+  closeBulkQtyDialog();
+  pushToast(`已修改 ${changes.length} 个分类的数量`);
+}
+
+// 操作日志清空功能
+export function clearOperationLogs(): void {
+  app.operationLogs.length = 0;
+  pushToast('操作日志已清空');
+  scheduleSave();
+}
+
+// 关联产品状态
+export const expandedCustomerProductsId = $state('');
+export const expandedSupplierProductsName = $state('');
+export const productPickerFilter = $state('');
+
+export function toggleCustomerProducts(id: string): void {
+  expandedCustomerProductsId = expandedCustomerProductsId === id ? '' : id;
+  expandedSupplierProductsName = '';
+  productPickerFilter = '';
+}
+
+export function toggleSupplierProducts(name: string): void {
+  expandedSupplierProductsName = expandedSupplierProductsName === name ? '' : name;
+  expandedCustomerProductsId = '';
+  productPickerFilter = '';
+}
+
+export const filteredProductsForPicker = $derived.by(() => {
+  const q = productPickerFilter.trim().toLowerCase();
+  let list = app.products;
+  if (q) list = list.filter(p => String(p.name).toLowerCase().includes(q));
+  return sortNatural(list, p => p.name);
+});
