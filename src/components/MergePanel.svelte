@@ -4,6 +4,8 @@
     isMergeSelected, toggleMergeSelect, selectAllSameCombination, clearMergeSelection,
     buildMergedText, templatePreviewHtml, getProductSamplingDisplay,
     pushToast, scheduleSave,
+    scheduleAutoRespSync, rejectAutoResponsible, addManualResponsible,
+    normalResponsibles,
   } from '../lib/stores/app.svelte';
   import { copyText } from '../lib/utils/copy';
 
@@ -11,12 +13,27 @@
 
   let copyOk = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
+  let respPickerOpen = $state(false);
+  let respFilter = $state('');
 
   const list = $derived(mergedProducts());
   const grouped = $derived(groupedProducts());
   const preview = $derived(templatePreviewHtml());
   const mergedText = $derived(buildMergedText(true));
   const mergedPlain = $derived(buildMergedText(false));
+
+  // 模块 E：选择变化时防抖同步负责人
+  $effect(() => {
+    app.mergeSelectedIds.length;
+    scheduleAutoRespSync();
+  });
+
+  const filteredResponsibles = $derived.by(() => {
+    const q = respFilter.trim().toLowerCase();
+    const all = normalResponsibles().map((r) => r.name);
+    if (!q) return all;
+    return all.filter((n) => n.toLowerCase().includes(q));
+  });
 
   async function onCopy() {
     const ok = await copyText(mergedPlain, false);
@@ -29,6 +46,13 @@
   function setMergeSummary(v: boolean) {
     app.settings.mergeMultiProductSummary = v;
     scheduleSave();
+  }
+
+  function pickResp(name: string) {
+    addManualResponsible(name);
+    respPickerOpen = false;
+    respFilter = '';
+    pushToast(`已添加 @${name}`);
   }
 </script>
 
@@ -100,6 +124,62 @@
       <span class="field-tag">临时处理方式</span>
       <span class="hint-text">请先选择参与汇总的产品</span>
     </div>
+  {/if}
+
+  <!-- 模块 E：负责人标签区 -->
+  {#if list.length}
+    <div class="merge-soft-field" style="align-items:flex-start;flex-wrap:wrap">
+      <span class="field-tag" style="padding-top:6px">负责人</span>
+      <div style="flex:1;display:flex;flex-wrap:wrap;gap:5px;min-width:0">
+        {#if app.settings.responsiblePersons.length}
+          {#each app.settings.responsiblePersons as name (name)}
+            <span class="resp-tag">
+              @{name}
+              <button
+                class="resp-tag-x"
+                title="移除"
+                onclick={() => rejectAutoResponsible(name)}
+              >✕</button>
+            </span>
+          {/each}
+        {:else}
+          <span style="font-size:12px;color:var(--c-text-3);padding:4px 0">
+            暂无（选择产品后自动带出）
+          </span>
+        {/if}
+        <button
+          class="mini-batch-btn"
+          style="padding:3px 9px;font-size:11.5px"
+          onclick={() => (respPickerOpen = !respPickerOpen)}
+        >＋ 添加</button>
+      </div>
+    </div>
+    {#if respPickerOpen}
+      <div class="resp-panel" style="margin:4px 0 8px">
+        <div class="panel-title">选择负责人</div>
+        <div class="panel-toolbar">
+          <input
+            bind:value={respFilter}
+            placeholder="🔍 过滤…"
+            oninput={(e) => (respFilter = (e.target as HTMLInputElement).value)}
+          />
+        </div>
+        {#if filteredResponsibles.length}
+          {#each filteredResponsibles as name (name)}
+            <button
+              type="button"
+              class="responsible-item"
+              style="width:100%;text-align:left;background:none;border:none"
+              onclick={() => pickResp(name)}
+            >
+              <span>@{name}</span>
+            </button>
+          {/each}
+        {:else}
+          <div class="empty-tip">没有匹配的负责人，请到「设置 → 数据预设 → 负责人」中添加。</div>
+        {/if}
+      </div>
+    {/if}
   {/if}
 
   <div class="template-label">汇总模板</div>
