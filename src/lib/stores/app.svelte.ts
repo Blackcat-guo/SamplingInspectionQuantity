@@ -400,6 +400,18 @@ export function resetGroup(index: number): void {
   scheduleSave();
 }
 
+export function collapseAllGroups(): void {
+  const p = currentProduct();
+  if (!p) return;
+  app.settings.collapsedGroups = p.groups.map(g => g.id);
+  scheduleSave();
+}
+
+export function expandAllGroups(): void {
+  app.settings.collapsedGroups = [];
+  scheduleSave();
+}
+
 export function groupSum(g: Group): number { return g.items.reduce((s, it) => s + it.qty, 0); }
 export function groupRate(g: Group): string {
   const sum = groupSum(g);
