@@ -1,10 +1,3 @@
-以下是为你项目 SamplingInspectionQuantity（方案 B：Svelte 5 重构版）量身定制的完整 README.md。这份文档不仅涵盖了所有功能、技术栈和部署指南，还特别包含了针对 Svelte 5 的开发和部署注意事项。
-
-你可以直接将以下内容复制并保存为项目根目录下的 README.md 文件。
-
----
-
-```markdown
 # 📦 抽检数量统计 (SamplingInspectionQuantity)
 
 基于 **Svelte 5** 完全重构的抽检数量统计与多产品汇总工具。项目编译为**单文件 HTML**，完美适配手机 Chrome，支持完全离线使用，并自动部署至 GitHub Pages。
