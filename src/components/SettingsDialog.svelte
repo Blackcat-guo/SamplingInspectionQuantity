@@ -1,11 +1,10 @@
 <script lang="ts">
   import Dialog from './Dialog.svelte';
   import {
-    app, setSetting, setExperience, setThemeMode, applyFontSize,
-    pushToast, storage, applyPayload, effectiveLevel,
+    app, setSetting, setExperience, setThemeMode,
+    pushToast, storage, applyPayload,
     cleanupOrphanData, clearLocalCache, scheduleSave, clearOperationLogs,
     MANUAL_SECTIONS,
-    // 任务 D 新增
     setShowTopNavText, setShowMainTips, setShowZeroQty,
     setMergeMultiProductSummary, setShowRecognizeTools,
     setFontSize, setAnimationLevel,
@@ -130,7 +129,6 @@
     {/if}
 
     {#if tab === 'display'}
-      <!-- 1. 体验等级 -->
       <div class="setting-row">
         <label>✨ 体验等级（当前：{experienceLevelLabel()}）</label>
         <div class="theme-toggle" style="margin-bottom:0">
@@ -142,33 +140,28 @@
         <p class="backup-note" style="margin-top:6px">{experienceHint()}</p>
       </div>
 
-      <!-- 2. 全局字体大小 -->
       <div class="setting-row">
         <label>🔤 全局字体大小（当前：{fontSizeLabel()}）</label>
         <div class="theme-toggle" style="margin-bottom:0">
           {#each ['small', 'standard', 'large'] as k (k)}
-            <button
-              class:active={app.settings.fontSize === k}
-              onclick={() => setFontSize(k as any)}
-            >{k === 'small' ? '小' : k === 'standard' ? '标准' : '大'}</button>
+            <button class:active={app.settings.fontSize === k} onclick={() => setFontSize(k as any)}>
+              {k === 'small' ? '小' : k === 'standard' ? '标准' : '大'}
+            </button>
           {/each}
         </div>
       </div>
 
-      <!-- 3. 动画强度 -->
       <div class="setting-row">
         <label>🎬 动画强度（当前：{animationLevelLabel()}）</label>
         <div class="theme-toggle" style="margin-bottom:0">
           {#each ['normal', 'reduced', 'none'] as k (k)}
-            <button
-              class:active={app.settings.animationLevel === k}
-              onclick={() => setAnimationLevel(k as any)}
-            >{k === 'normal' ? '标准' : k === 'reduced' ? '柔和' : '关闭'}</button>
+            <button class:active={app.settings.animationLevel === k} onclick={() => setAnimationLevel(k as any)}>
+              {k === 'normal' ? '标准' : k === 'reduced' ? '柔和' : '关闭'}
+            </button>
           {/each}
         </div>
       </div>
 
-      <!-- 4. 显示导航栏文字 -->
       <label class="display-toggle">
         <input
           type="checkbox"
@@ -179,7 +172,6 @@
         <small>{app.settings.showTopNavText !== false ? '已显示' : '仅显示图标（更紧凑）'}</small>
       </label>
 
-      <!-- 5. 显示主界面文字 -->
       <label class="display-toggle">
         <input
           type="checkbox"
@@ -190,7 +182,6 @@
         <small>{app.settings.showMainTips !== false ? '已显示' : '已隐藏（更紧凑）'}</small>
       </label>
 
-      <!-- 6. 显示 0 数量分类 -->
       <label class="display-toggle">
         <input
           type="checkbox"
@@ -201,7 +192,6 @@
         <small>{app.settings.showZeroQtyItems !== false ? '已开启' : '已隐藏'}</small>
       </label>
 
-      <!-- 7. 合并描述 -->
       <label class="display-toggle">
         <input
           type="checkbox"
@@ -216,27 +206,31 @@
         </small>
       </label>
 
-      <!-- 8. 显示识别工具（合并语音 + OCR） -->
-<label class="display-toggle">
-  <input
-    type="checkbox"
-    checked={app.settings.showRecognizeTools !== false}
-    onchange={(e) => setShowRecognizeTools((e.target as HTMLInputElement).checked)}
-  />
-  <span>🛠 显示识别工具</span>
-  <small>{app.settings.showRecognizeTools !== false ? '已开启' : '已隐藏'}</small>
-</label>
-<p class="backup-note">包含语音输入与图片识别两个面板。</p>
+      <label class="display-toggle">
+        <input
+          type="checkbox"
+          checked={app.settings.showRecognizeTools !== false}
+          onchange={(e) => setShowRecognizeTools((e.target as HTMLInputElement).checked)}
+        />
+        <span>🛠 显示识别工具</span>
+        <small>{app.settings.showRecognizeTools !== false ? '已开启' : '已隐藏'}</small>
+      </label>
+      <p class="backup-note">包含语音输入与图片识别两个面板。</p>
+    {/if}
 
     {#if tab === 'backup'}
       <p class="backup-note">导出时可选择要包含的模块；导入合并模式会跳过重复项。</p>
       <button class="backup-action" onclick={exportAll}>💾 导出全部数据</button>
       <button class="backup-action" onclick={importFull}>📥 导入全部数据（合并）</button>
+
       <div class="sub-section">
-        <div class="panel-head-row"><span class="panel-head-text">选择性导入导出</span></div>
+        <div class="panel-head-row">
+          <span class="panel-head-text">选择性导入导出</span>
+        </div>
         <button class="backup-action" onclick={() => (exportOpen = true)}>📤 部分导出…</button>
         <button class="backup-action" onclick={() => (importOpen = true)}>📥 部分导入…</button>
       </div>
+
       <div class="sub-section">
         <button class="backup-action" onclick={() => cleanupOrphanData()}>🧹 一键清理孤儿数据</button>
         <button class="backup-action" onclick={() => clearLocalCache()}>🧽 清理本地缓存</button>
@@ -281,7 +275,7 @@
     {/if}
 
     {#if tab === 'about'}
-      <p class="backup-note"><b>版本：</b>v3.3（Svelte 5 重构版）</p>
+      <p class="backup-note"><b>版本：</b>v3.4（Svelte 5 重构版）</p>
       <p class="backup-note">本版本使用 Svelte 5 编译时框架，运行时开销极低，产物体积缩小 60%+。</p>
     {/if}
   </div>
