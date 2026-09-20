@@ -1276,7 +1276,8 @@ export function clearOperationLogs(): void {
 export const uiState = $state({
   expandedCustomerProductsId: '',
   expandedSupplierProductsName: '',
-  productPickerFilter: ''
+  productPickerFilter: '',
+  expandedCustomerId: ''
 });
 
 export function toggleCustomerProducts(id: string): void {
