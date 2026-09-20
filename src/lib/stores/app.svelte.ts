@@ -1273,29 +1273,31 @@ export function clearOperationLogs(): void {
 }
 
 // 关联产品状态
-export const expandedCustomerProductsId = $state('');
-export const expandedSupplierProductsName = $state('');
-export const productPickerFilter = $state('');
+export const uiState = $state({
+  expandedCustomerProductsId: '',
+  expandedSupplierProductsName: '',
+  productPickerFilter: ''
+});
 
 export function toggleCustomerProducts(id: string): void {
-  expandedCustomerProductsId = expandedCustomerProductsId === id ? '' : id;
-  expandedSupplierProductsName = '';
-  productPickerFilter = '';
+  uiState.expandedCustomerProductsId = uiState.expandedCustomerProductsId === id ? '' : id;
+  uiState.expandedSupplierProductsName = '';
+  uiState.productPickerFilter = '';
 }
 
 export function toggleSupplierProducts(name: string): void {
-  expandedSupplierProductsName = expandedSupplierProductsName === name ? '' : name;
-  expandedCustomerProductsId = '';
-  productPickerFilter = '';
+  uiState.expandedSupplierProductsName = uiState.expandedSupplierProductsName === name ? '' : name;
+  uiState.expandedCustomerProductsId = '';
+  uiState.productPickerFilter = '';
 }
 
 export const filteredProductsForPicker = $derived.by(() => {
-  const q = productPickerFilter.trim().toLowerCase();
+  const q = uiState.productPickerFilter.trim().toLowerCase();
   let list = app.products;
   if (q) list = list.filter(p => String(p.name).toLowerCase().includes(q));
   return sortNatural(list, p => p.name);
 });
 
 export function setProductPickerFilter(v: string): void {
-  productPickerFilter = v;
+  uiState.productPickerFilter = v;
 }
