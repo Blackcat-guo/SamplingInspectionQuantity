@@ -1343,7 +1343,6 @@ export function batchDeleteItems(g: any): void {
   pushToast(`已删除 ${removedItems.length} 个分类`, 'success');
 }
 
-// ===== 补全数据预设相关的缺失导出 =====
 export function toggleCustomerRespFor(c: any, respId: string): void {
   const ids = c.responsibleIds.slice();
   const idx = ids.indexOf(respId);
@@ -1351,4 +1350,11 @@ export function toggleCustomerRespFor(c: any, respId: string): void {
   else ids.push(respId);
   c.responsibleIds = ids;
   scheduleSave();
+}
+
+export const expandedCustomerId = $state('');
+
+export function toggleCustomerResp(id: string): void {
+  expandedCustomerId = expandedCustomerId === id ? '' : id;
+  uiState.expandedCustomerProductsId = ''; // 展开负责人时，顺手收起关联产品面板
 }
