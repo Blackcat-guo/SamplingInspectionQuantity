@@ -1301,3 +1301,44 @@ export function getFilteredProductsForPicker() {
 export function setProductPickerFilter(v: string): void {
   uiState.productPickerFilter = v;
 }
+
+// ===== 新增：分组批量管理状态与功能 =====
+export const groupSelection = $state<Record<string, string[]>>({});
+export const batchGroupId = $state<{ value: string }>({ value: '' });
+
+export function enterBatchItems(gid: string): void {
+  batchGroupId.value = gid;
+  groupSelection[gid] = [];
+}
+
+export function cancelBatchItems(): void {
+  if (batchGroupId.value) groupSelection[batchGroupId.value] = [];
+  batchGroupId.value = '';
+}
+
+export function toggleItemSelect(gid: string, itemName: string): void {
+  if (!groupSelection[gid]) groupSelection[gid] = [];
+  const arr = groupSelection[gid];
+  const i = arr.indexOf(itemName);
+  if (i >= 0) arr.splice(i, 1); else arr.push(itemName);
+}
+
+export function toggleAllItems(gid: string, checked: boolean, items: any[]): void {
+  groupSelection[gid] = checked ? items.map(it => it.name) : [];
+}
+
+export function batchDeleteItems(g: any): void {
+  const sel = groupSelection[g.id] || [];
+  if (!sel.length) return;
+  const p = currentProduct();
+  if (!p) return;
+  const set = new Set(sel);
+  const removedItems = [];
+  g.items.forEach((it: any, i: number) => { if (set.has(it.name)) removedItems.push({ item: { ...it }, index: i }); });
+  history.pushSnapshot(app.products, p.id);
+  g.items = g.items.filter((it: any) => !set.has(it.name));
+  groupSelection[g.id] = [];
+  cancelBatchItems();
+  scheduleSave();
+  pushToast(`已删除 ${removedItems.length} 个分类`, 'success');
+}
