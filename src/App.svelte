@@ -17,7 +17,8 @@
   import SpeechInput from './components/SpeechInput.svelte';
   import OcrPanel from './components/OcrPanel.svelte';
   import RecognizePanel from './components/RecognizePanel.svelte';
-
+ import OutputPanel from './components/OutputPanel.svelte';
+ 
   let cleanup: (() => void) | null = null;
 
   onMount(() => {
@@ -124,6 +125,7 @@
         </section>
 
         <MergePanel onOpenShare={() => (shareMenuOpen = true)} />
+        <OutputPanel />
         <GroupList />
       </div>
     {/if}
