@@ -4,7 +4,7 @@
     setQty, commitQtyDraft, addItem, removeItem, toggleItemByName, setGroupTotal,
     groupSum, groupRate, realGroupIndex, nameKey,
     bulkQtyDialog, openBulkQtyDialog, closeBulkQtyDialog, applyBulkQty,
-    groupSelection, toggleItemSelect, toggleAllItems, batchDeleteItems, cancelBatchItems
+    groupSelection, batchGroupId, toggleItemSelect, toggleAllItems, batchDeleteItems, cancelBatchItems, enterBatchItems
   } from '../lib/stores/app.svelte';
   import type { Group } from '../lib/core/schema';
 
@@ -125,9 +125,9 @@
         arr.forEach(n => { if (addItem(g, n)) added++; });
         if (added) pushToast(`已添加 ${added} 个分类`);
       }}>＋ 批量添加</button>
-      <button v-if="g.items.length && batchGroupId !== g.id" class="mini-btn" onclick={() => enterBatchItems(g)}>批量删除/改量</button>
-      <div v-if="batchGroupId === g.id" class="batch-bar">
-        <label><input type="checkbox" checked={allItemsSelected(g)} onchange={(e) => toggleAllItems(g, (e.target as HTMLInputElement).checked)} /> 全选</label>
+      <button v-if="g.items.length && batchGroupId.value !== g.id" class="mini-btn" onclick={() => enterBatchItems(g.id)}>批量删除/改量</button>
+      <div v-if="batchGroupId.value === g.id" class="batch-bar">
+        <label><input type="checkbox" checked={allItemsSelected(g)} onchange={(e) => toggleAllItems(g.id, (e.target as HTMLInputElement).checked, g.items)} /> 全选</label>
         <span class="info">已选 {(groupSelection[g.id] || []).length} / {g.items.length}</span>
         <div class="actions">
           <button class="qty-btn" disabled={!(groupSelection[g.id] || []).length} onclick={() => openBulkQtyDialog(g.id)}>改量</button>
@@ -146,8 +146,8 @@
     <div class="items">
       {#each g.items as item, idx (item.name)}
         <div class="item">
-          {#if batchGroupId === g.id}
-            <input type="checkbox" class="item-check" checked={(groupSelection[g.id] || []).includes(item.name)} onchange={() => toggleItemSelect(g, item.name)} />
+          {#if batchGroupId.value === g.id}
+            <input type="checkbox" class="item-check" checked={(groupSelection[g.id] || []).includes(item.name)} onchange={() => toggleItemSelect(g.id, item.name)} />
           {:else}
             <div class="sort-btns">
               <button onclick={() => moveItem(idx, -1)} disabled={idx === 0}>▲</button>
@@ -162,7 +162,7 @@
                    onblur={(e) => { const raw = (e.target as HTMLInputElement).value.replace(/\D/g, ''); commitQtyDraft(g, item.name, raw); }} />
             <button class="btn" onclick={() => setQty(g, idx, item.qty + 1)}>+</button>
           </div>
-          <button class="move" title="转移到其他分组" onclick={() => { /* 转移逻辑略，保留原有 */ }}>↔</button>
+          <button class="move" title="转移到其他分组" onclick={() => { /* 转移逻辑略 */ }}>↔</button>
           <button class="del" onclick={() => removeItem(g, idx)}>✕</button>
         </div>
       {/each}
