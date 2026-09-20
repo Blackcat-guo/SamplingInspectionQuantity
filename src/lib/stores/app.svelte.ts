@@ -926,7 +926,8 @@ export function addDataPreset(kind: string, value: any): boolean {
   return false;
 }
 
-export function removeCustomer(id: string): void {
+/** 按 ID 移除客户，并清空其绑定的产品 */
+export function removeCustomerById(id: string): void {
   const idx = app.dataPresets.customers.findIndex(c => c.id === id);
   if (idx < 0) return;
   const c = app.dataPresets.customers[idx];
@@ -934,7 +935,9 @@ export function removeCustomer(id: string): void {
   app.dataPresets.customers.splice(idx, 1);
   scheduleSave();
 }
-export function removeSupplier(name: string): void {
+
+/** 按名称移除供应商，并清空其绑定的产品 */
+export function removeSupplierByName(name: string): void {
   const idx = app.dataPresets.suppliers.findIndex(x => x === name);
   if (idx < 0) return;
   app.products.forEach(p => { if (p.supplier === name) p.supplier = ''; });
@@ -956,6 +959,89 @@ export function renameSupplier(idx: number, value: string): void {
   scheduleSave();
   sanitizeMergeSelection();
 }
+
+/** 按 ID 重命名客户，并同步所有产品的客户字段 */
+export function renameCustomerById(id: string, value: string): void {
+  const c = app.dataPresets.customers.find(x => x.id === id);
+  if (!c) return;
+  const v = value.trim();
+  if (!v) return;
+  if (app.dataPresets.customers.some(x => x.id !== id && nameKey(x.name) === nameKey(v))) {
+    pushToast('已存在同名客户', 'error'); return;
+  }
+  if (c.name === v) return;
+  app.products.forEach(p => { if (p.customer === c.name) p.customer = v; });
+  c.name = v;
+  scheduleSave();
+  sanitizeMergeSelection();
+}
+
+/* ---------------- 设置页辅助功能（新增导出） ---------------- */
+
+/** 一键清理孤儿数据：无效绑定 + 未被产品引用的客户/供应商 */
+export function cleanupOrphanData(): void {
+  // 先清理产品上失效的绑定
+  cleanupOrphanProductBindings();
+
+  // 清理没有任何产品引用、且没有负责人的客户
+  const usedCust = new Set(app.products.map(p => p.customer).filter(Boolean));
+  const beforeCust = app.dataPresets.customers.length;
+  app.dataPresets.customers = app.dataPresets.customers.filter(
+    c => usedCust.has(c.name) || (c.responsibleIds && c.responsibleIds.length > 0),
+  );
+
+  // 清理没有任何产品引用的供应商
+  const usedSup = new Set(app.products.map(p => p.supplier).filter(Boolean));
+  const beforeSup = app.dataPresets.suppliers.length;
+  app.dataPresets.suppliers = app.dataPresets.suppliers.filter(s => usedSup.has(s));
+
+  const removed = (beforeCust - app.dataPresets.customers.length) + (beforeSup - app.dataPresets.suppliers.length);
+  scheduleSave();
+  pushToast(removed > 0 ? `已清理 ${removed} 项孤儿数据` : '没有可清理的孤儿数据');
+}
+
+/** 清理本地缓存：滚动备份、草稿、孤儿产品键 */
+export function clearLocalCache(): void {
+  try {
+    localStorage.removeItem(storage.BACKUP_KEY);
+    localStorage.removeItem(storage.AUTO_BACKUP_KEY);
+    localStorage.removeItem(storage.DRAFT_KEY);
+    const liveIds = new Set(app.products.map(p => p.id));
+    const stale: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(storage.PRODUCT_PREFIX)) {
+        const pid = k.slice(storage.PRODUCT_PREFIX.length);
+        if (!liveIds.has(pid)) stale.push(k);
+      }
+    }
+    stale.forEach(k => { try { localStorage.removeItem(k); } catch { /* ignore */ } });
+    scheduleSave();
+    pushToast('已清理本地缓存');
+  } catch {
+    pushToast('清理失败', 'error');
+  }
+}
+
+/* ---------------- 分类转移到其他分组 ---------------- */
+export function transferItemToGroup(fromG: Group, itemName: string, toG: Group): boolean {
+  const p = currentProduct();
+  if (!p) return false;
+  if (fromG.id === toG.id) return false;
+  const k = nameKey(itemName);
+  if (toG.items.some(it => nameKey(it.name) === k)) {
+    pushToast(`目标分组「${toG.name}」已存在同名分类`, 'error');
+    return false;
+  }
+  const idx = fromG.items.findIndex(it => nameKey(it.name) === k);
+  if (idx < 0) return false;
+  history.pushSnapshot(app.products, p.id);
+  const [item] = fromG.items.splice(idx, 1);
+  toG.items.push(item);
+  scheduleSave();
+  return true;
+}
+
 export function renameCustomer(id: string, value: string): void {
   const c = app.dataPresets.customers.find(x => x.id === id);
   if (!c) return;
@@ -1300,3 +1386,6 @@ export function clearOperationLogs(): void {
   pushToast('操作日志已清空');
   scheduleSave();
 }
+
+export { history, CMD, uid, nameKey, clampInt, sortNatural, ncmp,
+         calcSampling, parseGroupBulk, escapeHtml, storage, AUTO_GROUP_NAME };
