@@ -1386,7 +1386,3 @@ export function clearOperationLogs(): void {
   pushToast('操作日志已清空');
   scheduleSave();
 }
-
-export { history, CMD, storage, AUTO_GROUP_NAME };
-export { uid, nameKey, clampInt, sortNatural, ncmp, parseGroupBulk, escapeHtml } from '../core/schema';
-export { calcSampling } from '../core/sampling';
