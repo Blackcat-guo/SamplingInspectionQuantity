@@ -17,6 +17,7 @@
     toggleSpecialGroupProducts, toggleSpecialRespPanel,
     // 模块 K
     presetPages, pageSizeFor, setPresetPage,
+    presetNavDialog, openPresetNavDialog, closePresetNavDialog,
   } from '../lib/stores/app.svelte';
 
   let { open = $bindable(false), onOpenSettings } = $props<{
@@ -149,12 +150,16 @@
 </script>
 
 <Dialog bind:open title="📚 数据预设" subtitle="预设客户、供应商、来料数量、工序、负责人、特殊分组、预分组。" wide>
-  <div class="dp-tabs-wrap">
-    {#each tabs as t (t.key)}
-      <button class="dp-tab" class:active={tab === t.key} onclick={() => (tab = t.key)}>{t.label}</button>
-    {/each}
-    <button class="dp-tab" style="margin-left:auto" title="打开设置" onclick={onOpenSettings}>⚙️</button>
+
+<div class="dp-tabs-wrap">
+  {#each tabs as t (t.key)}
+    <button class="dp-tab" class:active={tab === t.key} onclick={() => (tab = t.key)}>{t.label}</button>
+  {/each}
+  <div style="margin-left:auto;display:flex;gap:4px">
+    <button class="dp-tab" title="Tab 导航" onclick={openPresetNavDialog}>≡</button>
+    <button class="dp-tab" title="打开设置" onclick={onOpenSettings}>⚙️</button>
   </div>
+</div>
 
   <div class="dialog-list">
     {#if tab === 'customer'}
@@ -565,3 +570,31 @@
     <button class="cancel" onclick={() => (open = false)}>关闭</button>
   </div>
 </Dialog>
+{#if presetNavDialog.show}
+  <div
+    class="dialog-overlay sub-dialog"
+    role="presentation"
+    onclick={(e) => { if (e.target === e.currentTarget) closePresetNavDialog(); }}
+  >
+    <div class="dialog-box" role="dialog" aria-modal="true" style="max-width:520px">
+      <h3>📚 数据预设导航</h3>
+      <p class="sub">点击分类直接切换，无需在页面内平铺展开。</p>
+      <div class="preset-nav-grid">
+        {#each tabs as t (t.key)}
+          <button
+            type="button"
+            class="preset-nav-item"
+            class:active={tab === t.key}
+            onclick={() => {
+              tab = t.key;
+              closePresetNavDialog();
+            }}
+          >{t.label}</button>
+        {/each}
+      </div>
+      <div class="dialog-actions" style="margin-top:16px">
+        <button class="cancel" onclick={closePresetNavDialog}>取消</button>
+      </div>
+    </div>
+  </div>
+{/if}
