@@ -433,8 +433,8 @@ export function redo(): void {
     pushToast('已恢复：' + (e.cmd.label || '下一步操作'));
   } finally { queueMicrotask(() => { applying = false; }); }
 }
-export const canUndo = history.canUndo;
-export const canRedo = history.canRedo;
+export const canUndo = () => history.canUndo;
+export const canRedo = () => history.canRedo;
 
 function applyCmd(cmd: any, dir: 'do' | 'undo'): void {
   if (cmd.t === CMD.SNAP) {
