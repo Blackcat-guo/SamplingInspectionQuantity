@@ -1,4 +1,3 @@
-import { reactive, computed } from 'svelte';
 import type { Product, DataPresets, Settings } from './schema';
 
 export const CMD = {
@@ -28,7 +27,9 @@ const HISTORY_MAX_ENTRIES = 50;
 const HISTORY_MAX_BYTES = 4 * 1024 * 1024;
 
 export function createHistory() {
-  const state = reactive({ past: [] as HistoryEntry[], future: [] as HistoryEntry[], memBytes: 0 });
+  let past = $state<HistoryEntry[]>([]);
+  let future = $state<HistoryEntry[]>([]);
+  let memBytes = $state(0);
 
   function cmdSize(cmd: Cmd): number {
     if (cmd.t === CMD.SNAP || cmd.t === CMD.GLOBAL) return (cmd.data ? cmd.data.length : 0) * 2;
@@ -52,18 +53,18 @@ export function createHistory() {
   }
 
   function trim(): void {
-    while (state.past.length > HISTORY_MAX_ENTRIES || state.memBytes > HISTORY_MAX_BYTES) {
-      if (state.past.length <= 1) break;
-      const dropped = state.past.shift();
-      state.memBytes -= dropped?.size ?? 0;
+    while (past.length > HISTORY_MAX_ENTRIES || memBytes > HISTORY_MAX_BYTES) {
+      if (past.length <= 1) break;
+      const dropped = past.shift();
+      memBytes -= dropped?.size ?? 0;
     }
-    if (state.memBytes < 0) state.memBytes = 0;
+    if (memBytes < 0) memBytes = 0;
   }
 
   function push(cmd: Cmd, guard = false): void {
     if (guard) return;
     const now = Date.now();
-    const last = state.past[state.past.length - 1];
+    const last = past[past.length - 1];
     if (last && now - last.at < HISTORY_MERGE_WINDOW && sameTarget(last.cmd, cmd)) {
       last.cmd.to = cmd.to;
       if (cmd.t === CMD.TOTAL) last.cmd.toAuto = cmd.toAuto;
@@ -71,17 +72,17 @@ export function createHistory() {
       return;
     }
     const size = cmdSize(cmd);
-    state.past.push({ cmd, at: now, size });
-    state.memBytes += size;
+    past.push({ cmd, at: now, size });
+    memBytes += size;
     trim();
-    state.future.length = 0;
+    future.length = 0;
   }
 
   return {
-    past: state.past,
-    future: state.future,
-    canUndo: computed(() => state.past.length > 0),
-    canRedo: computed(() => state.future.length > 0),
+    get past() { return past },
+    get future() { return future },
+    get canUndo() { return past.length > 0 },
+    get canRedo() { return future.length > 0 },
     push,
     pushSnapshot(products: Product[], pid: string, guard = false) {
       const p = products.find(x => x.id === pid);
@@ -105,27 +106,27 @@ export function createHistory() {
       }, guard);
     },
     popPast(): HistoryEntry | undefined {
-      const e = state.past.pop();
-      if (e) state.memBytes = Math.max(0, state.memBytes - e.size);
+      const e = past.pop();
+      if (e) memBytes = Math.max(0, memBytes - e.size);
       return e;
     },
-    popFuture(): HistoryEntry | undefined { return state.future.pop(); },
-    commitToFuture(e: HistoryEntry) { state.future.push(e); },
+    popFuture(): HistoryEntry | undefined { return future.pop(); },
+    commitToFuture(e: HistoryEntry) { future.push(e); },
     commitToPast(e: HistoryEntry) {
-      state.past.push(e);
-      state.memBytes += e.size;
+      past.push(e);
+      memBytes += e.size;
       trim();
     },
     clear() {
-      state.past.length = 0;
-      state.future.length = 0;
-      state.memBytes = 0;
+      past.length = 0;
+      future.length = 0;
+      memBytes = 0;
     },
     reset(products: Product[]) {
-      state.past.length = 0;
-      state.future.length = 0;
-      state.memBytes = 0;
-      state.past.push({
+      past.length = 0;
+      future.length = 0;
+      memBytes = 0;
+      past.push({
         cmd: { t: CMD.SNAP, pid: '__all__', data: JSON.stringify(products) },
         at: Date.now(), size: 0,
       });
