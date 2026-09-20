@@ -1888,6 +1888,7 @@ export function toggleSpecialRespPanel(id: string): void {
 
 /* ============================================================
    模块 L：部分导出 / 部分导入
+   数据格式 100% 兼容 counts.html
    ============================================================ */
 export interface ExportOptions {
   products: boolean;
@@ -1902,69 +1903,89 @@ export interface ImportOptions {
   mode: 'merge' | 'overwrite';
 }
 
+/** 导出：flat 结构，字段名与 counts.html 一致 */
 export function buildPartialExport(opts: ExportOptions): string {
-  const out: any = {
+  const payload: any = {
     app: 'category-counts',
     version: 5,
     exportedAt: new Date().toISOString(),
     partial: true,
-    modules: {},
   };
   if (opts.products) {
-    out.modules.products = {
-      products: app.products,
-      globalPresets: app.globalPresets,
-      mergeSelectedIds: app.mergeSelectedIds,
-      currentProductId: app.currentProductId,
-    };
+    payload.products = app.products;
+    payload.globalPresets = app.globalPresets;
+    payload.mergeSelectedIds = app.mergeSelectedIds;
+    payload.currentProductId = app.currentProductId;
   }
-  if (opts.dataPresets) out.modules.dataPresets = app.dataPresets;
-  if (opts.settings) out.modules.settings = app.settings;
-  return JSON.stringify(out, null, 2);
+  if (opts.dataPresets) payload.dataPresets = app.dataPresets;
+  if (opts.settings) payload.settings = app.settings;
+  return JSON.stringify(payload, null, 2);
 }
 
+/** 文件摘要 */
 export function summarizeImport(raw: any): string {
-  const mod = raw?.modules;
-  if (!mod) {
-    return `${(raw?.products || []).length} 产品 · ${(raw?.dataPresets?.customers || []).length} 客户 · ${(raw?.dataPresets?.suppliers || []).length} 供应商`;
-  }
   const parts: string[] = [];
-  if (mod.products) parts.push(`${(mod.products.products || []).length} 产品`);
-  if (mod.dataPresets) {
-    parts.push(`${(mod.dataPresets.customers || []).length} 客户`);
-    parts.push(`${(mod.dataPresets.suppliers || []).length} 供应商`);
-    parts.push(`${(mod.dataPresets.specialGroups || []).length} 特殊分组`);
+  if (Array.isArray(raw?.products)) parts.push(`${raw.products.length} 产品`);
+  const dp = raw?.dataPresets;
+  if (dp) {
+    parts.push(`${(dp.customers || []).length} 客户`);
+    parts.push(`${(dp.suppliers || []).length} 供应商`);
+    parts.push(`${(dp.specialGroups || []).length} 特殊分组`);
   }
-  if (mod.settings) parts.push('全局设置');
-  return parts.join(' · ');
+  if (raw?.settings) parts.push('全局设置');
+  return parts.join(' · ') || '空文件';
 }
 
+/** 检测导入文件包含哪些模块 */
+export function detectImportModules(raw: any): {
+  products: boolean;
+  dataPresets: boolean;
+  settings: boolean;
+} {
+  return {
+    products: Array.isArray(raw?.products),
+    dataPresets: !!raw?.dataPresets,
+    settings: !!raw?.settings,
+  };
+}
+
+/** ✅ RISK-2 修复：负责人 ID 悬空清理 */
+function cleanupResponsibleIds(): void {
+  const valid = new Set(app.dataPresets.responsiblePersons.map((r) => r.id));
+  app.dataPresets.customers.forEach((c) => {
+    const f = c.responsibleIds.filter((id) => valid.has(id));
+    if (f.length !== c.responsibleIds.length) c.responsibleIds = f;
+  });
+  app.dataPresets.specialGroups.forEach((sg) => {
+    const f = sg.responsibleIds.filter((id) => valid.has(id));
+    if (f.length !== sg.responsibleIds.length) sg.responsibleIds = f;
+  });
+}
+
+/** 导入：读取 flat 结构 */
 export function importPartialPayload(
   raw: any,
   opts: ImportOptions,
 ): { added: number; replaced: number } {
   let added = 0;
   let replaced = 0;
-  const mod = raw?.modules;
-  if (!mod) {
-    applyPayload(raw);
-    return { added: 1, replaced: 0 };
-  }
 
-  if (opts.products && mod.products) {
-    const newProducts = (mod.products.products || []).map(normalizeProduct);
+  if (opts.products && Array.isArray(raw?.products)) {
+    const newProducts = raw.products.map(normalizeProduct);
     if (opts.mode === 'overwrite') {
       app.products = newProducts;
-      app.globalPresets = cleanGlobalPresets(mod.products.globalPresets || []);
-      app.mergeSelectedIds = Array.isArray(mod.products.mergeSelectedIds)
-        ? mod.products.mergeSelectedIds
+      app.globalPresets = cleanGlobalPresets(raw.globalPresets || []);
+      app.mergeSelectedIds = Array.isArray(raw.mergeSelectedIds)
+        ? raw.mergeSelectedIds.filter((x: unknown) => typeof x === 'string')
         : [];
       app.currentProductId =
-        mod.products.currentProductId || newProducts[0]?.id || '';
+        raw.currentProductId && newProducts.some((p: Product) => p.id === raw.currentProductId)
+          ? raw.currentProductId
+          : newProducts[0]?.id || '';
       replaced += newProducts.length;
     } else {
       const byName = new Map(app.products.map((p) => [nameKey(p.name), p]));
-      newProducts.forEach((np) => {
+      newProducts.forEach((np: Product) => {
         const k = nameKey(np.name);
         if (byName.has(k)) replaced++;
         else {
@@ -1972,9 +1993,9 @@ export function importPartialPayload(
           added++;
         }
       });
-      if (Array.isArray(mod.products.globalPresets)) {
+      if (Array.isArray(raw.globalPresets)) {
         const seen = new Set(app.globalPresets.map((g) => nameKey(g.name)));
-        cleanGlobalPresets(mod.products.globalPresets).forEach((g) => {
+        cleanGlobalPresets(raw.globalPresets).forEach((g) => {
           if (!seen.has(nameKey(g.name))) {
             app.globalPresets.push(g);
             added++;
@@ -1984,8 +2005,8 @@ export function importPartialPayload(
     }
   }
 
-  if (opts.dataPresets && mod.dataPresets) {
-    const dp = mod.dataPresets;
+  if (opts.dataPresets && raw?.dataPresets) {
+    const dp = raw.dataPresets;
     if (opts.mode === 'overwrite') {
       app.dataPresets = {
         suppliers: cleanStringList(dp.suppliers),
@@ -1999,72 +2020,53 @@ export function importPartialPayload(
         presetGroups: cleanPresetGroups(dp.presetGroups),
       };
       replaced += 1;
-      // ✅ Bug 5 修复：覆盖 dataPresets 后清理产品上的失效绑定
+      // ✅ RISK-2：覆盖后清理悬空 ID
+      cleanupResponsibleIds();
+      // ✅ 覆盖后清理产品上失效的绑定
       cleanupOrphanProductBindings();
     } else {
       const sup = new Set(app.dataPresets.suppliers.map(nameKey));
       (dp.suppliers || []).forEach((s: string) => {
-        if (!sup.has(nameKey(s))) {
-          app.dataPresets.suppliers.push(s);
-          added++;
-        }
+        if (!sup.has(nameKey(s))) { app.dataPresets.suppliers.push(s); added++; }
       });
       const cust = new Set(app.dataPresets.customers.map((c) => nameKey(c.name)));
       cleanCustomers(dp.customers).forEach((c) => {
-        if (!cust.has(nameKey(c.name))) {
-          app.dataPresets.customers.push(c);
-          added++;
-        }
+        if (!cust.has(nameKey(c.name))) { app.dataPresets.customers.push(c); added++; }
       });
       const inq = new Set(app.dataPresets.incomingQtyPresets);
       cleanNumberList(dp.incomingQtyPresets).forEach((n) => {
-        if (!inq.has(n)) {
-          app.dataPresets.incomingQtyPresets.push(n);
-          added++;
-        }
+        if (!inq.has(n)) { app.dataPresets.incomingQtyPresets.push(n); added++; }
       });
       const proc = new Set(app.dataPresets.processes.map(nameKey));
       (dp.processes || []).forEach((s: string) => {
-        if (!proc.has(nameKey(s))) {
-          app.dataPresets.processes.push(s);
-          added++;
-        }
+        if (!proc.has(nameKey(s))) { app.dataPresets.processes.push(s); added++; }
       });
-      const resp = new Set(
-        app.dataPresets.responsiblePersons.map((r) => nameKey(r.name)),
-      );
+      const resp = new Set(app.dataPresets.responsiblePersons.map((r) => nameKey(r.name)));
       cleanResponsiblePersons(dp.responsiblePersons).forEach((r) => {
         if (!resp.has(nameKey(r.name))) {
-          app.dataPresets.responsiblePersons.push(r);
-          added++;
+          app.dataPresets.responsiblePersons.push(r); added++;
         }
       });
       const sg = new Set(app.dataPresets.specialGroups.map((s) => nameKey(s.name)));
       cleanSpecialGroups(dp.specialGroups).forEach((s) => {
-        if (!sg.has(nameKey(s.name))) {
-          app.dataPresets.specialGroups.push(s);
-          added++;
-        }
+        if (!sg.has(nameKey(s.name))) { app.dataPresets.specialGroups.push(s); added++; }
       });
-      const pg = new Set(
-        app.dataPresets.presetGroups.map((p) => nameKey(p.name)),
-      );
+      const pg = new Set(app.dataPresets.presetGroups.map((p) => nameKey(p.name)));
       cleanPresetGroups(dp.presetGroups).forEach((p) => {
-        if (!pg.has(nameKey(p.name))) {
-          app.dataPresets.presetGroups.push(p);
-          added++;
-        }
+        if (!pg.has(nameKey(p.name))) { app.dataPresets.presetGroups.push(p); added++; }
       });
+      // ✅ 合并后也做一次清理
+      cleanupResponsibleIds();
     }
   }
 
-  if (opts.settings && mod.settings) {
+  if (opts.settings && raw?.settings) {
     if (opts.mode === 'overwrite') {
-      Object.assign(app.settings, { ...defaultSettings(), ...mod.settings });
+      Object.assign(app.settings, { ...defaultSettings(), ...raw.settings });
     } else {
-      Object.keys(mod.settings).forEach((k) => {
+      Object.keys(raw.settings).forEach((k) => {
         if ((app.settings as any)[k] === undefined) {
-          (app.settings as any)[k] = mod.settings[k];
+          (app.settings as any)[k] = raw.settings[k];
         }
       });
     }
@@ -2074,12 +2076,11 @@ export function importPartialPayload(
   return { added, replaced };
 }
 
-/** 解析 .js 文件内容（拒绝危险关键字） */
+/** 解析 .js 文件内容（先剥离字符串再检测危险关键字） */
 export function parseJsData(text: string): any {
   const trimmed = String(text || '').trim();
   if (!trimmed) throw new Error('空文件');
 
-  // ✅ Bug 6 修复：先剥离字符串/模板字面量，再检测危险关键字
   const stripped = trimmed
     .replace(/'(?:[^'\\]|\\.)*'/g, "''")
     .replace(/"(?:[^"\\]|\\.)*"/g, '""')
