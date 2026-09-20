@@ -2,12 +2,12 @@
   import Dialog from './Dialog.svelte';
   import {
     app, addDataPreset, removeCustomerById, removeSupplierByName, renameSupplier, renameCustomerById,
-    normalResponsibles, specialResponsibles, pushToast, scheduleSave, uid, nameKey, sortNatural,
+    normalResponsibles, specialResponsibles, pushToast, scheduleSave, uid, nameKey,
     expandedCustomerId, toggleCustomerResp, toggleCustomerRespFor, 
     uiState, toggleCustomerProducts, toggleSupplierProducts, 
     toggleCustomerProduct, toggleSupplierProduct,
     selectAllProductsForCustomer, selectAllProductsForSupplier,
-    countSupplierProducts, countCustomerProducts, filteredProductsForPicker,
+    countSupplierProducts, countCustomerProducts, getFilteredProductsForPicker,
     setProductPickerFilter
   } from '../lib/stores/app.svelte';
 
