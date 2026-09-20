@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
-    app, currentProduct, duplicateProduct, removeProduct, switchProduct, sortNatural, ncmp,
+    app, duplicateProduct, removeProduct, switchProduct,
+    sortNatural, ncmp, scheduleSave,
   } from '../lib/stores/app.svelte';
 
   let { onOpenAddProduct, onOpenSettings } = $props<{
@@ -59,7 +60,9 @@
     if (v === null) return;
     const t = v.trim();
     if (!t) return;
+    if (p.name === t) return;
     p.name = t;
+    scheduleSave();
   }
 </script>
 
