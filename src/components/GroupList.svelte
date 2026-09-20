@@ -2,6 +2,7 @@
   import {
     app, currentProduct, currentGroups, addGroup, addStandardGroups,
     expandAllGroups, collapseAllGroups, scheduleSave,
+    createGroupFromPreset,
   } from '../lib/stores/app.svelte';
   import GroupCard from './GroupCard.svelte';
 
@@ -12,6 +13,7 @@
   let filter = $state('');
   let bulkTotalOpen = $state(false);
   let bulkTotalInput = $state('');
+  let presetMenuOpen = $state(false);
 
   const filtered = $derived.by(() => {
     const q = filter.trim().toLowerCase();
@@ -29,16 +31,18 @@
     nameInput = '';
   }
 
+  async function onPickPreset(pgId: string) {
+    presetMenuOpen = false;
+    await createGroupFromPreset(pgId);
+  }
+
   function applyBulkTotal() {
     const cur = currentProduct();
     if (!cur) return;
     const n = parseInt(bulkTotalInput.replace(/\D/g, ''), 10);
     if (!Number.isFinite(n)) return;
     if (!confirm(`将全部 ${cur.groups.length} 个分组的总数量设为 ${n}？`)) return;
-    cur.groups.forEach((g) => {
-      g.total = n;
-      g.totalIsAuto = false;
-    });
+    cur.groups.forEach((g) => { g.total = n; g.totalIsAuto = false; });
     scheduleSave();
     bulkTotalInput = '';
     bulkTotalOpen = false;
@@ -72,6 +76,34 @@
     />
     <button class="add-group-submit" onclick={onAddGroup}>添加分组</button>
     <button class="add-group-standard" onclick={addStandardGroups}>📋 标准分组</button>
+
+    <!-- ✅ 模块 S-1：从预分组新建分组 -->
+    {#if app.dataPresets.presetGroups.length}
+      <div class="preset-wrap">
+        <button
+          class="add-group-standard"
+          onclick={() => (presetMenuOpen = !presetMenuOpen)}
+        >📦 预分组 ▾</button>
+        {#if presetMenuOpen}
+          <div class="preset-menu" role="menu">
+            {#each app.dataPresets.presetGroups as pg (pg.id)}
+              <button
+                type="button"
+                role="menuitem"
+                onclick={() => onPickPreset(pg.id)}
+              >
+                <div style="font-weight:700">{pg.name}</div>
+                <div style="font-size:11px;color:var(--c-text-3);font-weight:400">
+                  {pg.items.length
+                    ? pg.items.slice(0, 3).join('、') + (pg.items.length > 3 ? '…' : '')
+                    : '（空分组）'}
+                </div>
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
   </div>
 
   <div style="margin-top:10px">
