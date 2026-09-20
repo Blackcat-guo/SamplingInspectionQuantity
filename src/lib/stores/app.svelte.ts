@@ -351,6 +351,24 @@ export function addGroup(raw: string): void {
   scheduleSave();
 }
 
+/* ---------------- 全部分组展开/折叠 ---------------- */
+export function collapseAllGroups(): void {
+  const p = currentProduct();
+  if (!p || !p.groups.length) return;
+  const arr = new Set(app.settings.collapsedGroups || []);
+  p.groups.forEach(g => arr.add(g.id));
+  app.settings.collapsedGroups = Array.from(arr);
+  scheduleSave();
+}
+
+export function expandAllGroups(): void {
+  const p = currentProduct();
+  if (!p || !p.groups.length) return;
+  const ids = new Set(p.groups.map(g => g.id));
+  app.settings.collapsedGroups = (app.settings.collapsedGroups || []).filter(id => !ids.has(id));
+  scheduleSave();
+}
+
 export function addStandardGroups(): void {
   const p = currentProduct();
   if (!p) return;
@@ -1386,3 +1404,4 @@ export function clearOperationLogs(): void {
   pushToast('操作日志已清空');
   scheduleSave();
 }
+
