@@ -1353,8 +1353,6 @@ export function toggleCustomerRespFor(c: any, respId: string): void {
   scheduleSave();
 }
 
-export const expandedCustomerId = $state('');
-
 export function toggleCustomerResp(id: string): void {
   expandedCustomerId = expandedCustomerId === id ? '' : id;
   uiState.expandedCustomerProductsId = ''; // 展开负责人时，顺手收起关联产品面板
