@@ -10,7 +10,7 @@ import {
 } from '../core/schema';
 import type {
   Product, Group, DataPresets, Settings, Customer, Responsible,
-  SpecialGroup, PresetGroup, GlobalPreset, Shortcut, Payload as _P,
+  SpecialGroup, PresetGroup, GlobalPreset, Shortcut,
 } from '../core/schema';
 import { calcSampling } from '../core/sampling';
 import { createHistory, CMD } from '../core/history.svelte';
@@ -19,7 +19,9 @@ import { renderTemplate } from '../core/template';
 
 /* ---------------- 状态 ---------------- */
 export interface ToastItem {
-  id: number; msg: string; type: 'success' | 'error' | 'info';
+  id: number;
+  msg: string;
+  type: 'success' | 'error' | 'info';
   action?: { label: string; fn: () => void } | null;
   timer?: ReturnType<typeof setTimeout>;
 }
@@ -70,6 +72,50 @@ export const app = $state({
 });
 
 const history = createHistory();
+
+/* ---------------- 自定义确认弹窗 ---------------- */
+export interface ConfirmOptions {
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  danger?: boolean;
+  showDontAsk?: boolean;
+  dontAskKey?: 'confirmBeforeDelete';
+}
+
+export const confirmState = $state<{
+  show: boolean;
+  options: ConfirmOptions;
+  _resolve: ((v: boolean) => void) | null;
+}>({
+  show: false,
+  options: { title: '', message: '' },
+  _resolve: null,
+});
+
+export function askConfirm(options: ConfirmOptions): Promise<boolean> {
+  if (options.showDontAsk && options.dontAskKey) {
+    const cur = (app.settings as any)[options.dontAskKey];
+    if (cur === false) return Promise.resolve(true);
+  }
+  return new Promise((resolve) => {
+    confirmState.options = options;
+    confirmState._resolve = resolve;
+    confirmState.show = true;
+  });
+}
+
+export function resolveConfirm(v: boolean, dontAskAgain = false): void {
+  if (dontAskAgain && confirmState.options.dontAskKey) {
+    (app.settings as any)[confirmState.options.dontAskKey] = false;
+    scheduleSave();
+  }
+  confirmState.show = false;
+  const r = confirmState._resolve;
+  confirmState._resolve = null;
+  if (r) r(v);
+}
 
 /* ---------------- 保存节流 ---------------- */
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -130,32 +176,43 @@ export function pushToast(
   item.timer = setTimeout(() => dismissToast(id), duration);
   if (app.toasts.length > 5) {
     const removed = app.toasts.splice(0, app.toasts.length - 5);
-    removed.forEach(t => t.timer && clearTimeout(t.timer));
+    removed.forEach((t) => t.timer && clearTimeout(t.timer));
   }
   return id;
 }
+
 export function dismissToast(id: number): void {
-  const i = app.toasts.findIndex(t => t.id === id);
+  const i = app.toasts.findIndex((t) => t.id === id);
   if (i >= 0) {
     const t = app.toasts[i];
     if (t.timer) clearTimeout(t.timer);
     app.toasts.splice(i, 1);
   }
 }
+
 export function runToastAction(t: ToastItem): void {
-  if (t.action?.fn) { try { t.action.fn(); } catch { /* ignore */ } }
+  if (t.action?.fn) {
+    try { t.action.fn(); } catch { /* ignore */ }
+  }
   dismissToast(t.id);
 }
+
 export function logOperation(text: string): void {
-  if (!text) return;
-  app.operationLogs.unshift({ id: uid(), text, at: Date.now() });
+  if (!text || typeof text !== 'string') return;
+  app.operationLogs.unshift({ id: uid(), text: text.slice(0, 200), at: Date.now() });
   if (app.operationLogs.length > 50) app.operationLogs.length = 50;
+  scheduleSave();
+}
+
+export function clearOperationLogs(): void {
+  app.operationLogs.length = 0;
+  pushToast('操作日志已清空');
   scheduleSave();
 }
 
 /* ---------------- 计算属性 ---------------- */
 export function currentProduct(): Product | null {
-  return app.products.find(p => p.id === app.currentProductId) || app.products[0] || null;
+  return app.products.find((p) => p.id === app.currentProductId) || app.products[0] || null;
 }
 export function currentGroups(): Group[] {
   return currentProduct()?.groups ?? [];
@@ -164,10 +221,10 @@ export function currentPresets(): string[] {
   return currentProduct()?.presets ?? [];
 }
 export function normalResponsibles(): Responsible[] {
-  return app.dataPresets.responsiblePersons.filter(r => r.kind !== 'special');
+  return app.dataPresets.responsiblePersons.filter((r) => r.kind !== 'special');
 }
 export function specialResponsibles(): Responsible[] {
-  return app.dataPresets.responsiblePersons.filter(r => r.kind === 'special');
+  return app.dataPresets.responsiblePersons.filter((r) => r.kind === 'special');
 }
 
 /* ---------------- 体验等级 ---------------- */
@@ -175,8 +232,10 @@ export function autoLevel(): 'standard' | 'compat' {
   try {
     const cores = (navigator as any).hardwareConcurrency ?? 4;
     const mem = (navigator as any).deviceMemory ?? 4;
-    return (cores < 4 || mem < 4) ? 'compat' : 'standard';
-  } catch { return 'standard'; }
+    return cores < 4 || mem < 4 ? 'compat' : 'standard';
+  } catch {
+    return 'standard';
+  }
 }
 export function effectiveLevel(): 'auto' | 'elegant' | 'standard' | 'compat' {
   const lv = app.settings.experienceLevel;
@@ -192,7 +251,7 @@ export function realGroupIndex(g: Group): number {
 export function syncSamplingToGroups(product: Product): void {
   if (!product) return;
   const s = calcSampling(product.incomingQty || 0);
-  product.groups.forEach(g => { if (g.totalIsAuto !== false) g.total = s; });
+  product.groups.forEach((g) => { if (g.totalIsAuto !== false) g.total = s; });
 }
 
 export function setQty(g: Group, itemIndex: number, qty: number): void {
@@ -211,7 +270,7 @@ export function setQty(g: Group, itemIndex: number, qty: number): void {
 export function commitQtyDraft(g: Group, itemName: string, raw: string): void {
   const p = currentProduct();
   if (!p) return;
-  const item = g.items.find(x => nameKey(x.name) === nameKey(itemName));
+  const item = g.items.find((x) => nameKey(x.name) === nameKey(itemName));
   if (!item) return;
   const v = Math.max(0, parseInt(raw, 10) || 0);
   if (item.qty === v) return;
@@ -225,9 +284,12 @@ export function addItem(g: Group, name: string): boolean {
   const p = currentProduct();
   if (!p || !name.trim()) return false;
   const k = nameKey(name);
-  if (g.items.some(it => nameKey(it.name) === k)) return false;
-  const used = p.groups.some(x => x.id !== g.id && x.items.some(it => nameKey(it.name) === k));
-  if (used) { pushToast(`分类「${name}」已存在于本产品的其他分组`, 'error'); return false; }
+  if (g.items.some((it) => nameKey(it.name) === k)) return false;
+  const used = p.groups.some((x) => x.id !== g.id && x.items.some((it) => nameKey(it.name) === k));
+  if (used) {
+    pushToast(`分类「${name}」已存在于本产品的其他分组`, 'error');
+    return false;
+  }
   history.pushSnapshot(app.products, p.id);
   g.items.push({ name: name.trim(), qty: 0 });
   scheduleSave();
@@ -236,7 +298,7 @@ export function addItem(g: Group, name: string): boolean {
 
 export function toggleItemByName(g: Group, name: string): void {
   const k = nameKey(name);
-  const idx = g.items.findIndex(it => nameKey(it.name) === k);
+  const idx = g.items.findIndex((it) => nameKey(it.name) === k);
   if (idx >= 0) {
     const p = currentProduct();
     if (!p) return;
@@ -298,7 +360,7 @@ export function setProductField(field: string, value: string): void {
 }
 
 export function setProductSupplier(pid: string, value: string): void {
-  const p = app.products.find(x => x.id === pid);
+  const p = app.products.find((x) => x.id === pid);
   if (!p) return;
   if (p.supplier === value) return;
   p.supplier = value;
@@ -306,7 +368,7 @@ export function setProductSupplier(pid: string, value: string): void {
   sanitizeMergeSelection();
 }
 export function setProductCustomer(pid: string, value: string): void {
-  const p = app.products.find(x => x.id === pid);
+  const p = app.products.find((x) => x.id === pid);
   if (!p) return;
   if (p.customer === value) return;
   p.customer = value;
@@ -333,30 +395,30 @@ export function addGroup(raw: string): void {
   const isNumeric = names.length > 1 || /^分组\d+$/.test(names[0] || '');
   history.pushSnapshot(app.products, p.id);
   if (isNumeric && names.length) {
-    const existing = new Set(p.groups.map(g => g.name));
+    const existing = new Set(p.groups.map((g) => g.name));
     let added = 0;
-    names.forEach(name => {
+    names.forEach((name) => {
       if (existing.has(name)) return;
       p.groups.push({ id: uid(), name, total: initTotal, items: [] });
-      existing.add(name); added++;
+      existing.add(name);
+      added++;
     });
     if (added === 0) { history.popPast(); return; }
     logOperation(`批量添加 ${added} 个分组`);
   } else {
     const name = names[0] || raw.trim();
-    if (p.groups.some(g => g.name === name)) { history.popPast(); return; }
+    if (p.groups.some((g) => g.name === name)) { history.popPast(); return; }
     p.groups.push({ id: uid(), name, total: initTotal, items: [] });
     logOperation(`添加分组「${name}」`);
   }
   scheduleSave();
 }
 
-/* ---------------- 全部分组展开/折叠 ---------------- */
 export function collapseAllGroups(): void {
   const p = currentProduct();
   if (!p || !p.groups.length) return;
   const arr = new Set(app.settings.collapsedGroups || []);
-  p.groups.forEach(g => arr.add(g.id));
+  p.groups.forEach((g) => arr.add(g.id));
   app.settings.collapsedGroups = Array.from(arr);
   scheduleSave();
 }
@@ -364,8 +426,8 @@ export function collapseAllGroups(): void {
 export function expandAllGroups(): void {
   const p = currentProduct();
   if (!p || !p.groups.length) return;
-  const ids = new Set(p.groups.map(g => g.id));
-  app.settings.collapsedGroups = (app.settings.collapsedGroups || []).filter(id => !ids.has(id));
+  const ids = new Set(p.groups.map((g) => g.id));
+  app.settings.collapsedGroups = (app.settings.collapsedGroups || []).filter((id) => !ids.has(id));
   scheduleSave();
 }
 
@@ -373,11 +435,14 @@ export function addStandardGroups(): void {
   const p = currentProduct();
   if (!p) return;
   const standards = ['严重', '主要', '次要'];
-  const missing = standards.filter(n => !p.groups.some(g => g.name === n));
-  if (!missing.length) { pushToast('标准分组已全部存在', 'error'); return; }
+  const missing = standards.filter((n) => !p.groups.some((g) => g.name === n));
+  if (!missing.length) {
+    pushToast('标准分组已全部存在', 'error');
+    return;
+  }
   history.pushSnapshot(app.products, p.id);
   const initTotal = calcSampling(p.incomingQty || 0);
-  missing.forEach(name => {
+  missing.forEach((name) => {
     p.groups.push({ id: uid(), name, total: initTotal, totalIsAuto: true, items: [] });
   });
   scheduleSave();
@@ -393,7 +458,7 @@ export function removeGroup(index: number): void {
   history.pushSnapshot(app.products, p.id);
   p.groups.splice(index, 1);
   scheduleSave();
-  const id = pushToast(`已删除分组「${g.name}」`, 'success', 5000, {
+  pushToast(`已删除分组「${g.name}」`, 'success', 5000, {
     label: '撤回',
     fn: () => {
       const prod = currentProduct();
@@ -403,7 +468,6 @@ export function removeGroup(index: number): void {
       scheduleSave();
     },
   });
-  void id;
 }
 
 export function resetGroup(index: number): void {
@@ -415,15 +479,17 @@ export function resetGroup(index: number): void {
   history.pushSnapshot(app.products, p.id);
   g.total = 0;
   g.totalIsAuto = undefined;
-  g.items.forEach(it => { it.qty = 0; });
+  g.items.forEach((it) => { it.qty = 0; });
   scheduleSave();
 }
 
-export function groupSum(g: Group): number { return g.items.reduce((s, it) => s + it.qty, 0); }
+export function groupSum(g: Group): number {
+  return g.items.reduce((s, it) => s + it.qty, 0);
+}
 export function groupRate(g: Group): string {
   const sum = groupSum(g);
   if (!(g.total > 0)) return '--';
-  return Math.round(sum / g.total * 100) + '%';
+  return Math.round((sum / g.total) * 100) + '%';
 }
 
 /* ---------------- 撤回/恢复 ---------------- */
@@ -438,7 +504,9 @@ export function undo(): void {
     history.commitToFuture(e);
     reconcile();
     pushToast('已撤回：' + (e.cmd.label || '上一步操作'));
-  } finally { queueMicrotask(() => { applying = false; }); }
+  } finally {
+    queueMicrotask(() => { applying = false; });
+  }
 }
 export function redo(): void {
   if (applying) return;
@@ -450,7 +518,9 @@ export function redo(): void {
     history.commitToPast(e);
     reconcile();
     pushToast('已恢复：' + (e.cmd.label || '下一步操作'));
-  } finally { queueMicrotask(() => { applying = false; }); }
+  } finally {
+    queueMicrotask(() => { applying = false; });
+  }
 }
 export const canUndo = () => history.canUndo;
 export const canRedo = () => history.canRedo;
@@ -461,10 +531,10 @@ function applyCmd(cmd: any, dir: 'do' | 'undo'): void {
       const restored = JSON.parse(cmd.data);
       app.products = restored.map(normalizeProduct);
       if (cmd.cur && app.products.some((p: Product) => p.id === cmd.cur)) app.currentProductId = cmd.cur;
-      else if (!app.products.some(p => p.id === app.currentProductId))
+      else if (!app.products.some((p) => p.id === app.currentProductId))
         app.currentProductId = app.products[0]?.id ?? '';
     } else {
-      const idx = app.products.findIndex(p => p.id === cmd.pid);
+      const idx = app.products.findIndex((p) => p.id === cmd.pid);
       if (idx >= 0) {
         const data = JSON.parse(cmd.data);
         data.id = cmd.pid;
@@ -491,14 +561,14 @@ function applyCmd(cmd: any, dir: 'do' | 'undo'): void {
     Object.assign(app.settings, data.settings || {});
     return;
   }
-  const p = app.products.find(x => x.id === cmd.pid);
+  const p = app.products.find((x) => x.id === cmd.pid);
   if (!p) return;
   if (cmd.t === CMD.QTY) {
-    const g = p.groups.find(x => x.id === cmd.gid);
-    const it = g?.items.find(x => nameKey(x.name) === cmd.key);
+    const g = p.groups.find((x) => x.id === cmd.gid);
+    const it = g?.items.find((x) => nameKey(x.name) === cmd.key);
     if (it) it.qty = dir === 'do' ? cmd.to : cmd.from;
   } else if (cmd.t === CMD.TOTAL) {
-    const g = p.groups.find(x => x.id === cmd.gid);
+    const g = p.groups.find((x) => x.id === cmd.gid);
     if (g) {
       const auto = dir === 'do' ? cmd.toAuto : cmd.fromAuto;
       g.total = dir === 'do' ? cmd.to : cmd.from;
@@ -512,14 +582,14 @@ function applyCmd(cmd: any, dir: 'do' | 'undo'): void {
     const v = dir === 'do' ? cmd.to : cmd.from;
     if (cmd.kind === 'product') p.name = v;
     else if (cmd.kind === 'group' && cmd.gid) {
-      const g = p.groups.find(x => x.id === cmd.gid);
+      const g = p.groups.find((x) => x.id === cmd.gid);
       if (g) g.name = v;
     } else if (cmd.kind === 'item' && cmd.gid && cmd.key) {
-      const g = p.groups.find(x => x.id === cmd.gid);
-      const it = g?.items.find(x => nameKey(x.name) === cmd.key);
+      const g = p.groups.find((x) => x.id === cmd.gid);
+      const it = g?.items.find((x) => nameKey(x.name) === cmd.key);
       if (it) it.name = v;
     } else if (cmd.kind === 'preset' && cmd.key) {
-      const i = p.presets.findIndex(x => nameKey(x) === cmd.key);
+      const i = p.presets.findIndex((x) => nameKey(x) === cmd.key);
       if (i >= 0) p.presets[i] = v;
     }
   }
@@ -527,7 +597,7 @@ function applyCmd(cmd: any, dir: 'do' | 'undo'): void {
 }
 
 function reconcile(): void {
-  if (!app.products.some(p => p.id === app.currentProductId)) {
+  if (!app.products.some((p) => p.id === app.currentProductId)) {
     app.currentProductId = app.products[0]?.id ?? '';
   }
   sanitizeMergeSelection();
@@ -549,16 +619,17 @@ export function addProduct(name: string, opts: Partial<Product> = {}): Product {
 }
 
 export function duplicateProduct(id: string): void {
-  const p = app.products.find(x => x.id === id);
+  const p = app.products.find((x) => x.id === id);
   if (!p) return;
   history.pushAllSnapshot(app.products, app.currentProductId, '复制产品');
   const copy = clonePlain(p);
   copy.id = uid();
-  let base = (p.name || '产品') + '-副本', name = base, n = 2;
-  while (app.products.some(x => x.name === name)) { name = base + n; n++; }
+  const base = (p.name || '产品') + '-副本';
+  let name = base, n = 2;
+  while (app.products.some((x) => x.name === name)) { name = base + n; n++; }
   copy.name = name;
-  copy.groups = copy.groups.map(g => ({
-    ...g, id: uid(), items: g.items.map(it => ({ ...it })),
+  copy.groups = copy.groups.map((g) => ({
+    ...g, id: uid(), items: g.items.map((it) => ({ ...it })),
   }));
   app.products.push(copy);
   app.currentProductId = copy.id;
@@ -567,7 +638,7 @@ export function duplicateProduct(id: string): void {
 }
 
 export function removeProduct(id: string): void {
-  const idx = app.products.findIndex(x => x.id === id);
+  const idx = app.products.findIndex((x) => x.id === id);
   if (idx < 0) return;
   const p = app.products[idx];
   if (app.settings.confirmBeforeDelete) {
@@ -576,10 +647,10 @@ export function removeProduct(id: string): void {
   const raw = clonePlain(p);
   history.pushAllSnapshot(app.products, app.currentProductId, '删除产品');
   app.products.splice(idx, 1);
-  app.globalPresets.forEach(gp => {
-    if (Array.isArray(gp.productIds)) gp.productIds = gp.productIds.filter(x => x !== id);
+  app.globalPresets.forEach((gp) => {
+    if (Array.isArray(gp.productIds)) gp.productIds = gp.productIds.filter((x) => x !== id);
   });
-  app.mergeSelectedIds = app.mergeSelectedIds.filter(x => x !== id);
+  app.mergeSelectedIds = app.mergeSelectedIds.filter((x) => x !== id);
   if (app.currentProductId === id) app.currentProductId = app.products[0]?.id ?? '';
   scheduleSave();
   pushToast(`已删除产品「${p.name}」`, 'success', 5000, {
@@ -593,35 +664,38 @@ export function removeProduct(id: string): void {
   });
 }
 
-/* ---------------- 来料/汇总 ---------------- */
+/* ---------------- 汇总选择 ---------------- */
 export function sanitizeMergeSelection(): void {
   const out: string[] = [];
   for (const id of app.mergeSelectedIds) {
-    const p = app.products.find(x => x.id === id);
+    const p = app.products.find((x) => x.id === id);
     if (!p || !(p.supplier || '').trim()) continue;
     if (!out.length) { out.push(id); continue; }
-    const f = app.products.find(x => x.id === out[0]);
+    const f = app.products.find((x) => x.id === out[0]);
     if (!f) { out.push(id); continue; }
-    if ((p.supplier || '').trim() === (f.supplier || '').trim()
-      && (p.customer || '').trim() === (f.customer || '').trim()) out.push(id);
+    if (
+      (p.supplier || '').trim() === (f.supplier || '').trim() &&
+      (p.customer || '').trim() === (f.customer || '').trim()
+    )
+      out.push(id);
   }
   if (out.length !== app.mergeSelectedIds.length) app.mergeSelectedIds = out;
 }
 
 export function sanitizeGlobalPresetProducts(): void {
-  const live = new Set(app.products.map(p => p.id));
-  app.globalPresets.forEach(gp => {
+  const live = new Set(app.products.map((p) => p.id));
+  app.globalPresets.forEach((gp) => {
     if (Array.isArray(gp.productIds)) {
-      const f = gp.productIds.filter(id => live.has(id));
+      const f = gp.productIds.filter((id) => live.has(id));
       if (f.length !== gp.productIds.length) gp.productIds = f;
     }
   });
 }
 
 export function cleanupOrphanProductBindings(): void {
-  const custNames = new Set(app.dataPresets.customers.map(c => c.name));
+  const custNames = new Set(app.dataPresets.customers.map((c) => c.name));
   const supNames = new Set(app.dataPresets.suppliers);
-  app.products.forEach(p => {
+  app.products.forEach((p) => {
     if (p.customer && !custNames.has(p.customer)) p.customer = '';
     if (p.supplier && !supNames.has(p.supplier)) p.supplier = '';
   });
@@ -632,12 +706,12 @@ export function selectAllSameCombination(): void {
   if (!p || !p.supplier.trim()) return;
   const sup = p.supplier, cus = p.customer || '';
   app.mergeSelectedIds = app.products
-    .filter(x => (x.supplier || '') === sup && (x.customer || '') === cus && x.supplier.trim())
-    .map(x => x.id);
+    .filter((x) => (x.supplier || '') === sup && (x.customer || '') === cus && x.supplier.trim())
+    .map((x) => x.id);
 }
 export function clearMergeSelection(): void { app.mergeSelectedIds = []; }
 export function toggleMergeSelect(id: string): void {
-  const p = app.products.find(x => x.id === id);
+  const p = app.products.find((x) => x.id === id);
   if (!p || !canSelectProduct(p)) return;
   const i = app.mergeSelectedIds.indexOf(id);
   if (i >= 0) app.mergeSelectedIds.splice(i, 1);
@@ -645,21 +719,23 @@ export function toggleMergeSelect(id: string): void {
 }
 export function canSelectProduct(p: Product): boolean {
   if (!p.supplier || !p.supplier.trim()) return false;
-  const list = app.products.filter(x => app.mergeSelectedIds.includes(x.id));
+  const list = app.products.filter((x) => app.mergeSelectedIds.includes(x.id));
   if (!list.length) return true;
   const first = list[0];
-  return (p.supplier || '') === (first.supplier || '')
-    && (p.customer || '') === (first.customer || '');
+  return (
+    (p.supplier || '') === (first.supplier || '') &&
+    (p.customer || '') === (first.customer || '')
+  );
 }
 export function isMergeSelected(id: string): boolean {
   return app.mergeSelectedIds.includes(id);
 }
 export function mergedProducts(): Product[] {
-  return app.products.filter(p => app.mergeSelectedIds.includes(p.id));
+  return app.products.filter((p) => app.mergeSelectedIds.includes(p.id));
 }
 export function groupedProducts(): { supplier: string; customer: string; list: Product[] }[] {
   const map = new Map<string, { supplier: string; customer: string; list: Product[] }>();
-  app.products.forEach(p => {
+  app.products.forEach((p) => {
     const sup = (p.supplier || '').trim();
     const cus = (p.customer || '').trim();
     const key = sup + '\u0000' + cus;
@@ -667,7 +743,7 @@ export function groupedProducts(): { supplier: string; customer: string; list: P
     map.get(key)!.list.push(p);
   });
   const out = Array.from(map.values());
-  out.forEach(g => g.list.sort((a, b) => ncmp(a.name, b.name)));
+  out.forEach((g) => g.list.sort((a, b) => ncmp(a.name, b.name)));
   out.sort((a, b) => {
     const s = ncmp(a.supplier, b.supplier);
     if (s !== 0) return s;
@@ -678,28 +754,29 @@ export function groupedProducts(): { supplier: string; customer: string; list: P
   return out;
 }
 
-/* ---------------- 汇总文本 ---------------- */
+/* ---------------- 输出文本 ---------------- */
 export function buildOutputText(withLabels: boolean): string {
   const p = currentProduct();
   if (!p) return '';
   const showZero = app.settings.showZeroQtyItems !== false;
   const parts: string[] = [];
-  p.groups.forEach(g => {
-    const items = g.items
-      .filter(it => showZero || it.qty > 0)
-      .map(it => `${it.name}${it.qty}PCS`);
+  p.groups.forEach((g) => {
+    const items = g.items.filter((it) => showZero || it.qty > 0).map((it) => `${it.name}${it.qty}PCS`);
     if (!items.length) return;
     const sum = g.items.reduce((s, it) => s + it.qty, 0);
-    const rate = g.total > 0 ? `不良率${Math.round(sum / g.total * 100)}%`
-      : (sum > 0 ? '不良率--' : '不良率0%');
+    const rate = g.total > 0
+      ? `不良率${Math.round((sum / g.total) * 100)}%`
+      : sum > 0 ? '不良率--' : '不良率0%';
     parts.push(withLabels ? `${g.name}：${items.join('，')}，${rate}` : `${items.join('，')}，${rate}`);
   });
   const body = parts.join('，');
   const pre = (p.prefix || '').trim();
   const suf = (p.suffix || '').trim();
-  const totals = p.groups.map(g => g.total);
+  const totals = p.groups.map((g) => g.total);
   const samplingText = buildSamplingLineFromTotals(totals, withLabels, p.incomingQty || 0);
-  if (!body && !pre && !suf && !samplingText) return withLabels ? '暂无分类或数量，请先添加分组分类' : '';
+  if (!body && !pre && !suf && !samplingText) {
+    return withLabels ? '暂无分类或数量，请先添加分组分类' : '';
+  }
   if (withLabels) {
     const lines: string[] = [];
     if (pre) lines.push(pre);
@@ -716,8 +793,12 @@ export function buildOutputText(withLabels: boolean): string {
   return segs.join('，');
 }
 
-export function buildSamplingLineFromTotals(totals: number[], withLabels: boolean, incomingQty = 0): string {
-  const valid = totals.filter(t => t > 0);
+export function buildSamplingLineFromTotals(
+  totals: number[],
+  withLabels: boolean,
+  incomingQty = 0,
+): string {
+  const valid = totals.filter((t) => t > 0);
   if (!valid.length) return '';
   const unique = [...new Set(valid)];
   const sum = valid.reduce((a, b) => a + b, 0);
@@ -728,14 +809,21 @@ export function buildSamplingLineFromTotals(totals: number[], withLabels: boolea
     if (isFull) text = withLabels ? `全检数量：${qty}PCS` : `全检${qty}PCS`;
     else text = withLabels ? `抽检数量：${qty}PCS` : `抽检${qty}PCS`;
   } else {
-    if (isFull) text = withLabels ? `全检数量合计：${sum}PCS（各组分别为 ${valid.join('、')}）` : `全检合计${sum}PCS`;
-    else text = withLabels ? `抽检数量合计：${sum}PCS（各组分别为 ${valid.join('、')}）` : `抽检合计${sum}PCS`;
+    if (isFull) {
+      text = withLabels
+        ? `全检数量合计：${sum}PCS（各组分别为 ${valid.join('、')}）`
+        : `全检合计${sum}PCS`;
+    } else {
+      text = withLabels
+        ? `抽检数量合计：${sum}PCS（各组分别为 ${valid.join('、')}）`
+        : `抽检合计${sum}PCS`;
+    }
   }
   return text + (text ? ',' : '');
 }
 
 export function getProductSamplingDisplay(p: Product): number {
-  const totals = p.groups.map(g => g.total).filter(t => t > 0);
+  const totals = p.groups.map((g) => g.total).filter((t) => t > 0);
   if (!totals.length) return 0;
   const unique = [...new Set(totals)];
   if (unique.length === 1) return unique[0];
@@ -745,8 +833,8 @@ export function getProductSamplingDisplay(p: Product): number {
 function computeMergedSummary(list: Product[], shouldMerge: boolean, withLabels: boolean) {
   if (!list.length) return { samplingLine: '', summaryText: '' };
   const showZero = app.settings.showZeroQtyItems !== false;
-  const allTotals = list.flatMap(p => p.groups.map(g => g.total));
-  const uniqueTotals = [...new Set(allTotals.filter(t => t > 0))];
+  const allTotals = list.flatMap((p) => p.groups.map((g) => g.total));
+  const uniqueTotals = [...new Set(allTotals.filter((t) => t > 0))];
   const sameSampling = uniqueTotals.length <= 1;
   const isSingle = list.length === 1;
   const totalIncoming = list.reduce((s, p) => s + (p.incomingQty || 0), 0);
@@ -765,29 +853,37 @@ function computeMergedSummary(list: Product[], shouldMerge: boolean, withLabels:
       const sum = allTotals.reduce((a, b) => a + b, 0);
       if (sum > 0) samplingLine = isFull ? `全检合计${sum}PCS,` : `抽检合计${sum}PCS,`;
     }
-    const groupMap = new Map<string, { totalSampling: number; items: Map<string, { name: string; qty: number }>; orderedKeys: string[] }>();
+    const groupMap = new Map<
+      string,
+      { totalSampling: number; items: Map<string, { name: string; qty: number }>; orderedKeys: string[] }
+    >();
     const orderedNames: string[] = [];
-    list.forEach(p => p.groups.forEach(g => {
-      const gname = g.name || '未命名分组';
-      if (!groupMap.has(gname)) {
-        groupMap.set(gname, { totalSampling: 0, items: new Map(), orderedKeys: [] });
-        orderedNames.push(gname);
-      }
-      const ge = groupMap.get(gname)!;
-      ge.totalSampling += g.total || 0;
-      g.items.forEach(it => {
-        if (!showZero && it.qty <= 0) return;
-        const k = nameKey(it.name);
-        if (!ge.items.has(k)) { ge.items.set(k, { name: it.name, qty: 0 }); ge.orderedKeys.push(k); }
-        ge.items.get(k)!.qty += it.qty;
-      });
-    }));
+    list.forEach((p) =>
+      p.groups.forEach((g) => {
+        const gname = g.name || '未命名分组';
+        if (!groupMap.has(gname)) {
+          groupMap.set(gname, { totalSampling: 0, items: new Map(), orderedKeys: [] });
+          orderedNames.push(gname);
+        }
+        const ge = groupMap.get(gname)!;
+        ge.totalSampling += g.total || 0;
+        g.items.forEach((it) => {
+          if (!showZero && it.qty <= 0) return;
+          const k = nameKey(it.name);
+          if (!ge.items.has(k)) {
+            ge.items.set(k, { name: it.name, qty: 0 });
+            ge.orderedKeys.push(k);
+          }
+          ge.items.get(k)!.qty += it.qty;
+        });
+      }),
+    );
     const lines: string[] = [];
-    orderedNames.forEach(gname => {
+    orderedNames.forEach((gname) => {
       const ge = groupMap.get(gname)!;
       const parts: string[] = [];
       let totalBad = 0;
-      ge.orderedKeys.forEach(k => {
+      ge.orderedKeys.forEach((k) => {
         const e = ge.items.get(k)!;
         if (showZero || e.qty > 0) {
           parts.push(`${e.name}${e.qty}PCS`);
@@ -795,17 +891,20 @@ function computeMergedSummary(list: Product[], shouldMerge: boolean, withLabels:
         }
       });
       if (!parts.length) return;
-      const rate = ge.totalSampling > 0 ? `不良率${Math.round(totalBad / ge.totalSampling * 100)}%`
-        : (totalBad > 0 ? '不良率--' : '不良率0%');
+      const rate = ge.totalSampling > 0
+        ? `不良率${Math.round((totalBad / ge.totalSampling) * 100)}%`
+        : totalBad > 0 ? '不良率--' : '不良率0%';
       lines.push(withLabels ? `${gname}：${parts.join('，')}，${rate}` : `${parts.join('，')}，${rate}`);
     });
-    summaryText = lines.length ? lines.join(withLabels ? '\n' : '，') : (showZero ? '暂无分类数据' : '');
+    summaryText = lines.length
+      ? lines.join(withLabels ? '\n' : '，')
+      : (showZero ? '暂无分类数据' : '');
   } else {
     samplingLine = '';
     const lines: string[] = [];
-    list.forEach(p => {
-      const pTotals = p.groups.map(g => g.total);
-      const uniq = [...new Set(pTotals.filter(t => t > 0))];
+    list.forEach((p) => {
+      const pTotals = p.groups.map((g) => g.total);
+      const uniq = [...new Set(pTotals.filter((t) => t > 0))];
       const pSum = pTotals.reduce((a, b) => a + b, 0);
       const pFull = (p.incomingQty || 0) > 0 && pSum === p.incomingQty;
       let inspectText = '';
@@ -813,12 +912,15 @@ function computeMergedSummary(list: Product[], shouldMerge: boolean, withLabels:
       else if (uniq.length === 0) inspectText = '抽检0PCS';
       else inspectText = pFull ? `全检合计${pSum}PCS` : `抽检合计${pSum}PCS`;
       const gp: string[] = [];
-      p.groups.forEach(g => {
-        const items = g.items.filter(it => showZero || it.qty > 0).map(it => `${it.name}${it.qty}PCS`);
+      p.groups.forEach((g) => {
+        const items = g.items
+          .filter((it) => showZero || it.qty > 0)
+          .map((it) => `${it.name}${it.qty}PCS`);
         if (!items.length) return;
         const sum = g.items.reduce((s, it) => s + it.qty, 0);
-        const rate = g.total > 0 ? `不良率${Math.round(sum / g.total * 100)}%`
-          : (sum > 0 ? '不良率--' : '不良率0%');
+        const rate = g.total > 0
+          ? `不良率${Math.round((sum / g.total) * 100)}%`
+          : sum > 0 ? '不良率--' : '不良率0%';
         gp.push(withLabels ? `${g.name}：${items.join('，')}，${rate}` : `${items.join('，')}，${rate}`);
       });
       lines.push(`${p.name}，${inspectText}，${gp.length ? gp.join('，') : '暂无分类数据'}`);
@@ -833,15 +935,15 @@ export function buildMergedText(withLabels: boolean): string {
   if (!list.length) return '';
   const supplier = list[0].supplier || '';
   const customer = list[0].customer || '';
-  const processes = [...new Set(list.map(p => p.process || ''))].filter(Boolean);
+  const processes = [...new Set(list.map((p) => p.process || ''))].filter(Boolean);
   const process = processes.join('、');
-  const lotLines = list.map(p => `${p.name}，来料${p.incomingQty || 0}PCS`).join('\n');
+  const lotLines = list.map((p) => `${p.name}，来料${p.incomingQty || 0}PCS`).join('\n');
   const shouldMerge = app.settings.mergeMultiProductSummary !== false;
   const { samplingLine, summaryText } = computeMergedSummary(list, shouldMerge, withLabels);
   const totalIncoming = list.reduce((s, p) => s + (p.incomingQty || 0), 0);
-  const totalSampling = list.flatMap(p => p.groups.map(g => g.total)).reduce((a, b) => a + b, 0);
+  const totalSampling = list.flatMap((p) => p.groups.map((g) => g.total)).reduce((a, b) => a + b, 0);
   const tempHandling = (app.settings.tempHandling || '').trim();
-  const responsible = app.settings.responsiblePersons.map(n => '@' + n).join(' ');
+  const responsible = app.settings.responsiblePersons.map((n) => '@' + n).join(' ');
   const tpl = app.settings.summaryTemplate || DEFAULT_TPL;
   let out = renderTemplate(tpl, {
     customer, supplier, process, lotLines, samplingLine,
@@ -851,7 +953,7 @@ export function buildMergedText(withLabels: boolean): string {
   });
   if (!samplingLine) out = out.replace(/\n[ \t]*\n/g, '\n');
   const dropIfEmpty = (text: string, re: RegExp) =>
-    text.split('\n').filter(l => !re.test(l)).join('\n');
+    text.split('\n').filter((l) => !re.test(l)).join('\n');
   if (!tempHandling) out = dropIfEmpty(out, /^\s*临时处理方式\s*[:：]?\s*$/);
   if (!responsible) out = dropIfEmpty(out, /^\s*负责人\s*[:：]?\s*$/);
   if (!customer) out = dropIfEmpty(out, /^\s*客户\s*[:：]?\s*$/);
@@ -866,14 +968,16 @@ export function templatePreviewHtml(): string {
   const first = target[0];
   const customer = first?.customer || '';
   const supplier = first?.supplier || '';
-  const process = [...new Set(target.map(p => p.process || ''))].filter(Boolean).join('、');
+  const process = [...new Set(target.map((p) => p.process || ''))].filter(Boolean).join('、');
   const tempHandling = (app.settings.tempHandling || '').trim();
-  const responsible = app.settings.responsiblePersons.map(n => '@' + n).join(' ');
-  const lotLines = target.length ? target.map(p => `${p.name}，来料${p.incomingQty || 0}PCS`).join('\n') : '';
+  const responsible = app.settings.responsiblePersons.map((n) => '@' + n).join(' ');
+  const lotLines = target.length
+    ? target.map((p) => `${p.name}，来料${p.incomingQty || 0}PCS`).join('\n')
+    : '';
   const shouldMerge = app.settings.mergeMultiProductSummary !== false;
   const { samplingLine, summaryText } = computeMergedSummary(target, shouldMerge, false);
   const totalIncoming = target.reduce((s, p) => s + (p.incomingQty || 0), 0);
-  const totalSampling = target.flatMap(p => p.groups.map(g => g.total)).reduce((a, b) => a + b, 0);
+  const totalSampling = target.flatMap((p) => p.groups.map((g) => g.total)).reduce((a, b) => a + b, 0);
   const vals: Record<string, string> = {
     customer, supplier, process,
     tempHandling, responsible, lotLines,
@@ -909,56 +1013,74 @@ export function addDataPreset(kind: string, value: any): boolean {
   if (kind === 'supplier') {
     const v = String(value).trim();
     if (!v) return false;
-    if (dp.suppliers.some(x => nameKey(x) === nameKey(v))) { pushToast('已存在同名供应商', 'error'); return false; }
+    if (dp.suppliers.some((x) => nameKey(x) === nameKey(v))) {
+      pushToast('已存在同名供应商', 'error');
+      return false;
+    }
     dp.suppliers.push(v);
-    scheduleSave(); return true;
+    scheduleSave();
+    return true;
   }
   if (kind === 'customer') {
     const v = String(value).trim();
     if (!v) return false;
-    if (dp.customers.some(x => nameKey(x.name) === nameKey(v))) { pushToast('已存在同名客户', 'error'); return false; }
+    if (dp.customers.some((x) => nameKey(x.name) === nameKey(v))) {
+      pushToast('已存在同名客户', 'error');
+      return false;
+    }
     dp.customers.push({ id: uid(), name: v, responsibleIds: [] });
-    scheduleSave(); return true;
+    scheduleSave();
+    return true;
   }
   if (kind === 'incoming') {
     const n = clampInt(value, 0);
     if (n <= 0) return false;
-    if (dp.incomingQtyPresets.includes(n)) { pushToast('已存在相同数量', 'error'); return false; }
+    if (dp.incomingQtyPresets.includes(n)) {
+      pushToast('已存在相同数量', 'error');
+      return false;
+    }
     dp.incomingQtyPresets.push(n);
-    scheduleSave(); return true;
+    scheduleSave();
+    return true;
   }
   if (kind === 'process') {
     const v = String(value).trim();
     if (!v) return false;
-    if (dp.processes.some(x => nameKey(x) === nameKey(v))) { pushToast('已存在同名工序', 'error'); return false; }
+    if (dp.processes.some((x) => nameKey(x) === nameKey(v))) {
+      pushToast('已存在同名工序', 'error');
+      return false;
+    }
     dp.processes.push(v);
-    scheduleSave(); return true;
+    scheduleSave();
+    return true;
   }
   if (kind === 'tempHandling') {
     const v = String(value).trim();
     if (!v) return false;
-    if (dp.tempHandlings.some(x => nameKey(x) === nameKey(v))) { pushToast('已存在同名', 'error'); return false; }
+    if (dp.tempHandlings.some((x) => nameKey(x) === nameKey(v))) {
+      pushToast('已存在同名', 'error');
+      return false;
+    }
     dp.tempHandlings.push(v);
-    scheduleSave(); return true;
+    scheduleSave();
+    return true;
   }
   return false;
 }
 
-/** 按 ID 移除客户，并清空其绑定的产品 */
 export function removeCustomerById(id: string): void {
-  const idx = app.dataPresets.customers.findIndex(c => c.id === id);
+  const idx = app.dataPresets.customers.findIndex((c) => c.id === id);
   if (idx < 0) return;
   const c = app.dataPresets.customers[idx];
-  app.products.forEach(p => { if (p.customer === c.name) p.customer = ''; });
+  app.products.forEach((p) => { if (p.customer === c.name) p.customer = ''; });
   app.dataPresets.customers.splice(idx, 1);
   scheduleSave();
 }
 
-/** 按名称移除供应商，并清空其绑定的产品 */
 export function removeSupplierByName(name: string): void {
-  const idx = app.dataPresets.suppliers.findIndex(x => x === name);
+  const idx = app.dataPresets.suppliers.findIndex((x) => x === name);
   if (idx < 0) return;
-  app.products.forEach(p => { if (p.supplier === name) p.supplier = ''; });
+  app.products.forEach((p) => { if (p.supplier === name) p.supplier = ''; });
   app.dataPresets.suppliers.splice(idx, 1);
   scheduleSave();
 }
@@ -969,62 +1091,59 @@ export function renameSupplier(idx: number, value: string): void {
   const v = value.trim();
   if (!v) return;
   if (app.dataPresets.suppliers.some((x, i) => i !== idx && nameKey(x) === nameKey(v))) {
-    pushToast('已存在同名供应商', 'error'); return;
+    pushToast('已存在同名供应商', 'error');
+    return;
   }
   if (old === v) return;
-  app.products.forEach(p => { if (p.supplier === old) p.supplier = v; });
+  app.products.forEach((p) => { if (p.supplier === old) p.supplier = v; });
   app.dataPresets.suppliers[idx] = v;
   scheduleSave();
   sanitizeMergeSelection();
 }
 
-/** 按 ID 重命名客户，并同步所有产品的客户字段 */
 export function renameCustomerById(id: string, value: string): void {
-  const c = app.dataPresets.customers.find(x => x.id === id);
+  const c = app.dataPresets.customers.find((x) => x.id === id);
   if (!c) return;
   const v = value.trim();
   if (!v) return;
-  if (app.dataPresets.customers.some(x => x.id !== id && nameKey(x.name) === nameKey(v))) {
-    pushToast('已存在同名客户', 'error'); return;
+  if (app.dataPresets.customers.some((x) => x.id !== id && nameKey(x.name) === nameKey(v))) {
+    pushToast('已存在同名客户', 'error');
+    return;
   }
   if (c.name === v) return;
-  app.products.forEach(p => { if (p.customer === c.name) p.customer = v; });
+  app.products.forEach((p) => { if (p.customer === c.name) p.customer = v; });
   c.name = v;
   scheduleSave();
   sanitizeMergeSelection();
 }
 
-/* ---------------- 设置页辅助功能（新增导出） ---------------- */
+export function renameCustomer(id: string, value: string): void {
+  renameCustomerById(id, value);
+}
 
-/** 一键清理孤儿数据：无效绑定 + 未被产品引用的客户/供应商 */
+/* ---------------- 清理 ---------------- */
 export function cleanupOrphanData(): void {
-  // 先清理产品上失效的绑定
   cleanupOrphanProductBindings();
-
-  // 清理没有任何产品引用、且没有负责人的客户
-  const usedCust = new Set(app.products.map(p => p.customer).filter(Boolean));
+  const usedCust = new Set(app.products.map((p) => p.customer).filter(Boolean));
   const beforeCust = app.dataPresets.customers.length;
   app.dataPresets.customers = app.dataPresets.customers.filter(
-    c => usedCust.has(c.name) || (c.responsibleIds && c.responsibleIds.length > 0),
+    (c) => usedCust.has(c.name) || (c.responsibleIds && c.responsibleIds.length > 0),
   );
-
-  // 清理没有任何产品引用的供应商
-  const usedSup = new Set(app.products.map(p => p.supplier).filter(Boolean));
+  const usedSup = new Set(app.products.map((p) => p.supplier).filter(Boolean));
   const beforeSup = app.dataPresets.suppliers.length;
-  app.dataPresets.suppliers = app.dataPresets.suppliers.filter(s => usedSup.has(s));
-
-  const removed = (beforeCust - app.dataPresets.customers.length) + (beforeSup - app.dataPresets.suppliers.length);
+  app.dataPresets.suppliers = app.dataPresets.suppliers.filter((s) => usedSup.has(s));
+  const removed =
+    beforeCust - app.dataPresets.customers.length + (beforeSup - app.dataPresets.suppliers.length);
   scheduleSave();
   pushToast(removed > 0 ? `已清理 ${removed} 项孤儿数据` : '没有可清理的孤儿数据');
 }
 
-/** 清理本地缓存：滚动备份、草稿、孤儿产品键 */
 export function clearLocalCache(): void {
   try {
     localStorage.removeItem(storage.BACKUP_KEY);
     localStorage.removeItem(storage.AUTO_BACKUP_KEY);
     localStorage.removeItem(storage.DRAFT_KEY);
-    const liveIds = new Set(app.products.map(p => p.id));
+    const liveIds = new Set(app.products.map((p) => p.id));
     const stale: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
@@ -1033,7 +1152,7 @@ export function clearLocalCache(): void {
         if (!liveIds.has(pid)) stale.push(k);
       }
     }
-    stale.forEach(k => { try { localStorage.removeItem(k); } catch { /* ignore */ } });
+    stale.forEach((k) => { try { localStorage.removeItem(k); } catch { /* ignore */ } });
     scheduleSave();
     pushToast('已清理本地缓存');
   } catch {
@@ -1041,38 +1160,23 @@ export function clearLocalCache(): void {
   }
 }
 
-/* ---------------- 分类转移到其他分组 ---------------- */
+/* ---------------- 转移 ---------------- */
 export function transferItemToGroup(fromG: Group, itemName: string, toG: Group): boolean {
   const p = currentProduct();
   if (!p) return false;
   if (fromG.id === toG.id) return false;
   const k = nameKey(itemName);
-  if (toG.items.some(it => nameKey(it.name) === k)) {
+  if (toG.items.some((it) => nameKey(it.name) === k)) {
     pushToast(`目标分组「${toG.name}」已存在同名分类`, 'error');
     return false;
   }
-  const idx = fromG.items.findIndex(it => nameKey(it.name) === k);
+  const idx = fromG.items.findIndex((it) => nameKey(it.name) === k);
   if (idx < 0) return false;
   history.pushSnapshot(app.products, p.id);
   const [item] = fromG.items.splice(idx, 1);
   toG.items.push(item);
   scheduleSave();
   return true;
-}
-
-export function renameCustomer(id: string, value: string): void {
-  const c = app.dataPresets.customers.find(x => x.id === id);
-  if (!c) return;
-  const v = value.trim();
-  if (!v) return;
-  if (app.dataPresets.customers.some(x => x.id !== id && nameKey(x.name) === nameKey(v))) {
-    pushToast('已存在同名客户', 'error'); return;
-  }
-  if (c.name === v) return;
-  app.products.forEach(p => { if (p.customer === c.name) p.customer = v; });
-  c.name = v;
-  scheduleSave();
-  sanitizeMergeSelection();
 }
 
 /* ---------------- 全局设置 ---------------- */
@@ -1085,16 +1189,18 @@ export function setExperience(level: Settings['experienceLevel']): void {
   if (app.settings.experienceLevel === level) return;
   app.settings.experienceLevel = level;
   scheduleSave();
-  pushToast('体验等级：' + (
-    level === 'auto' ? '自动' : level === 'elegant' ? '优雅' : level === 'standard' ? '标准' : '兼容'
-  ));
+  pushToast(
+    '体验等级：' +
+      (level === 'auto' ? '自动' : level === 'elegant' ? '优雅' : level === 'standard' ? '标准' : '兼容'),
+  );
 }
 
 /* ---------------- 主题 ---------------- */
 export function applyThemeEffective(): void {
-  let effective: 'light' | 'dark' = app.themeMode === 'auto'
-    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-    : app.themeMode;
+  const effective: 'light' | 'dark' =
+    app.themeMode === 'auto'
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      : app.themeMode;
   document.documentElement.dataset.theme = effective;
 }
 export function setThemeMode(m: 'auto' | 'light' | 'dark'): void {
@@ -1118,11 +1224,12 @@ export function loadFromStorage(): void {
 }
 
 export function applyPayload(payload: any): void {
-  app.products = (Array.isArray(payload.products) ? payload.products : []).map(normalizeProduct);
-  app.globalPresets = cleanGlobalPresets(payload.globalPresets || []);
-  app.mergeSelectedIds = Array.isArray(payload.mergeSelectedIds)
-    ? payload.mergeSelectedIds.filter((x: unknown) => typeof x === 'string') : [];
-  const dp = payload.dataPresets || {};
+  app.products = (Array.isArray(payload?.products) ? payload.products : []).map(normalizeProduct);
+  app.globalPresets = cleanGlobalPresets(payload?.globalPresets || []);
+  app.mergeSelectedIds = Array.isArray(payload?.mergeSelectedIds)
+    ? payload.mergeSelectedIds.filter((x: unknown) => typeof x === 'string')
+    : [];
+  const dp = (payload && typeof payload === 'object' && payload.dataPresets) ? payload.dataPresets : {};
   app.dataPresets = {
     suppliers: cleanStringList(dp.suppliers),
     customers: cleanCustomers(dp.customers),
@@ -1134,7 +1241,7 @@ export function applyPayload(payload: any): void {
     specialGroups: cleanSpecialGroups(dp.specialGroups || dp.specialCategories),
     presetGroups: cleanPresetGroups(dp.presetGroups),
   };
-  const s = payload.settings || {};
+  const s = (payload && typeof payload === 'object' && payload.settings) ? payload.settings : {};
   const tpl = (typeof s.summaryTemplate === 'string' && s.summaryTemplate.trim())
     ? (LEGACY_TPLS.includes(s.summaryTemplate) ? DEFAULT_TPL : s.summaryTemplate)
     : DEFAULT_TPL;
@@ -1146,7 +1253,8 @@ export function applyPayload(payload: any): void {
     showZeroQtyItems: s.showZeroQtyItems !== false,
     mergeMultiProductSummary: s.mergeMultiProductSummary !== false,
     animationLevel: ['normal', 'reduced', 'none'].includes(s.animationLevel) ? s.animationLevel : 'normal',
-    experienceLevel: ['auto', 'elegant', 'standard', 'compat'].includes(s.experienceLevel) ? s.experienceLevel
+    experienceLevel: ['auto', 'elegant', 'standard', 'compat'].includes(s.experienceLevel)
+      ? s.experienceLevel
       : (s.compatMode === 'on' ? 'compat' : 'auto'),
     confirmBeforeDelete: s.confirmBeforeDelete !== false,
     compactMode: s.compactMode === true,
@@ -1156,23 +1264,25 @@ export function applyPayload(payload: any): void {
     showMainTips: s.showMainTips !== false,
     showTopNavText: s.showTopNavText !== false,
     bulkAddConfirmThreshold: Number.isFinite(Number(s.bulkAddConfirmThreshold))
-      ? clampInt(s.bulkAddConfirmThreshold, 0, 9999) : 5,
+      ? clampInt(s.bulkAddConfirmThreshold, 0, 9999)
+      : 5,
     tempHandling: typeof s.tempHandling === 'string' ? s.tempHandling : '',
     responsiblePersons: Array.isArray(s.responsiblePersons)
-      ? s.responsiblePersons.filter((x: unknown) => typeof x === 'string') : [],
+      ? s.responsiblePersons.filter((x: unknown) => typeof x === 'string')
+      : [],
     collapsedGroups: Array.isArray(s.collapsedGroups)
-      ? s.collapsedGroups.filter((x: unknown) => typeof x === 'string') : [],
+      ? s.collapsedGroups.filter((x: unknown) => typeof x === 'string')
+      : [],
   });
-  const wantId = payload.currentProductId;
-  app.currentProductId = (wantId && app.products.some(p => p.id === wantId))
-    ? wantId : (app.products[0]?.id ?? '');
+  const wantId = payload?.currentProductId;
+  app.currentProductId =
+    wantId && app.products.some((p) => p.id === wantId) ? wantId : app.products[0]?.id ?? '';
   sanitizeGlobalPresetProducts();
   cleanupOrphanProductBindings();
   sanitizeMergeSelection();
 }
 
 export function initApp(): () => void {
-  /* 主题 */
   let saved = 'auto';
   try { saved = localStorage.getItem(storage.THEME_KEY) || 'auto'; } catch { /* ignore */ }
   if (!['auto', 'light', 'dark'].includes(saved)) saved = 'auto';
@@ -1185,23 +1295,18 @@ export function initApp(): () => void {
   loadFromStorage();
   applyFontSize();
 
-  /* 草稿 */
   const draft = storage.readDraft();
-  if (draft && draft.at > (Date.now() - 1000 * 60 * 60 * 24 * 7)) {
+  if (draft && draft.at > Date.now() - 1000 * 60 * 60 * 24 * 7) {
     if (confirm(`检测到上次未保存的草稿（共 ${(draft.products || []).length} 个产品），是否恢复？`)) {
       applyPayload(draft);
     }
     storage.clearDraft();
   }
 
-  /* 定期写草稿 */
   draftTimer = setInterval(() => {
     if (draftDirty) {
       draftDirty = false;
-      storage.saveDraft({
-        ...buildPayload(),
-        at: Date.now(),
-      } as any);
+      storage.saveDraft({ ...buildPayload(), at: Date.now() } as any);
     }
   }, 30_000);
 
@@ -1224,15 +1329,21 @@ export function initApp(): () => void {
   };
 }
 
-export { history, CMD, uid, nameKey, clampInt, sortNatural, ncmp, calcSampling, parseGroupBulk, escapeHtml, storage, AUTO_GROUP_NAME };
-export type { Product, Group, DataPresets, Settings, Customer, Responsible, SpecialGroup, PresetGroup, GlobalPreset, Shortcut };
+export {
+  history, CMD, uid, nameKey, clampInt, sortNatural, ncmp,
+  calcSampling, parseGroupBulk, escapeHtml, storage, AUTO_GROUP_NAME,
+};
+export type {
+  Product, Group, DataPresets, Settings, Customer, Responsible,
+  SpecialGroup, PresetGroup, GlobalPreset, Shortcut,
+};
 
-/* ---------------- 批量管理状态（Svelte 5 安全写法） ---------------- */
+/* ---------------- UI 状态（Svelte 5 安全写法） ---------------- */
 export const uiState = $state({
   expandedCustomerProductsId: '',
   expandedSupplierProductsName: '',
   productPickerFilter: '',
-  expandedCustomerId: ''
+  expandedCustomerId: '',
 });
 
 export function setProductPickerFilter(v: string): void {
@@ -1254,12 +1365,12 @@ export function toggleSupplierProducts(name: string): void {
 export function getFilteredProductsForPicker() {
   const q = uiState.productPickerFilter.trim().toLowerCase();
   let list = app.products;
-  if (q) list = list.filter(p => String(p.name).toLowerCase().includes(q));
-  return sortNatural(list, p => p.name);
+  if (q) list = list.filter((p) => String(p.name).toLowerCase().includes(q));
+  return sortNatural(list, (p) => p.name);
 }
 
 export function toggleCustomerProduct(c: any, pid: string, checked: boolean): void {
-  const p = app.products.find(x => x.id === pid);
+  const p = app.products.find((x) => x.id === pid);
   if (!p) return;
   if (checked) setProductCustomer(pid, c.name);
   else if ((p.customer || '') === c.name) setProductCustomer(pid, '');
@@ -1267,7 +1378,7 @@ export function toggleCustomerProduct(c: any, pid: string, checked: boolean): vo
 }
 
 export function toggleSupplierProduct(name: string, pid: string, checked: boolean): void {
-  const p = app.products.find(x => x.id === pid);
+  const p = app.products.find((x) => x.id === pid);
   if (!p) return;
   if (checked) setProductSupplier(pid, name);
   else if ((p.supplier || '') === name) setProductSupplier(pid, '');
@@ -1275,23 +1386,23 @@ export function toggleSupplierProduct(name: string, pid: string, checked: boolea
 }
 
 export function selectAllProductsForCustomer(c: any, on: boolean): void {
-  if (on) app.products.forEach(p => setProductCustomer(p.id, c.name));
-  else app.products.forEach(p => { if ((p.customer || '') === c.name) setProductCustomer(p.id, ''); });
+  if (on) app.products.forEach((p) => setProductCustomer(p.id, c.name));
+  else app.products.forEach((p) => { if ((p.customer || '') === c.name) setProductCustomer(p.id, ''); });
   scheduleSave();
 }
 
 export function selectAllProductsForSupplier(name: string, on: boolean): void {
-  if (on) app.products.forEach(p => setProductSupplier(p.id, name));
-  else app.products.forEach(p => { if ((p.supplier || '') === name) setProductSupplier(p.id, ''); });
+  if (on) app.products.forEach((p) => setProductSupplier(p.id, name));
+  else app.products.forEach((p) => { if ((p.supplier || '') === name) setProductSupplier(p.id, ''); });
   scheduleSave();
 }
 
 export function countSupplierProducts(name: string): number {
-  return app.products.filter(p => (p.supplier || '') === name).length;
+  return app.products.filter((p) => (p.supplier || '') === name).length;
 }
 
 export function countCustomerProducts(name: string): number {
-  return app.products.filter(p => (p.customer || '') === name).length;
+  return app.products.filter((p) => (p.customer || '') === name).length;
 }
 
 export function toggleCustomerResp(id: string): void {
@@ -1308,7 +1419,7 @@ export function toggleCustomerRespFor(c: any, respId: string): void {
   scheduleSave();
 }
 
-/* ---------------- 分组批量管理（Svelte 5 安全写法） ---------------- */
+/* ---------------- 分组批量管理 ---------------- */
 export const groupSelection = $state<Record<string, string[]>>({});
 export const batchGroupId = $state<{ value: string }>({ value: '' });
 
@@ -1326,11 +1437,12 @@ export function toggleItemSelect(gid: string, itemName: string): void {
   if (!groupSelection[gid]) groupSelection[gid] = [];
   const arr = groupSelection[gid];
   const i = arr.indexOf(itemName);
-  if (i >= 0) arr.splice(i, 1); else arr.push(itemName);
+  if (i >= 0) arr.splice(i, 1);
+  else arr.push(itemName);
 }
 
 export function toggleAllItems(gid: string, checked: boolean, items: any[]): void {
-  groupSelection[gid] = checked ? items.map(it => it.name) : [];
+  groupSelection[gid] = checked ? items.map((it) => it.name) : [];
 }
 
 export function batchDeleteItems(g: any): void {
@@ -1339,14 +1451,13 @@ export function batchDeleteItems(g: any): void {
   const p = currentProduct();
   if (!p) return;
   const set = new Set(sel);
-  const removedItems = [];
-  g.items.forEach((it: any, i: number) => { if (set.has(it.name)) removedItems.push({ item: { ...it }, index: i }); });
+  const removedCount = g.items.filter((it: any) => set.has(it.name)).length;
   history.pushSnapshot(app.products, p.id);
   g.items = g.items.filter((it: any) => !set.has(it.name));
   groupSelection[g.id] = [];
   cancelBatchItems();
   scheduleSave();
-  pushToast(`已删除 ${removedItems.length} 个分类`, 'success');
+  pushToast(`已删除 ${removedCount} 个分类`, 'success');
 }
 
 export const bulkQtyDialog = $state({
@@ -1358,7 +1469,10 @@ export const bulkQtyDialog = $state({
 
 export function openBulkQtyDialog(gid: string): void {
   const sel = groupSelection[gid] || [];
-  if (!sel.length) { pushToast('请先勾选要修改的分类', 'error'); return; }
+  if (!sel.length) {
+    pushToast('请先勾选要修改的分类', 'error');
+    return;
+  }
   bulkQtyDialog.gid = gid;
   bulkQtyDialog.mode = 'multiply';
   bulkQtyDialog.value = '2';
@@ -1372,36 +1486,34 @@ export function closeBulkQtyDialog(): void {
 
 export function applyBulkQty(): void {
   const p = currentProduct();
-  const g = p?.groups.find(x => x.id === bulkQtyDialog.gid);
+  const g = p?.groups.find((x) => x.id === bulkQtyDialog.gid);
   if (!p || !g) { closeBulkQtyDialog(); return; }
   const sel = groupSelection[bulkQtyDialog.gid] || [];
   if (!sel.length) { closeBulkQtyDialog(); return; }
 
   const n = Number(bulkQtyDialog.value);
   if (!bulkQtyDialog.value.trim() || !Number.isFinite(n) || n < 0) {
-    pushToast('请输入有效的数值', 'error'); return;
+    pushToast('请输入有效的数值', 'error');
+    return;
   }
 
   const set = new Set(sel);
   const changes: { item: any; from: number; to: number }[] = [];
-  g.items.forEach(it => {
+  g.items.forEach((it) => {
     if (!set.has(it.name)) return;
     const oldV = it.qty || 0;
     const nv = clampInt(bulkQtyDialog.mode === 'multiply' ? Math.round(oldV * n) : Math.round(n), 0);
     if (nv !== oldV) changes.push({ item: it, from: oldV, to: nv });
   });
 
-  if (!changes.length) { closeBulkQtyDialog(); pushToast('数量没有变化'); return; }
+  if (!changes.length) {
+    closeBulkQtyDialog();
+    pushToast('数量没有变化');
+    return;
+  }
   history.pushSnapshot(app.products, p.id);
-  changes.forEach(c => { c.item.qty = c.to; });
+  changes.forEach((c) => { c.item.qty = c.to; });
   scheduleSave();
   closeBulkQtyDialog();
   pushToast(`已修改 ${changes.length} 个分类的数量`);
 }
-
-export function clearOperationLogs(): void {
-  app.operationLogs.length = 0;
-  pushToast('操作日志已清空');
-  scheduleSave();
-}
-
