@@ -85,7 +85,7 @@
               <button onclick={() => selectAllProductsForCustomer(c, true)}>全选</button>
               <button onclick={() => selectAllProductsForCustomer(c, false)}>清空</button>
             </div>
-            {#each filteredProductsForPicker as p (p.id)}
+            {#each getFilteredProductsForPicker() as p (p.id)}
               <label class="responsible-item">
                 <input type="checkbox" checked={(p.customer || '') === c.name} onchange={() => toggleCustomerProduct(c, p.id, !((p.customer || '') === c.name))} />
                 <span>{p.name}</span>
@@ -132,7 +132,7 @@
               <button onclick={() => selectAllProductsForSupplier(s, true)}>全选</button>
               <button onclick={() => selectAllProductsForSupplier(s, false)}>清空</button>
             </div>
-            {#each filteredProductsForPicker as p (p.id)}
+            {#each getFilteredProductsForPicker() as p (p.id)}
               <label class="responsible-item">
                 <input type="checkbox" checked={(p.supplier || '') === s} onchange={() => toggleSupplierProduct(s, p.id, !((p.supplier || '') === s))} />
                 <span>{p.name}</span>
