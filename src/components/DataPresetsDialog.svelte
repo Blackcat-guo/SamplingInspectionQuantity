@@ -483,3 +483,47 @@
                onkeydown={(e) => { if (e.key === 'Enter') addSpecial(); }} />
         <button onclick={addSpecial}>添加</button>
       </div>
+    {/if}
+
+    {#if tab === 'presetGroup'}
+      {@const pg = paginate(app.dataPresets.presetGroups, 'presetGroup')}
+      <div class="panel-head-row">
+        <span class="panel-head-text">预分组（{app.dataPresets.presetGroups.length}）</span>
+      </div>
+      {#if pg.pages > 1}
+        <div class="pager">
+          <button onclick={() => prevPage('presetGroup')} disabled={pg.page <= 1}>‹</button>
+          <span>{pg.page} / {pg.pages}</span>
+          <button onclick={() => nextPage('presetGroup')} disabled={pg.page >= pg.pages}>›</button>
+        </div>
+      {/if}
+      {#each pg.list as p (p.id)}
+        <div class="preset-edit-row">
+          <input class="main-name-input" value={p.name} maxlength="30"
+                 onblur={(e) => renamePresetGroup(p.id, (e.target as HTMLInputElement).value)} />
+          <div class="row-actions">
+            <button class="scope-btn" onclick={() => editPresetGroupItems(p.id)}>
+              编辑分类({p.items.length})
+            </button>
+            <button class="del" onclick={() => removePresetGroup(p.id)}>✕</button>
+          </div>
+        </div>
+        <div style="font-size:11.5px;color:var(--c-text-3);padding:2px 12px 6px">
+          {p.items.length ? p.items.join('、') : '（空，点"编辑分类"添加）'}
+        </div>
+      {/each}
+      {#if !app.dataPresets.presetGroups.length}
+        <div class="transfer-empty">还没有预分组</div>
+      {/if}
+      <div class="preset-add-row">
+        <input bind:value={newPresetGroup} placeholder="输入预分组名称…" maxlength="30"
+               onkeydown={(e) => { if (e.key === 'Enter') addPresetGroup(); }} />
+        <button onclick={addPresetGroup}>添加</button>
+      </div>
+    {/if}
+  </div>
+
+  <div class="dialog-actions">
+    <button class="cancel" onclick={() => (open = false)}>关闭</button>
+  </div>
+</Dialog>
