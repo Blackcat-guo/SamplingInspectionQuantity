@@ -22,7 +22,6 @@
     Array.isArray(app.settings.collapsedGroups) && app.settings.collapsedGroups.includes(g.id),
   );
 
-  /* ---------- 折叠 ---------- */
   function toggleCollapse() {
     const arr = Array.isArray(app.settings.collapsedGroups)
       ? app.settings.collapsedGroups.slice()
@@ -34,7 +33,6 @@
     scheduleSave();
   }
 
-  /* ---------- 分类数量 ---------- */
   function onQtyInput(itemName: string, e: Event) {
     const key = g.id + '|' + nameKey(itemName);
     const raw = (e.target as HTMLInputElement).value.replace(/\D/g, '');
@@ -137,7 +135,7 @@
     }
   }
 
-  /* ---------- 模块 R：拖拽排序 ---------- */
+  /* ---------- 拖拽排序 ---------- */
   let longPressTimer: ReturnType<typeof setTimeout> | null = null;
   let pressing = false;
   let startY = 0;
@@ -183,9 +181,11 @@
     }, 260);
   }
 
+  // ✅ Bug 4 修复：拖拽期间直接返回，只由 window 监听器处理
   function onHandlePointerMove(e: PointerEvent) {
+    if (dragState.dragging) return;
     if (!pressing) return;
-    if (!dragState.dragging && longPressTimer) {
+    if (longPressTimer) {
       const dx = Math.abs(e.clientX - startX);
       const dy = Math.abs(e.clientY - startY);
       if (dx > 8 || dy > 8) {
@@ -193,9 +193,7 @@
         longPressTimer = null;
         pressing = false;
       }
-      return;
     }
-    if (dragState.dragging) updateOverIndex(e.clientY);
   }
 
   function onHandlePointerUp() {
@@ -255,7 +253,7 @@
     dragState.overIndex = -1;
   }
 
-  /* ---------- 模块 S：预分组下拉菜单 ---------- */
+  /* ---------- 预分组下拉 ---------- */
   let presetMenuOpen = $state(false);
   function onApplyPreset(pgId: string, pgName: string) {
     presetMenuOpen = false;
@@ -336,7 +334,6 @@
     <div class="group-toolbar">
       <button class="mini-btn" onclick={onBulkAddItems}>＋ 批量添加</button>
 
-      <!-- 模块 S：预分组下拉 -->
       {#if app.dataPresets.presetGroups.length}
         <div class="preset-wrap">
           <button class="preset-btn pg" onclick={() => (presetMenuOpen = !presetMenuOpen)}>
