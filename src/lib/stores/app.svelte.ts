@@ -2105,3 +2105,80 @@ export function parseJsData(text: string): any {
     return JSON.parse(converted);
   }
 }
+
+/* ============================================================
+   任务 A：本产品汇总模块的 store 包装
+   ============================================================ */
+export function outputText(): string {
+  return buildOutputText(true);
+}
+export function outputCopyText(): string {
+  return buildOutputText(false);
+}
+
+/* ============================================================
+   任务 D：显示 Tab 的 setter 包装
+   ============================================================ */
+export function setShowTopNavText(v: boolean): void {
+  app.settings.showTopNavText = v;
+  scheduleSave();
+}
+export function setShowMainTips(v: boolean): void {
+  app.settings.showMainTips = v;
+  scheduleSave();
+}
+export function setShowZeroQty(v: boolean): void {
+  app.settings.showZeroQtyItems = v;
+  scheduleSave();
+}
+export function setMergeMultiProductSummary(v: boolean): void {
+  app.settings.mergeMultiProductSummary = v;
+  scheduleSave();
+}
+export function setShowVoice(v: boolean): void {
+  app.settings.showVoice = v;
+  scheduleSave();
+}
+export function setShowOcr(v: boolean): void {
+  app.settings.showImageOcr = v;
+  scheduleSave();
+}
+export function setFontSize(key: 'small' | 'standard' | 'large'): void {
+  app.settings.fontSize = key;
+  applyFontSize();
+  scheduleSave();
+}
+export function setAnimationLevel(key: 'normal' | 'reduced' | 'none'): void {
+  app.settings.animationLevel = key;
+  scheduleSave();
+}
+export function fontSizeLabel(): string {
+  const m: Record<string, string> = { small: '小', standard: '标准', large: '大' };
+  return m[app.settings.fontSize] || '标准';
+}
+export function animationLevelLabel(): string {
+  const m: Record<string, string> = { normal: '标准', reduced: '柔和', none: '关闭' };
+  return m[app.settings.animationLevel] || '标准';
+}
+export function experienceLevelLabel(): string {
+  const lv = app.settings.experienceLevel;
+  return lv === 'auto' ? `自动（${autoLevel()}）` : lv === 'elegant' ? '优雅' : lv === 'standard' ? '标准' : '兼容';
+}
+export function experienceHint(): string {
+  const lv = effectiveLevel();
+  return lv === 'elegant' ? '全动画 + 毛玻璃，适合高端设备'
+    : lv === 'compat' ? '关闭动画与毛玻璃，适合低端设备与老旧浏览器'
+    : '平衡性能与观感（推荐）';
+}
+
+/* ============================================================
+   任务 E：数据预设导航弹窗状态
+   ============================================================ */
+export const presetNavDialog = $state<{ show: boolean }>({ show: false });
+
+export function openPresetNavDialog(): void {
+  presetNavDialog.show = true;
+}
+export function closePresetNavDialog(): void {
+  presetNavDialog.show = false;
+}
