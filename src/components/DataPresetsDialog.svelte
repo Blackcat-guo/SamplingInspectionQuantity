@@ -11,11 +11,12 @@
     setProductPickerFilter,
     // 模块 G
     productMatchesSpecialGroup, productEffectiveForSpecialGroup,
-    getSpecialGroupResponsibleNames, addSpecialGroup, removeSpecialGroup,
-    renameSpecialGroup, toggleSpecialGroupResp, toggleSpecialGroupSample,
-    setSpecialGroupItems, specialUIState, toggleSpecialGroupProducts, toggleSpecialGroupResp,
+    addSpecialGroup, removeSpecialGroup, renameSpecialGroup,
+    toggleSpecialGroupResp, toggleSpecialGroupSample,
+    setSpecialGroupItems, specialUIState,
+    toggleSpecialGroupProducts, toggleSpecialRespPanel,
     // 模块 K
-    presetPages, pageSizeFor, setPresetPage, resetPresetPage,
+    presetPages, pageSizeFor, setPresetPage,
   } from '../lib/stores/app.svelte';
 
   let { open = $bindable(false), onOpenSettings } = $props<{
@@ -44,22 +45,51 @@
   let newSpecialGroup = $state('');
   let newPresetGroup = $state('');
 
+  // ✅ Bug 7 修复：用 $derived 计算当前页/页数/切片，不在渲染期间改状态
   const pageSize = $derived(pageSizeFor());
 
-  function paginate<T>(arr: T[], key: string): { list: T[]; page: number; pages: number } {
-    const size = pageSize;
-    const pages = Math.max(1, Math.ceil(arr.length / size));
-    const page = Math.min(presetPages[key] || 1, pages);
-    if (page !== presetPages[key]) presetPages[key] = page;
-    const start = (page - 1) * size;
-    return { list: arr.slice(start, start + size), page, pages };
-  }
+  const customerPages = $derived(Math.max(1, Math.ceil(app.dataPresets.customers.length / pageSize)));
+  const customerPage = $derived(Math.min(presetPages.customer || 1, customerPages));
+  const customerList = $derived(
+    app.dataPresets.customers.slice((customerPage - 1) * pageSize, customerPage * pageSize),
+  );
 
-  function pager(key: string, pages: number) {
-    if (pages <= 1) return;
-    const page = presetPages[key] || 1;
-    return { page, pages };
-  }
+  const supplierPages = $derived(Math.max(1, Math.ceil(app.dataPresets.suppliers.length / pageSize)));
+  const supplierPage = $derived(Math.min(presetPages.supplier || 1, supplierPages));
+  const supplierList = $derived(
+    app.dataPresets.suppliers.slice((supplierPage - 1) * pageSize, supplierPage * pageSize),
+  );
+
+  const incomingPages = $derived(Math.max(1, Math.ceil(app.dataPresets.incomingQtyPresets.length / pageSize)));
+  const incomingPage = $derived(Math.min(presetPages.incoming || 1, incomingPages));
+  const incomingList = $derived(
+    app.dataPresets.incomingQtyPresets.slice((incomingPage - 1) * pageSize, incomingPage * pageSize),
+  );
+
+  const processPages = $derived(Math.max(1, Math.ceil(app.dataPresets.processes.length / pageSize)));
+  const processPage = $derived(Math.min(presetPages.process || 1, processPages));
+  const processList = $derived(
+    app.dataPresets.processes.slice((processPage - 1) * pageSize, processPage * pageSize),
+  );
+
+  const normalRespArr = $derived(normalResponsibles());
+  const respPages = $derived(Math.max(1, Math.ceil(normalRespArr.length / pageSize)));
+  const respPage = $derived(Math.min(presetPages.responsible || 1, respPages));
+  const respList = $derived(
+    normalRespArr.slice((respPage - 1) * pageSize, respPage * pageSize),
+  );
+
+  const specialPages = $derived(Math.max(1, Math.ceil(app.dataPresets.specialGroups.length / pageSize)));
+  const specialPage = $derived(Math.min(presetPages.special || 1, specialPages));
+  const specialList = $derived(
+    app.dataPresets.specialGroups.slice((specialPage - 1) * pageSize, specialPage * pageSize),
+  );
+
+  const pgPages = $derived(Math.max(1, Math.ceil(app.dataPresets.presetGroups.length / pageSize)));
+  const pgPage = $derived(Math.min(presetPages.presetGroup || 1, pgPages));
+  const pgList = $derived(
+    app.dataPresets.presetGroups.slice((pgPage - 1) * pageSize, pgPage * pageSize),
+  );
 
   function bulkText() {
     const raw = prompt('批量添加（每行一个 / 逗号分隔）：');
@@ -70,7 +100,6 @@
   function prevPage(key: string) { setPresetPage(key, (presetPages[key] || 1) - 1); }
   function nextPage(key: string) { setPresetPage(key, (presetPages[key] || 1) + 1); }
 
-  // 特殊分组
   function addSpecial() {
     if (!newSpecialGroup.trim()) return;
     if (addSpecialGroup(newSpecialGroup)) {
@@ -79,7 +108,6 @@
     }
   }
 
-  // 预分组（简化：只作为 name+items 编辑）
   function addPresetGroup() {
     const v = newPresetGroup.trim();
     if (!v) return;
@@ -111,6 +139,13 @@
     p.items = raw.split(/[\n,，、;；]+/).map((s) => s.trim()).filter(Boolean);
     scheduleSave();
   }
+  function editSpecialGroupItems(id: string) {
+    const sg = app.dataPresets.specialGroups.find((x) => x.id === id);
+    if (!sg) return;
+    const raw = prompt(`编辑「${sg.name}」的分类（每行一个）：`, sg.items.join('\n'));
+    if (raw == null) return;
+    setSpecialGroupItems(id, raw);
+  }
 </script>
 
 <Dialog bind:open title="📚 数据预设" subtitle="预设客户、供应商、来料数量、工序、负责人、特殊分组、预分组。" wide>
@@ -123,7 +158,6 @@
 
   <div class="dialog-list">
     {#if tab === 'customer'}
-      {@const pg = paginate(app.dataPresets.customers, 'customer')}
       <div class="panel-head-row">
         <span class="panel-head-text">客户列表（{app.dataPresets.customers.length}）</span>
         <button class="mini-batch-btn" onclick={() => {
@@ -134,14 +168,14 @@
           if (n) pushToast(`已添加 ${n} 个客户`);
         }}>＋ 批量添加</button>
       </div>
-      {#if pg.pages > 1}
+      {#if customerPages > 1}
         <div class="pager">
-          <button onclick={() => prevPage('customer')} disabled={pg.page <= 1}>‹</button>
-          <span>{pg.page} / {pg.pages}</span>
-          <button onclick={() => nextPage('customer')} disabled={pg.page >= pg.pages}>›</button>
+          <button onclick={() => prevPage('customer')} disabled={customerPage <= 1}>‹</button>
+          <span>{customerPage} / {customerPages}</span>
+          <button onclick={() => nextPage('customer')} disabled={customerPage >= customerPages}>›</button>
         </div>
       {/if}
-      {#each pg.list as c (c.id)}
+      {#each customerList as c (c.id)}
         <div class="preset-edit-row">
           <input class="main-name-input" value={c.name} maxlength="40"
                  onblur={(e) => renameCustomerById(c.id, (e.target as HTMLInputElement).value)} />
@@ -192,7 +226,6 @@
     {/if}
 
     {#if tab === 'supplier'}
-      {@const pg = paginate(app.dataPresets.suppliers, 'supplier')}
       <div class="panel-head-row">
         <span class="panel-head-text">供应商列表（{app.dataPresets.suppliers.length}）</span>
         <button class="mini-batch-btn" onclick={() => {
@@ -203,15 +236,15 @@
           if (n) pushToast(`已添加 ${n} 个供应商`);
         }}>＋ 批量添加</button>
       </div>
-      {#if pg.pages > 1}
+      {#if supplierPages > 1}
         <div class="pager">
-          <button onclick={() => prevPage('supplier')} disabled={pg.page <= 1}>‹</button>
-          <span>{pg.page} / {pg.pages}</span>
-          <button onclick={() => nextPage('supplier')} disabled={pg.page >= pg.pages}>›</button>
+          <button onclick={() => prevPage('supplier')} disabled={supplierPage <= 1}>‹</button>
+          <span>{supplierPage} / {supplierPages}</span>
+          <button onclick={() => nextPage('supplier')} disabled={supplierPage >= supplierPages}>›</button>
         </div>
       {/if}
-      {#each pg.list as s, i (s)}
-        {@const realIndex = (pg.page - 1) * pageSize + i}
+      {#each supplierList as s, i (s)}
+        {@const realIndex = (supplierPage - 1) * pageSize + i}
         <div class="preset-edit-row">
           <input class="main-name-input" value={s} maxlength="40"
                  onblur={(e) => renameSupplier(realIndex, (e.target as HTMLInputElement).value)} />
@@ -249,17 +282,18 @@
     {/if}
 
     {#if tab === 'incoming'}
-      {@const pg = paginate(app.dataPresets.incomingQtyPresets, 'incoming')}
-      <div class="panel-head-row"><span class="panel-head-text">来料数量列表（{app.dataPresets.incomingQtyPresets.length}）</span></div>
-      {#if pg.pages > 1}
+      <div class="panel-head-row">
+        <span class="panel-head-text">来料数量列表（{app.dataPresets.incomingQtyPresets.length}）</span>
+      </div>
+      {#if incomingPages > 1}
         <div class="pager">
-          <button onclick={() => prevPage('incoming')} disabled={pg.page <= 1}>‹</button>
-          <span>{pg.page} / {pg.pages}</span>
-          <button onclick={() => nextPage('incoming')} disabled={pg.page >= pg.pages}>›</button>
+          <button onclick={() => prevPage('incoming')} disabled={incomingPage <= 1}>‹</button>
+          <span>{incomingPage} / {incomingPages}</span>
+          <button onclick={() => nextPage('incoming')} disabled={incomingPage >= incomingPages}>›</button>
         </div>
       {/if}
-      {#each pg.list as v, i (v)}
-        {@const realIndex = (pg.page - 1) * pageSize + i}
+      {#each incomingList as v, i (v)}
+        {@const realIndex = (incomingPage - 1) * pageSize + i}
         <div class="preset-edit-row">
           <input type="text" inputmode="numeric" value={String(v)} maxlength="9"
                  onblur={(e) => {
@@ -283,17 +317,18 @@
     {/if}
 
     {#if tab === 'process'}
-      {@const pg = paginate(app.dataPresets.processes, 'process')}
-      <div class="panel-head-row"><span class="panel-head-text">发生工序列表（{app.dataPresets.processes.length}）</span></div>
-      {#if pg.pages > 1}
+      <div class="panel-head-row">
+        <span class="panel-head-text">发生工序列表（{app.dataPresets.processes.length}）</span>
+      </div>
+      {#if processPages > 1}
         <div class="pager">
-          <button onclick={() => prevPage('process')} disabled={pg.page <= 1}>‹</button>
-          <span>{pg.page} / {pg.pages}</span>
-          <button onclick={() => nextPage('process')} disabled={pg.page >= pg.pages}>›</button>
+          <button onclick={() => prevPage('process')} disabled={processPage <= 1}>‹</button>
+          <span>{processPage} / {processPages}</span>
+          <button onclick={() => nextPage('process')} disabled={processPage >= processPages}>›</button>
         </div>
       {/if}
-      {#each pg.list as p, i (p)}
-        {@const realIndex = (pg.page - 1) * pageSize + i}
+      {#each processList as p, i (p)}
+        {@const realIndex = (processPage - 1) * pageSize + i}
         <div class="preset-edit-row">
           <input value={p} maxlength="40"
                  onblur={(e) => {
@@ -314,16 +349,15 @@
     {/if}
 
     {#if tab === 'responsible'}
-      {@const pgN = paginate(normalResponsibles(), 'responsible')}
       <div class="panel-head-row"><span class="panel-head-text">常规负责人</span></div>
-      {#if pgN.pages > 1}
+      {#if respPages > 1}
         <div class="pager">
-          <button onclick={() => prevPage('responsible')} disabled={pgN.page <= 1}>‹</button>
-          <span>{pgN.page} / {pgN.pages}</span>
-          <button onclick={() => nextPage('responsible')} disabled={pgN.page >= pgN.pages}>›</button>
+          <button onclick={() => prevPage('responsible')} disabled={respPage <= 1}>‹</button>
+          <span>{respPage} / {respPages}</span>
+          <button onclick={() => nextPage('responsible')} disabled={respPage >= respPages}>›</button>
         </div>
       {/if}
-      {#each pgN.list as r (r.id)}
+      {#each respList as r (r.id)}
         <div class="preset-edit-row">
           <input value={r.name} maxlength="30"
                  onblur={(e) => {
@@ -384,23 +418,23 @@
     {/if}
 
     {#if tab === 'special'}
-      {@const pg = paginate(app.dataPresets.specialGroups, 'special')}
       <div class="panel-head-row">
         <span class="panel-head-text">特殊分组（{app.dataPresets.specialGroups.length}）</span>
       </div>
-      {#if pg.pages > 1}
+      {#if specialPages > 1}
         <div class="pager">
-          <button onclick={() => prevPage('special')} disabled={pg.page <= 1}>‹</button>
-          <span>{pg.page} / {pg.pages}</span>
-          <button onclick={() => nextPage('special')} disabled={pg.page >= pg.pages}>›</button>
+          <button onclick={() => prevPage('special')} disabled={specialPage <= 1}>‹</button>
+          <span>{specialPage} / {specialPages}</span>
+          <button onclick={() => nextPage('special')} disabled={specialPage >= specialPages}>›</button>
         </div>
       {/if}
-      {#each pg.list as sg (sg.id)}
+      {#each specialList as sg (sg.id)}
         <div class="preset-edit-row">
           <input class="main-name-input" value={sg.name} maxlength="30"
                  onblur={(e) => renameSpecialGroup(sg.id, (e.target as HTMLInputElement).value)} />
           <div class="row-actions">
-            <button class="scope-btn" onclick={() => toggleSpecialGroupResp(sg.id)}>
+            <!-- ✅ Bug 1 修复：改用 toggleSpecialRespPanel -->
+            <button class="scope-btn" onclick={() => toggleSpecialRespPanel(sg.id)}>
               负责人({sg.responsibleIds.length})
             </button>
             <button class="scope-btn" onclick={() => toggleSpecialGroupProducts(sg.id)}>
@@ -424,6 +458,7 @@
             <div class="panel-title">选择该特殊分组的负责人</div>
             {#each specialResponsibles() as r (r.id)}
               <label class="responsible-item">
+                <!-- ✅ 这个仍是两参数版本，正确 -->
                 <input type="checkbox" checked={sg.responsibleIds.includes(r.id)}
                        onchange={() => toggleSpecialGroupResp(sg.id, r.id)} />
                 <span>@{r.name}</span>
@@ -464,7 +499,11 @@
               return true;
             }) as p (p.id)}
               <div class="responsible-item" style="cursor:default">
-                <span style="flex:1">{p.name}{#if p.isSample} <span style="color:var(--c-purple-text);font-size:11px">· 样品</span>{/if}</span>
+                <span style="flex:1">
+                  {p.name}{#if p.isSample}
+                    <span style="color:var(--c-purple-text);font-size:11px">· 样品</span>
+                  {/if}
+                </span>
                 <span style="font-size:11px;color:var(--c-text-3)">
                   {#if productEffectiveForSpecialGroup(p, sg)}✅ 生效
                   {:else if productMatchesSpecialGroup(p, sg)}⚠️ 命中(未生效)
@@ -486,18 +525,17 @@
     {/if}
 
     {#if tab === 'presetGroup'}
-      {@const pg = paginate(app.dataPresets.presetGroups, 'presetGroup')}
       <div class="panel-head-row">
         <span class="panel-head-text">预分组（{app.dataPresets.presetGroups.length}）</span>
       </div>
-      {#if pg.pages > 1}
+      {#if pgPages > 1}
         <div class="pager">
-          <button onclick={() => prevPage('presetGroup')} disabled={pg.page <= 1}>‹</button>
-          <span>{pg.page} / {pg.pages}</span>
-          <button onclick={() => nextPage('presetGroup')} disabled={pg.page >= pg.pages}>›</button>
+          <button onclick={() => prevPage('presetGroup')} disabled={pgPage <= 1}>‹</button>
+          <span>{pgPage} / {pgPages}</span>
+          <button onclick={() => nextPage('presetGroup')} disabled={pgPage >= pgPages}>›</button>
         </div>
       {/if}
-      {#each pg.list as p (p.id)}
+      {#each pgList as p (p.id)}
         <div class="preset-edit-row">
           <input class="main-name-input" value={p.name} maxlength="30"
                  onblur={(e) => renamePresetGroup(p.id, (e.target as HTMLInputElement).value)} />
