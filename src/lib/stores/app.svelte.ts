@@ -1133,3 +1133,81 @@ export function initApp(): () => void {
 
 export { history, CMD, uid, nameKey, clampInt, sortNatural, ncmp, calcSampling, parseGroupBulk, escapeHtml, storage, AUTO_GROUP_NAME };
 export type { Product, Group, DataPresets, Settings, Customer, Responsible, SpecialGroup, PresetGroup, GlobalPreset, Shortcut };
+
+// ===== 新增：清理本地缓存 =====
+export function clearLocalCache(): void {
+  if (!confirm('确定清理本地缓存吗？将删除历史滚动备份与孤儿产品数据（不影响当前数据）。')) return;
+  try {
+    const liveIds = new Set(app.products.map(p => p.id));
+    const staleKeys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(storage.PRODUCT_PREFIX)) {
+        const pid = k.slice(storage.PRODUCT_PREFIX.length);
+        if (!liveIds.has(pid)) staleKeys.push(k);
+      }
+    }
+    staleKeys.forEach(k => { try { localStorage.removeItem(k); } catch { /* ignore */ } });
+    try { localStorage.removeItem(storage.BACKUP_KEY); } catch { /* ignore */ }
+    try { localStorage.removeItem(storage.AUTO_BACKUP_KEY); } catch { /* ignore */ }
+    try { localStorage.removeItem(storage.DRAFT_KEY); } catch { /* ignore */ }
+    pushToast(`已清理本地缓存（删除 ${staleKeys.length} 条孤儿数据）`);
+    logOperation('清理本地缓存');
+  } catch (e: any) {
+    pushToast('清理失败：' + (e?.message || '未知错误'), 'error');
+  }
+}
+
+// ===== 新增：清理孤儿数据 =====
+export function cleanupOrphanData(): void {
+  const respIds = new Set(app.dataPresets.responsiblePersons.map(r => r.id));
+  const liveProductIds = new Set(app.products.map(p => p.id));
+  const liveGroupIds = new Set(app.products.flatMap(p => (p.groups || []).map(g => g.id)));
+  const usedCustomers = new Set(app.products.map(p => p.customer || '').filter(Boolean));
+  const usedSuppliers = new Set(app.products.map(p => p.supplier || '').filter(Boolean));
+
+  let resp = 0, cust = 0, sup = 0, gp = 0, collapsed = 0, merge = 0;
+  app.dataPresets.customers.forEach(c => { resp += c.responsibleIds.filter(id => !respIds.has(id)).length; });
+  app.dataPresets.specialGroups.forEach(sg => { resp += (sg.responsibleIds || []).filter(id => !respIds.has(id)).length; });
+  if (app.products.length) {
+    cust = app.dataPresets.customers.filter(c => !usedCustomers.has(c.name)).length;
+    sup = app.dataPresets.suppliers.filter(s => !usedSuppliers.has(s)).length;
+  }
+  app.globalPresets.forEach(g => {
+    if (Array.isArray(g.productIds)) gp += g.productIds.filter(id => !liveProductIds.has(id)).length;
+  });
+  if (Array.isArray(app.settings.collapsedGroups)) {
+    collapsed = app.settings.collapsedGroups.filter(id => !liveGroupIds.has(id)).length;
+  }
+  merge = app.mergeSelectedIds.filter(id => !liveProductIds.has(id)).length;
+
+  const total = resp + cust + sup + gp + collapsed + merge;
+  if (!total) { pushToast('没有发现可清理的孤儿数据'); return; }
+
+  const parts: string[] = [];
+  if (cust) parts.push(`${cust} 个未被引用的客户预设`);
+  if (sup) parts.push(`${sup} 个未被引用的供应商预设`);
+  if (resp) parts.push(`${resp} 条失效的负责人绑定`);
+  if (gp) parts.push(`${gp} 条失效的预分类产品关联`);
+  if (collapsed) parts.push(`${collapsed} 条失效的折叠状态`);
+  if (merge) parts.push(`${merge} 条失效的汇总选择`);
+
+  if (!confirm('确定清理以下孤儿数据吗？\n\n· ' + parts.join('\n· '))) return;
+
+  history.pushGlobalSnapshot(app.products, app.dataPresets, app.globalPresets, app.settings, '清理孤儿数据');
+  app.dataPresets.customers.forEach(c => { c.responsibleIds = c.responsibleIds.filter(id => respIds.has(id)); });
+  app.dataPresets.specialGroups.forEach(sg => { sg.responsibleIds = (sg.responsibleIds || []).filter(id => respIds.has(id)); });
+  if (app.products.length) {
+    app.dataPresets.customers = app.dataPresets.customers.filter(c => usedCustomers.has(c.name));
+    app.dataPresets.suppliers = app.dataPresets.suppliers.filter(s => usedSuppliers.has(s));
+  }
+  app.globalPresets.forEach(g => { if (Array.isArray(g.productIds)) g.productIds = g.productIds.filter(id => liveProductIds.has(id)); });
+  if (Array.isArray(app.settings.collapsedGroups)) {
+    app.settings.collapsedGroups = app.settings.collapsedGroups.filter(id => liveGroupIds.has(id));
+  }
+  app.mergeSelectedIds = app.mergeSelectedIds.filter(id => liveProductIds.has(id));
+
+  scheduleSave();
+  logOperation('清理孤儿数据');
+  pushToast(`已清理 ${total} 项孤儿数据`);
+}
