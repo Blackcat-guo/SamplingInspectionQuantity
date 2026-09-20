@@ -1387,5 +1387,6 @@ export function clearOperationLogs(): void {
   scheduleSave();
 }
 
-export { history, CMD, uid, nameKey, clampInt, sortNatural, ncmp,
-         calcSampling, parseGroupBulk, escapeHtml, storage, AUTO_GROUP_NAME };
+export { history, CMD, storage, AUTO_GROUP_NAME };
+export { uid, nameKey, clampInt, sortNatural, ncmp, parseGroupBulk, escapeHtml } from '../core/schema';
+export { calcSampling } from '../core/sampling';
