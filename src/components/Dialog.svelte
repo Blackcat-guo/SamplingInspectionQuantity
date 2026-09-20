@@ -15,7 +15,7 @@
     children?: Snippet;
   }>();
 
-  let boxEl: HTMLDivElement | null = null;
+  let boxEl = $state<HTMLDivElement | null>(null);
   let lastActive: HTMLElement | null = null;
 
   function onKeydown(e: KeyboardEvent) {
