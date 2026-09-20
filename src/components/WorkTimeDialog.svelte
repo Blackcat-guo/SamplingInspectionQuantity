@@ -1,9 +1,10 @@
 <script lang="ts">
   import Dialog from './Dialog.svelte';
-  import { pushToast } from '../lib/stores/app.svelte';
+  import { pushToast, storage } from '../lib/stores/app.svelte';
   import { copyText } from '../lib/utils/copy';
-  import { parseTimeToMinutes, minutesToTime, formatTimeRange, formatDuration } from '../lib/utils/time';
-  import { storage } from '../lib/stores/app.svelte';
+  import {
+    parseTimeToMinutes, minutesToTime, formatTimeRange, formatDuration,
+  } from '../lib/utils/time';
 
   let { open = $bindable(false) } = $props<{ open: boolean }>();
 
@@ -23,39 +24,56 @@
       if (typeof d.start === 'string') start = d.start;
       if (typeof d.end === 'string') end = d.end;
       if (Array.isArray(d.breaks)) breaks = d.breaks.slice(0, MAX_BREAKS);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   });
 
   function persist() {
     try {
       localStorage.setItem(storage.WORK_TIME_KEY, JSON.stringify({ start, end, breaks }));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   const result = $derived.by(() => {
     const s = parseTimeToMinutes(start);
     const rawEnd = parseTimeToMinutes(end);
     const empty = {
-      valid: false, workRange: '—', overtimeRange: '—',
-      totalDuration: '—', breakDuration: '—', actualDuration: '—', overtimeDuration: '—',
+      valid: false,
+      workRange: '—',
+      overtimeRange: '—',
+      totalDuration: '—',
+      breakDuration: '—',
+      actualDuration: '—',
+      overtimeDuration: '—',
       hasOvertime: false,
     };
     if (s === null || rawEnd === null) return empty;
     let e = rawEnd;
     let crossDay = false;
-    if (e < s) { e += 1440; crossDay = true; }
+    if (e < s) {
+      e += 1440;
+      crossDay = true;
+    }
     const total = e - s;
     if (total <= 0) return empty;
+
     const rawIntervals: { start: number; end: number }[] = [];
-    breaks.forEach(b => {
+    breaks.forEach((b) => {
       let bs = parseTimeToMinutes(b.start);
       let be = parseTimeToMinutes(b.end);
       if (bs === null || be === null) return;
       if (be < bs) be += 1440;
-      const cands = [[bs, be], [bs + 1440, be + 1440]] as const;
+      const cands = [
+        [bs, be],
+        [bs + 1440, be + 1440],
+      ] as const;
       let best: { start: number; end: number; d: number } | null = null;
       cands.forEach(([a, b2]) => {
-        const vs = Math.max(a, s), ve = Math.min(b2, e);
+        const vs = Math.max(a, s);
+        const ve = Math.min(b2, e);
         const d = ve - vs;
         if (d > 0 && (!best || d > best.d)) best = { start: vs, end: ve, d };
       });
@@ -63,10 +81,11 @@
     });
     rawIntervals.sort((a, b) => a.start - b.start);
     const merged: { start: number; end: number }[] = [];
-    rawIntervals.forEach(iv => {
+    rawIntervals.forEach((iv) => {
       const last = merged[merged.length - 1];
-      if (last && iv.start <= last.end) { if (iv.end > last.end) last.end = iv.end; }
-      else merged.push({ ...iv });
+      if (last && iv.start <= last.end) {
+        if (iv.end > last.end) last.end = iv.end;
+      } else merged.push({ ...iv });
     });
     const totalBreak = merged.reduce((acc, iv) => acc + (iv.end - iv.start), 0);
     const actual = Math.max(0, total - totalBreak);
@@ -87,20 +106,29 @@
   });
 
   function addBreak() {
-    if (breaks.length >= MAX_BREAKS) { pushToast(`最多 ${MAX_BREAKS} 段`, 'error'); return; }
+    if (breaks.length >= MAX_BREAKS) {
+      pushToast(`最多 ${MAX_BREAKS} 段`, 'error');
+      return;
+    }
     const last = breaks[breaks.length - 1];
-    let s = '12:00', e = '13:00';
+    let s = '12:00';
+    let e = '13:00';
     if (last) {
       const le = parseTimeToMinutes(last.end);
-      if (le !== null) { s = minutesToTime(le); e = minutesToTime(le + 60); }
+      if (le !== null) {
+        s = minutesToTime(le);
+        e = minutesToTime(le + 60);
+      }
     }
     breaks = [...breaks, { start: s, end: e }];
     persist();
   }
+
   function removeBreak(i: number) {
     breaks = breaks.filter((_, k) => k !== i);
     persist();
   }
+
   async function copyOne(text: string, label: string) {
     const ok = await copyText(text, false);
     pushToast(ok ? `已复制${label}` : '复制失败', ok ? 'success' : 'error');
@@ -123,7 +151,9 @@
     <div class="break-section">
       <div class="break-title">
         <span>🍽️ 休息时间段</span>
-        {#if breaks.length}<span style="font-size:11px;color:var(--c-text-3)">共 {breaks.length} 段</span>{/if}
+        {#if breaks.length}
+          <span style="font-size:11px;color:var(--c-text-3)">共 {breaks.length} 段</span>
+        {/if}
       </div>
       {#each breaks as b, i (i)}
         <div class="break-row">
@@ -169,12 +199,21 @@
     </div>
 
     <div class="work-copy-row">
-      <button class="work-copy-btn" disabled={!result.valid}
-              onclick={() => copyOne(result.workRange, '时间段')}>📋 复制时间段</button>
-      <button class="work-copy-btn" disabled={!result.hasOvertime || result.overtimeRange === '—'}
-              onclick={() => copyOne(result.overtimeRange, '加班段')}>📋 复制加班段</button>
-      <button class="work-copy-btn primary" disabled={!result.valid}
-              onclick={() => copyOne(result.overtimeDuration, '加班时长')}>📋 复制加班时长</button>
+      <button
+        class="work-copy-btn"
+        disabled={!result.valid}
+        onclick={() => copyOne(result.workRange, '时间段')}
+      >📋 复制时间段</button>
+      <button
+        class="work-copy-btn"
+        disabled={!result.hasOvertime || result.overtimeRange === '—'}
+        onclick={() => copyOne(result.overtimeRange, '加班段')}
+      >📋 复制加班段</button>
+      <button
+        class="work-copy-btn primary"
+        disabled={!result.valid}
+        onclick={() => copyOne(result.overtimeDuration, '加班时长')}
+      >📋 复制加班时长</button>
     </div>
   </div>
 </Dialog>
