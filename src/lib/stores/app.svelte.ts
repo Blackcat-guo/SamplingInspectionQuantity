@@ -28,7 +28,9 @@ export interface ToastItem {
 
 const defaultSettings = (): Settings => ({
   summaryTemplate: DEFAULT_TPL,
-  showVoice: true, showImageOcr: true,
+  showVoice: true,
+  showImageOcr: true,
+  showRecognizeTools: true,   // ★ v3.4 任务 4
   experienceLevel: 'auto',
   animationLevel: 'normal',
   showZeroQtyItems: true,
@@ -1241,15 +1243,24 @@ export function applyPayload(payload: any): void {
     specialGroups: cleanSpecialGroups(dp.specialGroups || dp.specialCategories),
     presetGroups: cleanPresetGroups(dp.presetGroups),
   };
+
   const s = (payload && typeof payload === 'object' && payload.settings) ? payload.settings : {};
   const tpl = (typeof s.summaryTemplate === 'string' && s.summaryTemplate.trim())
     ? (LEGACY_TPLS.includes(s.summaryTemplate) ? DEFAULT_TPL : s.summaryTemplate)
     : DEFAULT_TPL;
+
+  // ★ v3.4 任务 4：数据迁移（旧数据 → showRecognizeTools）
+  const migratedShowRecognizeTools: boolean =
+    typeof s.showRecognizeTools === 'boolean'
+      ? s.showRecognizeTools
+      : (s.showVoice !== false || s.showImageOcr !== false);
+
   Object.assign(app.settings, {
     ...defaultSettings(),
     summaryTemplate: tpl,
     showVoice: s.showVoice !== false,
     showImageOcr: s.showImageOcr !== false,
+    showRecognizeTools: migratedShowRecognizeTools,
     showZeroQtyItems: s.showZeroQtyItems !== false,
     mergeMultiProductSummary: s.mergeMultiProductSummary !== false,
     animationLevel: ['normal', 'reduced', 'none'].includes(s.animationLevel) ? s.animationLevel : 'normal',
@@ -1545,7 +1556,6 @@ export function moveGroupTo(fromIndex: number, toIndex: number): boolean {
 /* ============================================================
    模块 S-1：从预分组新建分组
    入口：GroupList.svelte 的"添加分组栏"
-   行为：在产品末尾 push 一个新分组；三层去重
    ============================================================ */
 export async function createGroupFromPreset(presetGroupId: string): Promise<boolean> {
   const pg = app.dataPresets.presetGroups.find((x) => x.id === presetGroupId);
@@ -1553,13 +1563,11 @@ export async function createGroupFromPreset(presetGroupId: string): Promise<bool
   const p = currentProduct();
   if (!p) return false;
 
-  // 1. 同名分组 → 中止
   if (p.groups.some((g) => nameKey(g.name) === nameKey(pg.name))) {
     pushToast(`已存在同名分组：${pg.name}`, 'error', 2600);
     return false;
   }
 
-  // 2. 三层去重：预分组内部 / 本产品其他分组 / 即将新建的组内
   const existing = new Set<string>();
   p.groups.forEach((g) =>
     g.items.forEach((it) => existing.add(nameKey(it.name))),
@@ -1569,13 +1577,12 @@ export async function createGroupFromPreset(presetGroupId: string): Promise<bool
   for (const raw of pg.items) {
     const k = nameKey(raw);
     if (!k) continue;
-    if (seen.has(k)) continue;          // 组内去重
-    if (existing.has(k)) continue;      // 与本产品其他分组冲突
+    if (seen.has(k)) continue;
+    if (existing.has(k)) continue;
     seen.add(k);
     finalItems.push(raw);
   }
 
-  // 3. 大数量确认
   const threshold = app.settings.bulkAddConfirmThreshold || 5;
   if (finalItems.length > threshold) {
     const ok = await askConfirm({
@@ -1586,10 +1593,7 @@ export async function createGroupFromPreset(presetGroupId: string): Promise<bool
     if (!ok) return false;
   }
 
-  // 4. 推历史栈（判定通过后，避免"点了没变化也占撤回"）
   history.pushSnapshot(app.products, p.id);
-
-  // 5. 创建新分组
   const initTotal = calcSampling(p.incomingQty || 0);
   p.groups.push({
     id: uid(),
@@ -1611,28 +1615,25 @@ export async function createGroupFromPreset(presetGroupId: string): Promise<bool
 
 /* ============================================================
    模块 S-2：预分组追加到现有分组
-   入口：GroupCard.svelte 分组内部的"预分组 ▾"
-   行为：往传入的分组 g 追加分类（跳过重名）
+   保留 store 函数（GroupCard 已移除入口，但其他模块可能调用）
    ============================================================ */
 export function applyPresetGroupToGroup(g: Group, presetGroupId: string): number {
   const pg = app.dataPresets.presetGroups.find((x) => x.id === presetGroupId);
   if (!pg) return 0;
   const p = currentProduct();
   if (!p) return 0;
-
   const seen = new Set(g.items.map((it) => nameKey(it.name)));
   const added: string[] = [];
   pg.items.forEach((name) => {
     const k = nameKey(name);
-    if (seen.has(k)) return; // 组内去重
+    if (seen.has(k)) return;
     const usedElsewhere = p.groups.some(
       (x) => x.id !== g.id && x.items.some((it) => nameKey(it.name) === k),
     );
-    if (usedElsewhere) return; // 与本产品其他分组冲突
+    if (usedElsewhere) return;
     seen.add(k);
     added.push(name);
   });
-
   if (!added.length) return 0;
 
   history.pushSnapshot(app.products, p.id);
@@ -1643,7 +1644,7 @@ export function applyPresetGroupToGroup(g: Group, presetGroupId: string): number
 }
 
 /* ============================================================
-   模块 K：数据预设分页（只读，不在 render 期改状态）
+   模块 K：数据预设分页
    ============================================================ */
 export function pageSizeFor(): number {
   try {
@@ -1672,7 +1673,6 @@ export function setPresetPage(key: string, page: number): void {
   presetPages[key] = Math.max(1, page);
 }
 
-// ✅ Bug 7 修复：只读函数，不在 render 期间修改状态
 export function getPresetPage(key: string, total: number): number {
   const size = pageSizeFor();
   const pages = Math.max(1, Math.ceil(total / size));
@@ -1839,7 +1839,6 @@ export function renameSpecialGroup(id: string, name: string): void {
   scheduleSave();
 }
 
-/** 切换特殊分组与某负责人的关联（勾选/取消） */
 export function toggleSpecialGroupResp(sgId: string, respId: string): void {
   const sg = app.dataPresets.specialGroups.find((x) => x.id === sgId);
   if (!sg) return;
@@ -1866,7 +1865,6 @@ export function setSpecialGroupItems(sgId: string, text: string): void {
   scheduleSave();
 }
 
-/* 特殊分组 UI 状态 */
 export const specialUIState = $state({
   expandedProductsId: '',
   filter: '',
@@ -1880,15 +1878,13 @@ export function toggleSpecialGroupProducts(id: string): void {
   specialUIState.filter = '';
 }
 
-// ✅ Bug 1 修复：原 toggleSpecialGroupResp(id) 重命名为 toggleSpecialRespPanel
 export function toggleSpecialRespPanel(id: string): void {
   specialUIState.expandedRespId = specialUIState.expandedRespId === id ? '' : id;
   specialUIState.expandedProductsId = '';
 }
 
 /* ============================================================
-   模块 L：部分导出 / 部分导入
-   数据格式 100% 兼容 counts.html
+   模块 L：部分导出 / 部分导入（数据格式与 counts.html 100% 兼容）
    ============================================================ */
 export interface ExportOptions {
   products: boolean;
@@ -1903,7 +1899,6 @@ export interface ImportOptions {
   mode: 'merge' | 'overwrite';
 }
 
-/** 导出：flat 结构，字段名与 counts.html 一致 */
 export function buildPartialExport(opts: ExportOptions): string {
   const payload: any = {
     app: 'category-counts',
@@ -1922,7 +1917,6 @@ export function buildPartialExport(opts: ExportOptions): string {
   return JSON.stringify(payload, null, 2);
 }
 
-/** 文件摘要 */
 export function summarizeImport(raw: any): string {
   const parts: string[] = [];
   if (Array.isArray(raw?.products)) parts.push(`${raw.products.length} 产品`);
@@ -1936,7 +1930,6 @@ export function summarizeImport(raw: any): string {
   return parts.join(' · ') || '空文件';
 }
 
-/** 检测导入文件包含哪些模块 */
 export function detectImportModules(raw: any): {
   products: boolean;
   dataPresets: boolean;
@@ -1949,7 +1942,6 @@ export function detectImportModules(raw: any): {
   };
 }
 
-/** ✅ RISK-2 修复：负责人 ID 悬空清理 */
 function cleanupResponsibleIds(): void {
   const valid = new Set(app.dataPresets.responsiblePersons.map((r) => r.id));
   app.dataPresets.customers.forEach((c) => {
@@ -1962,7 +1954,6 @@ function cleanupResponsibleIds(): void {
   });
 }
 
-/** 导入：读取 flat 结构 */
 export function importPartialPayload(
   raw: any,
   opts: ImportOptions,
@@ -2020,9 +2011,7 @@ export function importPartialPayload(
         presetGroups: cleanPresetGroups(dp.presetGroups),
       };
       replaced += 1;
-      // ✅ RISK-2：覆盖后清理悬空 ID
       cleanupResponsibleIds();
-      // ✅ 覆盖后清理产品上失效的绑定
       cleanupOrphanProductBindings();
     } else {
       const sup = new Set(app.dataPresets.suppliers.map(nameKey));
@@ -2055,7 +2044,6 @@ export function importPartialPayload(
       cleanPresetGroups(dp.presetGroups).forEach((p) => {
         if (!pg.has(nameKey(p.name))) { app.dataPresets.presetGroups.push(p); added++; }
       });
-      // ✅ 合并后也做一次清理
       cleanupResponsibleIds();
     }
   }
@@ -2076,7 +2064,6 @@ export function importPartialPayload(
   return { added, replaced };
 }
 
-/** 解析 .js 文件内容（先剥离字符串再检测危险关键字） */
 export function parseJsData(text: string): any {
   const trimmed = String(text || '').trim();
   if (!trimmed) throw new Error('空文件');
@@ -2143,6 +2130,13 @@ export function setShowOcr(v: boolean): void {
   app.settings.showImageOcr = v;
   scheduleSave();
 }
+/** ★ v3.4 任务 4：统一识别工具开关 */
+export function setShowRecognizeTools(v: boolean): void {
+  app.settings.showRecognizeTools = v;
+  app.settings.showVoice = v;
+  app.settings.showImageOcr = v;
+  scheduleSave();
+}
 export function setFontSize(key: 'small' | 'standard' | 'large'): void {
   app.settings.fontSize = key;
   applyFontSize();
@@ -2172,19 +2166,7 @@ export function experienceHint(): string {
 }
 
 /* ============================================================
-   任务 E：数据预设导航弹窗状态
-   ============================================================ */
-export const presetNavDialog = $state<{ show: boolean }>({ show: false });
-
-export function openPresetNavDialog(): void {
-  presetNavDialog.show = true;
-}
-export function closePresetNavDialog(): void {
-  presetNavDialog.show = false;
-}
-
-/* ============================================================
-   任务 C：说明书 9 章（含案例）
+   任务 C：说明书 9 章
    ============================================================ */
 export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] = [
   {
@@ -2228,7 +2210,7 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
   <li>内联重命名（✏️ 就地编辑，Enter 保存，Esc 取消）</li>
 </ul>
 <blockquote>📘 <b>案例：批量添加 3 个相近料号</b><br>
-在「添加产品」文本域输入：<br>
+在「添加产品」文本域输入：
 <pre>5004-1
 5004-2
 5004-3</pre>
@@ -2255,7 +2237,7 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
 <h4>3.3 ★ 从预分组一键建组（重点）</h4>
 <p>添加分组栏右侧「📦 预分组 ▾」→ 点击下拉项 → 立即新建一个分组，组名 = 预分组名，分类 = 预分组的 items（自动去重）。</p>
 <blockquote>📘 <b>案例：从预分组一键建组</b><br>
-① 数据预设 → 预分组 → 新增「常见外观问题」，items 填入：<br>
+① 数据预设 → 预分组 → 新增「常见外观问题」，items 填入：
 <pre>磕碰伤
 划痕
 色差
@@ -2272,7 +2254,6 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
   <li><b>键盘排序</b>：聚焦 ⠿ 按 Enter 进入，↑↓ 移动，Esc 退出</li>
   <li><b>批量改量</b>：批量删除/改量 → 勾选 → 改量（× 系数 / = 定值）</li>
   <li><b>分类转移</b>：点 ↔ 转移到其他分组</li>
-  <li><b>预分类下拉</b>：从当前产品的预分类快速加入</li>
 </ul>
 `,
   },
@@ -2296,10 +2277,12 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
 <h4>4.2 ★ 特殊分组负责人自动联动</h4>
 <blockquote>📘 <b>案例：客户绑定负责人 + 特殊分组命中</b><br>
 ① 数据预设 → 客户 → 新增「华为」，勾选负责人 @张三<br>
-② 数据预设 → 特殊分组 → 新增「外观」<br>
-   - 分类：磕碰伤、划痕<br>
-   - 负责人：@李四<br>
-   - 勾选「仅样品触发」<br>
+② 数据预设 → 特殊分组 → 新增「外观」
+<ul>
+  <li>分类：磕碰伤、划痕</li>
+  <li>负责人：@李四</li>
+  <li>勾选「仅样品触发」</li>
+</ul>
 ③ 主面板选一个「客户=华为、样品=true」的产品，且含「磕碰伤」分类<br>
 ④ 多产品汇总 → 负责人自动带出：<b>@张三 @李四</b><br>
 ⑤ 手动 ✕ 移除 @李四 → 切换产品组合后不再加回（否决集合）
@@ -2320,7 +2303,7 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
   <li><b>逐料号拆分</b>：每个产品独立一行</li>
 </ul>
 <blockquote>📘 <b>案例：三产品合并输出</b><br>
-选中 3 个产品，供应商=A厂，客户=华为：<br>
+选中 3 个产品，供应商=A厂，客户=华为：
 <pre>5004-1：来料1000，抽检20
 5004-2：来料2000，抽检32
 5004-3：来料500，抽检13</pre>
@@ -2360,7 +2343,7 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
 </blockquote>
 <blockquote>📘 <b>案例 C：跨天夜班</b><br>
 上班 22:00 / 下班 06:00（次日）/ 无休息<br>
-输出：总 8h，休息 0h，实际 8h，加班 0h（因为 18:00 基准不适用于夜班，加班时段显示 —）
+输出：总 8h，休息 0h，实际 8h，加班 0h
 </blockquote>
 <h4>6.2 复制按钮</h4>
 <p>底部三个按钮分别复制：时间段 / 加班段 / 加班时长。</p>
@@ -2388,7 +2371,7 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
 ⑤ 导入完成，Toast 提示「导入完成」
 </blockquote>
 <h4>7.3 部分导入</h4>
-<p>「📥 部分导入…」→ 选文件 → 显示摘要（N 产品 · M 客户 · K 供应商 · J 特殊分组）→ 勾选模块 + 模式（合并/覆盖）→ 确认。覆盖模式会二次确认并自动清理负责人 ID 悬空引用。</p>
+<p>「📥 部分导入…」→ 选文件 → 显示摘要（N 产品 · M 客户 · K 供应商 · J 特殊分组）→ 勾选模块 + 模式（合并/覆盖）→ 确认。</p>
 `,
   },
   {
@@ -2420,7 +2403,7 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
     title: '第九章 · 常见问题',
     content: `
 <h4>Q1 · 撤回按钮灰着？</h4>
-<p>说明历史栈为空。<b>修改前</b>需要先保存（右上角出现"已自动保存"提示），或者该操作本身不推历史栈（如：查看类操作）。</p>
+<p>说明历史栈为空。<b>修改前</b>需要先保存，或者该操作本身不推历史栈（如：查看类操作）。</p>
 <h4>Q2 · 抽检数不随来料变化？</h4>
 <p>检查该分组的「总数量」是否显示 <code>· 已手改</code>。若是，说明用户手动改过，系统不再自动同步。点击分组头 ↻ 重置该组可恢复联动。</p>
 <h4>Q3 · 特殊分组没带出负责人？</h4>
@@ -2447,13 +2430,25 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
 · 邮件（直接调起邮件客户端）<br>
 · 仅复制到剪贴板</p>
 <h4>Q8 · 预分组下拉从哪来？</h4>
-<p>数据预设 → 预分组 Tab。新增预分组后，添加分组栏和分组内部都会出现对应的下拉菜单项。</p>
+<p>数据预设 → 预分组 Tab。新增预分组后，添加分组栏会出现「📦 预分组 ▾」菜单项。</p>
 <h4>Q9 · 为什么有些分类在别的分组灰着？</h4>
 <p>同一产品内分类名唯一。若某分类已在其他分组存在，添加时会被拒绝，避免不良率重复统计。</p>
 <h4>Q10 · 语音 / OCR 面板不显示？</h4>
 <p>两种情况：<br>
 ① 浏览器不支持（语音依赖 <code>SpeechRecognition</code>，需要 HTTPS 或 localhost）<br>
-② 设置 → 显示中关闭了「显示语音输入功能」/「显示图片识别功能」开关</p>
+② 设置 → 显示中关闭了「显示识别工具」开关</p>
 `,
   },
 ];
+
+/* ============================================================
+   任务 E：数据预设导航弹窗状态
+   ============================================================ */
+export const presetNavDialog = $state<{ show: boolean }>({ show: false });
+
+export function openPresetNavDialog(): void {
+  presetNavDialog.show = true;
+}
+export function closePresetNavDialog(): void {
+  presetNavDialog.show = false;
+}
