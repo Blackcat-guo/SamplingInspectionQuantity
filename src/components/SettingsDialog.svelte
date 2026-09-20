@@ -7,7 +7,7 @@
     MANUAL_SECTIONS,
     // 任务 D 新增
     setShowTopNavText, setShowMainTips, setShowZeroQty,
-    setMergeMultiProductSummary, setShowVoice, setShowOcr,
+    setMergeMultiProductSummary, setShowRecognizeTools,
     setFontSize, setAnimationLevel,
     fontSizeLabel, animationLevelLabel, experienceLevelLabel, experienceHint,
   } from '../lib/stores/app.svelte';
@@ -216,28 +216,17 @@
         </small>
       </label>
 
-      <!-- 8. 显示语音 -->
-      <label class="display-toggle">
-        <input
-          type="checkbox"
-          checked={app.settings.showVoice !== false}
-          onchange={(e) => setShowVoice((e.target as HTMLInputElement).checked)}
-        />
-        <span>🎤 显示语音输入功能</span>
-        <small>{app.settings.showVoice !== false ? '已开启' : '已隐藏'}</small>
-      </label>
-
-      <!-- 9. 显示 OCR -->
-      <label class="display-toggle">
-        <input
-          type="checkbox"
-          checked={app.settings.showImageOcr !== false}
-          onchange={(e) => setShowOcr((e.target as HTMLInputElement).checked)}
-        />
-        <span>📷 显示图片识别功能</span>
-        <small>{app.settings.showImageOcr !== false ? '已开启' : '已隐藏'}</small>
-      </label>
-    {/if}
+      <!-- 8. 显示识别工具（合并语音 + OCR） -->
+<label class="display-toggle">
+  <input
+    type="checkbox"
+    checked={app.settings.showRecognizeTools !== false}
+    onchange={(e) => setShowRecognizeTools((e.target as HTMLInputElement).checked)}
+  />
+  <span>🛠 显示识别工具</span>
+  <small>{app.settings.showRecognizeTools !== false ? '已开启' : '已隐藏'}</small>
+</label>
+<p class="backup-note">包含语音输入与图片识别两个面板。</p>
 
     {#if tab === 'backup'}
       <p class="backup-note">导出时可选择要包含的模块；导入合并模式会跳过重复项。</p>
