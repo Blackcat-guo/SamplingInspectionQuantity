@@ -1,3 +1,4 @@
+// src/lib/stores/app.svelte.ts
 import {
   SCHEMA_VERSION, AUTO_GROUP_NAME,
   uid, nameKey, clampInt, clonePlain, sortNatural, ncmp,
@@ -70,7 +71,7 @@ export const app = $state({
 
 const history = createHistory();
 
-/* 保存节流 */
+/* ---------------- 保存节流 ---------------- */
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let draftTimer: ReturnType<typeof setInterval> | null = null;
 let autoBackupTimer: ReturnType<typeof setTimeout> | null = null;
@@ -397,18 +398,6 @@ export function resetGroup(index: number): void {
   g.total = 0;
   g.totalIsAuto = undefined;
   g.items.forEach(it => { it.qty = 0; });
-  scheduleSave();
-}
-
-export function collapseAllGroups(): void {
-  const p = currentProduct();
-  if (!p) return;
-  app.settings.collapsedGroups = p.groups.map(g => g.id);
-  scheduleSave();
-}
-
-export function expandAllGroups(): void {
-  app.settings.collapsedGroups = [];
   scheduleSave();
 }
 
@@ -1134,87 +1123,128 @@ export function initApp(): () => void {
 export { history, CMD, uid, nameKey, clampInt, sortNatural, ncmp, calcSampling, parseGroupBulk, escapeHtml, storage, AUTO_GROUP_NAME };
 export type { Product, Group, DataPresets, Settings, Customer, Responsible, SpecialGroup, PresetGroup, GlobalPreset, Shortcut };
 
-// ===== 新增：清理本地缓存 =====
-export function clearLocalCache(): void {
-  if (!confirm('确定清理本地缓存吗？将删除历史滚动备份与孤儿产品数据（不影响当前数据）。')) return;
-  try {
-    const liveIds = new Set(app.products.map(p => p.id));
-    const staleKeys: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith(storage.PRODUCT_PREFIX)) {
-        const pid = k.slice(storage.PRODUCT_PREFIX.length);
-        if (!liveIds.has(pid)) staleKeys.push(k);
-      }
-    }
-    staleKeys.forEach(k => { try { localStorage.removeItem(k); } catch { /* ignore */ } });
-    try { localStorage.removeItem(storage.BACKUP_KEY); } catch { /* ignore */ }
-    try { localStorage.removeItem(storage.AUTO_BACKUP_KEY); } catch { /* ignore */ }
-    try { localStorage.removeItem(storage.DRAFT_KEY); } catch { /* ignore */ }
-    pushToast(`已清理本地缓存（删除 ${staleKeys.length} 条孤儿数据）`);
-    logOperation('清理本地缓存');
-  } catch (e: any) {
-    pushToast('清理失败：' + (e?.message || '未知错误'), 'error');
-  }
+/* ---------------- 批量管理状态（Svelte 5 安全写法） ---------------- */
+export const uiState = $state({
+  expandedCustomerProductsId: '',
+  expandedSupplierProductsName: '',
+  productPickerFilter: '',
+  expandedCustomerId: ''
+});
+
+export function setProductPickerFilter(v: string): void {
+  uiState.productPickerFilter = v;
 }
 
-// ===== 新增：清理孤儿数据 =====
-export function cleanupOrphanData(): void {
-  const respIds = new Set(app.dataPresets.responsiblePersons.map(r => r.id));
-  const liveProductIds = new Set(app.products.map(p => p.id));
-  const liveGroupIds = new Set(app.products.flatMap(p => (p.groups || []).map(g => g.id)));
-  const usedCustomers = new Set(app.products.map(p => p.customer || '').filter(Boolean));
-  const usedSuppliers = new Set(app.products.map(p => p.supplier || '').filter(Boolean));
+export function toggleCustomerProducts(id: string): void {
+  uiState.expandedCustomerProductsId = uiState.expandedCustomerProductsId === id ? '' : id;
+  uiState.expandedSupplierProductsName = '';
+  uiState.productPickerFilter = '';
+}
 
-  let resp = 0, cust = 0, sup = 0, gp = 0, collapsed = 0, merge = 0;
-  app.dataPresets.customers.forEach(c => { resp += c.responsibleIds.filter(id => !respIds.has(id)).length; });
-  app.dataPresets.specialGroups.forEach(sg => { resp += (sg.responsibleIds || []).filter(id => !respIds.has(id)).length; });
-  if (app.products.length) {
-    cust = app.dataPresets.customers.filter(c => !usedCustomers.has(c.name)).length;
-    sup = app.dataPresets.suppliers.filter(s => !usedSuppliers.has(s)).length;
-  }
-  app.globalPresets.forEach(g => {
-    if (Array.isArray(g.productIds)) gp += g.productIds.filter(id => !liveProductIds.has(id)).length;
-  });
-  if (Array.isArray(app.settings.collapsedGroups)) {
-    collapsed = app.settings.collapsedGroups.filter(id => !liveGroupIds.has(id)).length;
-  }
-  merge = app.mergeSelectedIds.filter(id => !liveProductIds.has(id)).length;
+export function toggleSupplierProducts(name: string): void {
+  uiState.expandedSupplierProductsName = uiState.expandedSupplierProductsName === name ? '' : name;
+  uiState.expandedCustomerProductsId = '';
+  uiState.productPickerFilter = '';
+}
 
-  const total = resp + cust + sup + gp + collapsed + merge;
-  if (!total) { pushToast('没有发现可清理的孤儿数据'); return; }
+export function getFilteredProductsForPicker() {
+  const q = uiState.productPickerFilter.trim().toLowerCase();
+  let list = app.products;
+  if (q) list = list.filter(p => String(p.name).toLowerCase().includes(q));
+  return sortNatural(list, p => p.name);
+}
 
-  const parts: string[] = [];
-  if (cust) parts.push(`${cust} 个未被引用的客户预设`);
-  if (sup) parts.push(`${sup} 个未被引用的供应商预设`);
-  if (resp) parts.push(`${resp} 条失效的负责人绑定`);
-  if (gp) parts.push(`${gp} 条失效的预分类产品关联`);
-  if (collapsed) parts.push(`${collapsed} 条失效的折叠状态`);
-  if (merge) parts.push(`${merge} 条失效的汇总选择`);
-
-  if (!confirm('确定清理以下孤儿数据吗？\n\n· ' + parts.join('\n· '))) return;
-
-  history.pushGlobalSnapshot(app.products, app.dataPresets, app.globalPresets, app.settings, '清理孤儿数据');
-  app.dataPresets.customers.forEach(c => { c.responsibleIds = c.responsibleIds.filter(id => respIds.has(id)); });
-  app.dataPresets.specialGroups.forEach(sg => { sg.responsibleIds = (sg.responsibleIds || []).filter(id => respIds.has(id)); });
-  if (app.products.length) {
-    app.dataPresets.customers = app.dataPresets.customers.filter(c => usedCustomers.has(c.name));
-    app.dataPresets.suppliers = app.dataPresets.suppliers.filter(s => usedSuppliers.has(s));
-  }
-  app.globalPresets.forEach(g => { if (Array.isArray(g.productIds)) g.productIds = g.productIds.filter(id => liveProductIds.has(id)); });
-  if (Array.isArray(app.settings.collapsedGroups)) {
-    app.settings.collapsedGroups = app.settings.collapsedGroups.filter(id => liveGroupIds.has(id));
-  }
-  app.mergeSelectedIds = app.mergeSelectedIds.filter(id => liveProductIds.has(id));
-
+export function toggleCustomerProduct(c: any, pid: string, checked: boolean): void {
+  const p = app.products.find(x => x.id === pid);
+  if (!p) return;
+  if (checked) setProductCustomer(pid, c.name);
+  else if ((p.customer || '') === c.name) setProductCustomer(pid, '');
   scheduleSave();
-  logOperation('清理孤儿数据');
-  pushToast(`已清理 ${total} 项孤儿数据`);
 }
 
-// ==================== 以下为新增补全功能 ====================
+export function toggleSupplierProduct(name: string, pid: string, checked: boolean): void {
+  const p = app.products.find(x => x.id === pid);
+  if (!p) return;
+  if (checked) setProductSupplier(pid, name);
+  else if ((p.supplier || '') === name) setProductSupplier(pid, '');
+  scheduleSave();
+}
 
-// 批量修改数量状态
+export function selectAllProductsForCustomer(c: any, on: boolean): void {
+  if (on) app.products.forEach(p => setProductCustomer(p.id, c.name));
+  else app.products.forEach(p => { if ((p.customer || '') === c.name) setProductCustomer(p.id, ''); });
+  scheduleSave();
+}
+
+export function selectAllProductsForSupplier(name: string, on: boolean): void {
+  if (on) app.products.forEach(p => setProductSupplier(p.id, name));
+  else app.products.forEach(p => { if ((p.supplier || '') === name) setProductSupplier(p.id, ''); });
+  scheduleSave();
+}
+
+export function countSupplierProducts(name: string): number {
+  return app.products.filter(p => (p.supplier || '') === name).length;
+}
+
+export function countCustomerProducts(name: string): number {
+  return app.products.filter(p => (p.customer || '') === name).length;
+}
+
+export function toggleCustomerResp(id: string): void {
+  uiState.expandedCustomerId = uiState.expandedCustomerId === id ? '' : id;
+  uiState.expandedCustomerProductsId = '';
+}
+
+export function toggleCustomerRespFor(c: any, respId: string): void {
+  const ids = c.responsibleIds.slice();
+  const idx = ids.indexOf(respId);
+  if (idx >= 0) ids.splice(idx, 1);
+  else ids.push(respId);
+  c.responsibleIds = ids;
+  scheduleSave();
+}
+
+/* ---------------- 分组批量管理（Svelte 5 安全写法） ---------------- */
+export const groupSelection = $state<Record<string, string[]>>({});
+export const batchGroupId = $state<{ value: string }>({ value: '' });
+
+export function enterBatchItems(gid: string): void {
+  batchGroupId.value = gid;
+  groupSelection[gid] = [];
+}
+
+export function cancelBatchItems(): void {
+  if (batchGroupId.value) groupSelection[batchGroupId.value] = [];
+  batchGroupId.value = '';
+}
+
+export function toggleItemSelect(gid: string, itemName: string): void {
+  if (!groupSelection[gid]) groupSelection[gid] = [];
+  const arr = groupSelection[gid];
+  const i = arr.indexOf(itemName);
+  if (i >= 0) arr.splice(i, 1); else arr.push(itemName);
+}
+
+export function toggleAllItems(gid: string, checked: boolean, items: any[]): void {
+  groupSelection[gid] = checked ? items.map(it => it.name) : [];
+}
+
+export function batchDeleteItems(g: any): void {
+  const sel = groupSelection[g.id] || [];
+  if (!sel.length) return;
+  const p = currentProduct();
+  if (!p) return;
+  const set = new Set(sel);
+  const removedItems = [];
+  g.items.forEach((it: any, i: number) => { if (set.has(it.name)) removedItems.push({ item: { ...it }, index: i }); });
+  history.pushSnapshot(app.products, p.id);
+  g.items = g.items.filter((it: any) => !set.has(it.name));
+  groupSelection[g.id] = [];
+  cancelBatchItems();
+  scheduleSave();
+  pushToast(`已删除 ${removedItems.length} 个分类`, 'success');
+}
+
 export const bulkQtyDialog = $state({
   show: false,
   gid: '',
@@ -1265,95 +1295,8 @@ export function applyBulkQty(): void {
   pushToast(`已修改 ${changes.length} 个分类的数量`);
 }
 
-// 操作日志清空功能
 export function clearOperationLogs(): void {
   app.operationLogs.length = 0;
   pushToast('操作日志已清空');
   scheduleSave();
-}
-
-// 关联产品状态
-export const uiState = $state({
-  expandedCustomerProductsId: '',
-  expandedSupplierProductsName: '',
-  productPickerFilter: '',
-  expandedCustomerId: ''
-});
-
-export function toggleCustomerProducts(id: string): void {
-  uiState.expandedCustomerProductsId = uiState.expandedCustomerProductsId === id ? '' : id;
-  uiState.expandedSupplierProductsName = '';
-  uiState.productPickerFilter = '';
-}
-
-export function toggleSupplierProducts(name: string): void {
-  uiState.expandedSupplierProductsName = uiState.expandedSupplierProductsName === name ? '' : name;
-  uiState.expandedCustomerProductsId = '';
-  uiState.productPickerFilter = '';
-}
-
-export function getFilteredProductsForPicker() {
-  const q = uiState.productPickerFilter.trim().toLowerCase();
-  let list = app.products;
-  if (q) list = list.filter(p => String(p.name).toLowerCase().includes(q));
-  return sortNatural(list, p => p.name);
-}
-
-export function setProductPickerFilter(v: string): void {
-  uiState.productPickerFilter = v;
-}
-
-// ===== 新增：分组批量管理状态与功能 =====
-export const groupSelection = $state<Record<string, string[]>>({});
-export const batchGroupId = $state<{ value: string }>({ value: '' });
-
-export function enterBatchItems(gid: string): void {
-  batchGroupId.value = gid;
-  groupSelection[gid] = [];
-}
-
-export function cancelBatchItems(): void {
-  if (batchGroupId.value) groupSelection[batchGroupId.value] = [];
-  batchGroupId.value = '';
-}
-
-export function toggleItemSelect(gid: string, itemName: string): void {
-  if (!groupSelection[gid]) groupSelection[gid] = [];
-  const arr = groupSelection[gid];
-  const i = arr.indexOf(itemName);
-  if (i >= 0) arr.splice(i, 1); else arr.push(itemName);
-}
-
-export function toggleAllItems(gid: string, checked: boolean, items: any[]): void {
-  groupSelection[gid] = checked ? items.map(it => it.name) : [];
-}
-
-export function batchDeleteItems(g: any): void {
-  const sel = groupSelection[g.id] || [];
-  if (!sel.length) return;
-  const p = currentProduct();
-  if (!p) return;
-  const set = new Set(sel);
-  const removedItems = [];
-  g.items.forEach((it: any, i: number) => { if (set.has(it.name)) removedItems.push({ item: { ...it }, index: i }); });
-  history.pushSnapshot(app.products, p.id);
-  g.items = g.items.filter((it: any) => !set.has(it.name));
-  groupSelection[g.id] = [];
-  cancelBatchItems();
-  scheduleSave();
-  pushToast(`已删除 ${removedItems.length} 个分类`, 'success');
-}
-
-export function toggleCustomerRespFor(c: any, respId: string): void {
-  const ids = c.responsibleIds.slice();
-  const idx = ids.indexOf(respId);
-  if (idx >= 0) ids.splice(idx, 1);
-  else ids.push(respId);
-  c.responsibleIds = ids;
-  scheduleSave();
-}
-
-export function toggleCustomerResp(id: string): void {
-  expandedCustomerId = expandedCustomerId === id ? '' : id;
-  uiState.expandedCustomerProductsId = ''; // 展开负责人时，顺手收起关联产品面板
 }
