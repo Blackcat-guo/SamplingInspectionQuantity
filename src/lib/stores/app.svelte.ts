@@ -1517,3 +1517,499 @@ export function applyBulkQty(): void {
   closeBulkQtyDialog();
   pushToast(`已修改 ${changes.length} 个分类的数量`);
 }
+
+/* ============================================================
+   模块 R：分组拖拽排序
+   ============================================================ */
+export const dragState = $state({
+  activeId: '',
+  dragging: false,
+  overIndex: -1,
+});
+
+export function moveGroupTo(fromIndex: number, toIndex: number): boolean {
+  const p = currentProduct();
+  if (!p) return false;
+  const n = p.groups.length;
+  if (fromIndex < 0 || fromIndex >= n) return false;
+  if (toIndex < 0 || toIndex >= n) return false;
+  if (fromIndex === toIndex) return false;
+  history.pushSnapshot(app.products, p.id);
+  const [g] = p.groups.splice(fromIndex, 1);
+  p.groups.splice(toIndex, 0, g);
+  scheduleSave();
+  logOperation(`分组「${g.name}」移动到第 ${toIndex + 1} 位`);
+  return true;
+}
+
+/* ============================================================
+   模块 S：预分组应用到现有分组
+   ============================================================ */
+export function applyPresetGroupToGroup(g: Group, presetGroupId: string): number {
+  const pg = app.dataPresets.presetGroups.find((x) => x.id === presetGroupId);
+  if (!pg) return 0;
+  const p = currentProduct();
+  if (!p) return 0;
+  const seen = new Set(g.items.map((it) => nameKey(it.name)));
+  const added: string[] = [];
+  pg.items.forEach((name) => {
+    const k = nameKey(name);
+    if (seen.has(k)) return;
+    const usedElsewhere = p.groups.some(
+      (x) => x.id !== g.id && x.items.some((it) => nameKey(it.name) === k),
+    );
+    if (usedElsewhere) return;
+    seen.add(k);
+    g.items.push({ name, qty: 0 });
+    added.push(name);
+  });
+  if (added.length) {
+    scheduleSave();
+    logOperation(`将预分组「${pg.name}」应用到「${g.name}」（+${added.length}）`);
+  }
+  return added.length;
+}
+
+/* ============================================================
+   模块 K：数据预设分页
+   ============================================================ */
+export function pageSizeFor(): number {
+  try {
+    const h = window.innerHeight;
+    return Math.max(4, Math.floor((h - 380) / 54));
+  } catch {
+    return 6;
+  }
+}
+
+export const presetPages = $state<Record<string, number>>({
+  customer: 1,
+  supplier: 1,
+  incoming: 1,
+  process: 1,
+  responsible: 1,
+  special: 1,
+  presetGroup: 1,
+});
+
+export function resetPresetPage(key: string): void {
+  presetPages[key] = 1;
+}
+
+export function setPresetPage(key: string, page: number): void {
+  presetPages[key] = Math.max(1, page);
+}
+
+/* ============================================================
+   模块 E：负责人自动联动
+   ============================================================ */
+export const autoRespState = $state({
+  rejected: [] as string[],
+  manuallyAdded: [] as string[],
+  lastSignature: '',
+});
+
+function computeAutoResponsibleSignature(): string {
+  return app.mergeSelectedIds.slice().sort().join('|');
+}
+
+export function computeAutoResponsibles(): string[] {
+  const list = mergedProducts();
+  if (!list.length) return [];
+  const rejected = new Set(autoRespState.rejected.map(nameKey));
+  const out = new Set<string>();
+
+  // 1. 客户绑定的负责人
+  const custNames = new Set(list.map((p) => (p.customer || '').trim()).filter(Boolean));
+  app.dataPresets.customers.forEach((c) => {
+    if (!custNames.has(c.name)) return;
+    c.responsibleIds.forEach((rid) => {
+      const r = app.dataPresets.responsiblePersons.find((x) => x.id === rid);
+      if (r && !rejected.has(nameKey(r.name))) out.add(r.name);
+    });
+  });
+
+  // 2. 特殊分组负责人
+  app.dataPresets.specialGroups.forEach((sg) => {
+    let hit = false;
+    list.forEach((p) => {
+      if (hit) return;
+      if (sg.requireSample && !p.isSample) return;
+      p.groups.forEach((g) => {
+        if (hit) return;
+        g.items.forEach((it) => {
+          if (hit) return;
+          if (sg.items.some((si) => nameKey(si) === nameKey(it.name))) hit = true;
+        });
+      });
+    });
+    if (hit) {
+      sg.responsibleIds.forEach((rid) => {
+        const r = app.dataPresets.responsiblePersons.find((x) => x.id === rid);
+        if (r && !rejected.has(nameKey(r.name))) out.add(r.name);
+      });
+    }
+  });
+
+  return Array.from(out);
+}
+
+export function rejectAutoResponsible(name: string): void {
+  const k = nameKey(name);
+  if (!autoRespState.rejected.some((x) => nameKey(x) === k)) {
+    autoRespState.rejected.push(name);
+  }
+  autoRespState.manuallyAdded = autoRespState.manuallyAdded.filter(
+    (n) => nameKey(n) !== k,
+  );
+  app.settings.responsiblePersons = app.settings.responsiblePersons.filter(
+    (n) => nameKey(n) !== k,
+  );
+  scheduleSave();
+}
+
+export function addManualResponsible(name: string): void {
+  const v = String(name || '').trim().replace(/^@+/, '');
+  if (!v) return;
+  const k = nameKey(v);
+  autoRespState.rejected = autoRespState.rejected.filter((x) => nameKey(x) !== k);
+  if (!autoRespState.manuallyAdded.some((x) => nameKey(x) === k)) {
+    autoRespState.manuallyAdded.push(v);
+  }
+  if (!app.settings.responsiblePersons.some((n) => nameKey(n) === k)) {
+    app.settings.responsiblePersons = [...app.settings.responsiblePersons, v];
+  }
+  scheduleSave();
+  scheduleAutoRespSync();
+}
+
+let autoRespTimer: ReturnType<typeof setTimeout> | null = null;
+export function scheduleAutoRespSync(): void {
+  if (autoRespTimer) clearTimeout(autoRespTimer);
+  autoRespTimer = setTimeout(() => {
+    autoRespTimer = null;
+    const sig = computeAutoResponsibleSignature();
+    if (sig !== autoRespState.lastSignature) {
+      autoRespState.lastSignature = sig;
+      autoRespState.rejected = [];
+    }
+    const auto = computeAutoResponsibles();
+    const merged = new Set<string>(auto);
+    autoRespState.manuallyAdded.forEach((n) => merged.add(n));
+    const seen = new Set<string>();
+    const final: string[] = [];
+    merged.forEach((n) => {
+      const k = nameKey(n);
+      if (seen.has(k)) return;
+      seen.add(k);
+      final.push(n);
+    });
+    app.settings.responsiblePersons = final;
+    scheduleSave();
+  }, 300);
+}
+
+/* ============================================================
+   模块 G：特殊分组关联产品
+   ============================================================ */
+export function productMatchesSpecialGroup(p: Product, sg: SpecialGroup): boolean {
+  return p.groups.some((g) =>
+    g.items.some((it) => sg.items.some((si) => nameKey(si) === nameKey(it.name))),
+  );
+}
+
+export function productEffectiveForSpecialGroup(p: Product, sg: SpecialGroup): boolean {
+  if (!productMatchesSpecialGroup(p, sg)) return false;
+  if (sg.requireSample && !p.isSample) return false;
+  return true;
+}
+
+export function getSpecialGroupResponsibleNames(sg: SpecialGroup): string[] {
+  return sg.responsibleIds
+    .map((id) => app.dataPresets.responsiblePersons.find((r) => r.id === id)?.name || '')
+    .filter(Boolean);
+}
+
+export function addSpecialGroup(name: string): boolean {
+  const v = String(name || '').trim();
+  if (!v) return false;
+  if (app.dataPresets.specialGroups.some((sg) => nameKey(sg.name) === nameKey(v))) {
+    pushToast('已存在同名特殊分组', 'error');
+    return false;
+  }
+  app.dataPresets.specialGroups.push({
+    id: uid(), name: v, items: [v], responsibleIds: [], requireSample: false,
+  });
+  scheduleSave();
+  return true;
+}
+
+export function removeSpecialGroup(id: string): void {
+  const idx = app.dataPresets.specialGroups.findIndex((sg) => sg.id === id);
+  if (idx < 0) return;
+  app.dataPresets.specialGroups.splice(idx, 1);
+  scheduleSave();
+}
+
+export function renameSpecialGroup(id: string, name: string): void {
+  const sg = app.dataPresets.specialGroups.find((x) => x.id === id);
+  if (!sg) return;
+  const v = String(name || '').trim();
+  if (!v) return;
+  sg.name = v;
+  scheduleSave();
+}
+
+export function toggleSpecialGroupResp(sgId: string, respId: string): void {
+  const sg = app.dataPresets.specialGroups.find((x) => x.id === sgId);
+  if (!sg) return;
+  const i = sg.responsibleIds.indexOf(respId);
+  if (i >= 0) sg.responsibleIds.splice(i, 1);
+  else sg.responsibleIds.push(respId);
+  scheduleSave();
+}
+
+export function toggleSpecialGroupSample(sgId: string): void {
+  const sg = app.dataPresets.specialGroups.find((x) => x.id === sgId);
+  if (!sg) return;
+  sg.requireSample = !sg.requireSample;
+  scheduleSave();
+}
+
+export function setSpecialGroupItems(sgId: string, text: string): void {
+  const sg = app.dataPresets.specialGroups.find((x) => x.id === sgId);
+  if (!sg) return;
+  sg.items = text
+    .split(/[\n,，、;；]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  scheduleSave();
+}
+
+/* 特殊分组 UI 状态 */
+export const specialUIState = $state({
+  expandedProductsId: '',
+  filter: '',
+  mode: 'all' as 'all' | 'hit' | 'effective',
+  expandedRespId: '',
+});
+
+export function toggleSpecialGroupProducts(id: string): void {
+  specialUIState.expandedProductsId = specialUIState.expandedProductsId === id ? '' : id;
+  specialUIState.expandedRespId = '';
+  specialUIState.filter = '';
+}
+
+export function toggleSpecialGroupResp(id: string): void {
+  specialUIState.expandedRespId = specialUIState.expandedRespId === id ? '' : id;
+  specialUIState.expandedProductsId = '';
+}
+
+/* ============================================================
+   模块 L：部分导出 / 部分导入
+   ============================================================ */
+export interface ExportOptions {
+  products: boolean;
+  dataPresets: boolean;
+  settings: boolean;
+}
+
+export interface ImportOptions {
+  products: boolean;
+  dataPresets: boolean;
+  settings: boolean;
+  mode: 'merge' | 'overwrite';
+}
+
+export function buildPartialExport(opts: ExportOptions): string {
+  const out: any = {
+    app: 'category-counts',
+    version: 5,
+    exportedAt: new Date().toISOString(),
+    partial: true,
+    modules: {},
+  };
+  if (opts.products) {
+    out.modules.products = {
+      products: app.products,
+      globalPresets: app.globalPresets,
+      mergeSelectedIds: app.mergeSelectedIds,
+      currentProductId: app.currentProductId,
+    };
+  }
+  if (opts.dataPresets) out.modules.dataPresets = app.dataPresets;
+  if (opts.settings) out.modules.settings = app.settings;
+  return JSON.stringify(out, null, 2);
+}
+
+export function summarizeImport(raw: any): string {
+  const mod = raw?.modules;
+  if (!mod) {
+    return `${(raw?.products || []).length} 产品 · ${(raw?.dataPresets?.customers || []).length} 客户 · ${(raw?.dataPresets?.suppliers || []).length} 供应商`;
+  }
+  const parts: string[] = [];
+  if (mod.products) parts.push(`${(mod.products.products || []).length} 产品`);
+  if (mod.dataPresets) {
+    parts.push(`${(mod.dataPresets.customers || []).length} 客户`);
+    parts.push(`${(mod.dataPresets.suppliers || []).length} 供应商`);
+    parts.push(`${(mod.dataPresets.specialGroups || []).length} 特殊分组`);
+  }
+  if (mod.settings) parts.push('全局设置');
+  return parts.join(' · ');
+}
+
+export function importPartialPayload(
+  raw: any,
+  opts: ImportOptions,
+): { added: number; replaced: number } {
+  let added = 0;
+  let replaced = 0;
+  const mod = raw?.modules;
+  if (!mod) {
+    applyPayload(raw);
+    return { added: 1, replaced: 0 };
+  }
+
+  if (opts.products && mod.products) {
+    const newProducts = (mod.products.products || []).map(normalizeProduct);
+    if (opts.mode === 'overwrite') {
+      app.products = newProducts;
+      app.globalPresets = cleanGlobalPresets(mod.products.globalPresets || []);
+      app.mergeSelectedIds = Array.isArray(mod.products.mergeSelectedIds)
+        ? mod.products.mergeSelectedIds
+        : [];
+      app.currentProductId =
+        mod.products.currentProductId || newProducts[0]?.id || '';
+      replaced += newProducts.length;
+    } else {
+      const byName = new Map(app.products.map((p) => [nameKey(p.name), p]));
+      newProducts.forEach((np) => {
+        const k = nameKey(np.name);
+        if (byName.has(k)) replaced++;
+        else {
+          app.products.push(np);
+          added++;
+        }
+      });
+      if (Array.isArray(mod.products.globalPresets)) {
+        const seen = new Set(app.globalPresets.map((g) => nameKey(g.name)));
+        cleanGlobalPresets(mod.products.globalPresets).forEach((g) => {
+          if (!seen.has(nameKey(g.name))) {
+            app.globalPresets.push(g);
+            added++;
+          }
+        });
+      }
+    }
+  }
+
+  if (opts.dataPresets && mod.dataPresets) {
+    const dp = mod.dataPresets;
+    if (opts.mode === 'overwrite') {
+      app.dataPresets = {
+        suppliers: cleanStringList(dp.suppliers),
+        customers: cleanCustomers(dp.customers),
+        incomingQtyPresets: cleanNumberList(dp.incomingQtyPresets),
+        processes: cleanStringList(dp.processes),
+        tempHandlings: cleanStringList(dp.tempHandlings),
+        tempHandlingShortcuts: cleanShortcuts(dp.tempHandlingShortcuts),
+        responsiblePersons: cleanResponsiblePersons(dp.responsiblePersons),
+        specialGroups: cleanSpecialGroups(dp.specialGroups),
+        presetGroups: cleanPresetGroups(dp.presetGroups),
+      };
+      replaced += 1;
+    } else {
+      const sup = new Set(app.dataPresets.suppliers.map(nameKey));
+      (dp.suppliers || []).forEach((s: string) => {
+        if (!sup.has(nameKey(s))) {
+          app.dataPresets.suppliers.push(s);
+          added++;
+        }
+      });
+      const cust = new Set(app.dataPresets.customers.map((c) => nameKey(c.name)));
+      cleanCustomers(dp.customers).forEach((c) => {
+        if (!cust.has(nameKey(c.name))) {
+          app.dataPresets.customers.push(c);
+          added++;
+        }
+      });
+      const inq = new Set(app.dataPresets.incomingQtyPresets);
+      cleanNumberList(dp.incomingQtyPresets).forEach((n) => {
+        if (!inq.has(n)) {
+          app.dataPresets.incomingQtyPresets.push(n);
+          added++;
+        }
+      });
+      const proc = new Set(app.dataPresets.processes.map(nameKey));
+      (dp.processes || []).forEach((s: string) => {
+        if (!proc.has(nameKey(s))) {
+          app.dataPresets.processes.push(s);
+          added++;
+        }
+      });
+      const resp = new Set(
+        app.dataPresets.responsiblePersons.map((r) => nameKey(r.name)),
+      );
+      cleanResponsiblePersons(dp.responsiblePersons).forEach((r) => {
+        if (!resp.has(nameKey(r.name))) {
+          app.dataPresets.responsiblePersons.push(r);
+          added++;
+        }
+      });
+      const sg = new Set(app.dataPresets.specialGroups.map((s) => nameKey(s.name)));
+      cleanSpecialGroups(dp.specialGroups).forEach((s) => {
+        if (!sg.has(nameKey(s.name))) {
+          app.dataPresets.specialGroups.push(s);
+          added++;
+        }
+      });
+      const pg = new Set(
+        app.dataPresets.presetGroups.map((p) => nameKey(p.name)),
+      );
+      cleanPresetGroups(dp.presetGroups).forEach((p) => {
+        if (!pg.has(nameKey(p.name))) {
+          app.dataPresets.presetGroups.push(p);
+          added++;
+        }
+      });
+    }
+  }
+
+  if (opts.settings && mod.settings) {
+    if (opts.mode === 'overwrite') {
+      Object.assign(app.settings, { ...defaultSettings(), ...mod.settings });
+    } else {
+      Object.keys(mod.settings).forEach((k) => {
+        if ((app.settings as any)[k] === undefined) {
+          (app.settings as any)[k] = mod.settings[k];
+        }
+      });
+    }
+  }
+
+  scheduleSave();
+  return { added, replaced };
+}
+
+/** 解析 .js 文件内容（拒绝危险关键字） */
+export function parseJsData(text: string): any {
+  const trimmed = String(text || '').trim();
+  if (!trimmed) throw new Error('空文件');
+  if (/\b(import|require|eval|Function|fetch|XMLHttpRequest|WebSocket)\b/.test(trimmed)) {
+    throw new Error('文件包含不安全的关键字，已拒绝');
+  }
+  let jsonText = trimmed;
+  jsonText = jsonText.replace(/^\s*export\s+default\s+/, '');
+  jsonText = jsonText.replace(/^\s*(const|let|var)\s+\w+\s*=\s*/, '');
+  jsonText = jsonText.replace(/^\s*window\.\w+\s*=\s*/, '');
+  jsonText = jsonText.replace(/;?\s*$/, '');
+  try {
+    return JSON.parse(jsonText);
+  } catch {
+    const converted = jsonText
+      .replace(/'/g, '"')
+      .replace(/([{,]\s*)([a-zA-Z_$][\w$]*)\s*:/g, '$1"$2":')
+      .replace(/,(\s*[}\]])/g, '$1');
+    return JSON.parse(converted);
+  }
+}
