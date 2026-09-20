@@ -1543,32 +1543,102 @@ export function moveGroupTo(fromIndex: number, toIndex: number): boolean {
 }
 
 /* ============================================================
-   模块 S：预分组应用到现有分组
+   模块 S-1：从预分组新建分组
+   入口：GroupList.svelte 的"添加分组栏"
+   行为：在产品末尾 push 一个新分组；三层去重
+   ============================================================ */
+export async function createGroupFromPreset(presetGroupId: string): Promise<boolean> {
+  const pg = app.dataPresets.presetGroups.find((x) => x.id === presetGroupId);
+  if (!pg) return false;
+  const p = currentProduct();
+  if (!p) return false;
+
+  // 1. 同名分组 → 中止
+  if (p.groups.some((g) => nameKey(g.name) === nameKey(pg.name))) {
+    pushToast(`已存在同名分组：${pg.name}`, 'error', 2600);
+    return false;
+  }
+
+  // 2. 三层去重：预分组内部 / 本产品其他分组 / 即将新建的组内
+  const existing = new Set<string>();
+  p.groups.forEach((g) =>
+    g.items.forEach((it) => existing.add(nameKey(it.name))),
+  );
+  const seen = new Set<string>();
+  const finalItems: string[] = [];
+  for (const raw of pg.items) {
+    const k = nameKey(raw);
+    if (!k) continue;
+    if (seen.has(k)) continue;          // 组内去重
+    if (existing.has(k)) continue;      // 与本产品其他分组冲突
+    seen.add(k);
+    finalItems.push(raw);
+  }
+
+  // 3. 大数量确认
+  const threshold = app.settings.bulkAddConfirmThreshold || 5;
+  if (finalItems.length > threshold) {
+    const ok = await askConfirm({
+      title: '创建新分组',
+      message: `将从「${pg.name}」创建 ${finalItems.length} 个分类，是否继续？`,
+      confirmText: '创建',
+    });
+    if (!ok) return false;
+  }
+
+  // 4. 推历史栈（判定通过后，避免"点了没变化也占撤回"）
+  history.pushSnapshot(app.products, p.id);
+
+  // 5. 创建新分组
+  const initTotal = calcSampling(p.incomingQty || 0);
+  p.groups.push({
+    id: uid(),
+    name: pg.name,
+    total: initTotal,
+    totalIsAuto: true,
+    items: finalItems.map((name) => ({ name, qty: 0 })),
+  });
+  scheduleSave();
+  logOperation(`从预分组「${pg.name}」创建新分组（${finalItems.length} 个分类）`);
+
+  if (finalItems.length === 0) {
+    pushToast(`已创建空分组「${pg.name}」`);
+  } else {
+    pushToast(`已创建「${pg.name}」（+${finalItems.length}）`);
+  }
+  return true;
+}
+
+/* ============================================================
+   模块 S-2：预分组追加到现有分组
+   入口：GroupCard.svelte 分组内部的"预分组 ▾"
+   行为：往传入的分组 g 追加分类（跳过重名）
    ============================================================ */
 export function applyPresetGroupToGroup(g: Group, presetGroupId: string): number {
   const pg = app.dataPresets.presetGroups.find((x) => x.id === presetGroupId);
   if (!pg) return 0;
   const p = currentProduct();
   if (!p) return 0;
+
   const seen = new Set(g.items.map((it) => nameKey(it.name)));
   const added: string[] = [];
   pg.items.forEach((name) => {
     const k = nameKey(name);
-    if (seen.has(k)) return;
+    if (seen.has(k)) return; // 组内去重
     const usedElsewhere = p.groups.some(
       (x) => x.id !== g.id && x.items.some((it) => nameKey(it.name) === k),
     );
-    if (usedElsewhere) return;
+    if (usedElsewhere) return; // 与本产品其他分组冲突
     seen.add(k);
     added.push(name);
   });
+
   if (!added.length) return 0;
 
-  // ✅ Bug 3 修复：推入历史栈
   history.pushSnapshot(app.products, p.id);
   added.forEach((name) => g.items.push({ name, qty: 0 }));
   scheduleSave();
-  logOperation(`将预分组「${pg.name}」应用到「${g.name}」（+${added.length}）`);
+  logOperation(`将预分组「${pg.name}」追加到「${g.name}」（+${added.length}）`);
   return added.length;
 }
 
