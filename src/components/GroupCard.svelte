@@ -11,6 +11,7 @@
     applyPresetGroupToGroup,
   } from '../lib/stores/app.svelte';
   import type { Group } from '../lib/core/schema';
+  import { tick } from 'svelte';
 
   let { g, realIndex, i } = $props<{ g: Group; realIndex: number; i: number }>();
 
@@ -235,23 +236,27 @@
     if (idx >= 0) dragState.overIndex = idx;
   }
 
-  function endDrag() {
-    window.removeEventListener('pointermove', onWindowMove);
-    window.removeEventListener('pointerup', onWindowUp);
-    window.removeEventListener('pointercancel', onWindowUp);
-    const p = currentProduct();
-    if (p && dragState.overIndex >= 0 && dragState.activeId) {
-      const from = p.groups.findIndex((x) => x.id === dragState.activeId);
-      const to = dragState.overIndex;
-      if (from >= 0 && from !== to) {
-        moveGroupTo(from, to);
-        pushToast(`已移动到第 ${to + 1} 位`);
-      }
+  async function endDrag() {
+  window.removeEventListener('pointermove', onWindowMove);
+  window.removeEventListener('pointerup', onWindowUp);
+  window.removeEventListener('pointercancel', onWindowUp);
+
+  // ✅ RISK-3 修复：确保 Svelte DOM 已更新后再读取 rect
+  await tick();
+
+  const p = currentProduct();
+  if (p && dragState.overIndex >= 0 && dragState.activeId) {
+    const from = p.groups.findIndex((x) => x.id === dragState.activeId);
+    const to = dragState.overIndex;
+    if (from >= 0 && from !== to) {
+      moveGroupTo(from, to);
+      pushToast(`已移动到第 ${to + 1} 位`);
     }
-    dragState.dragging = false;
-    dragState.activeId = '';
-    dragState.overIndex = -1;
   }
+  dragState.dragging = false;
+  dragState.activeId = '';
+  dragState.overIndex = -1;
+}
 
   /* ---------- 预分组下拉 ---------- */
   let presetMenuOpen = $state(false);
