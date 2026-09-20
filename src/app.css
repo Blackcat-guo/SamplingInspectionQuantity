@@ -561,3 +561,32 @@ html[data-theme="dark"] .template-preview :global(.ph-empty){background:#7f1d1d;
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
+/* ===== 新增：操作日志样式 ===== */
+.log-list { max-height: 220px; overflow-y: auto; padding: 6px; background: var(--c-surface-2); border: 1.5px solid var(--c-border); border-radius: 10px; }
+.log-item { display: flex; gap: 8px; padding: 6px 9px; font-size: 12px; color: var(--c-text-2); border-bottom: 1px dashed var(--c-border); line-height: 1.5; }
+.log-item:last-child { border-bottom: none; }
+.log-item .log-time { color: var(--c-text-4); flex-shrink: 0; font-family: ui-monospace, monospace; }
+
+/* ===== 新增：说明书导航栏样式 ===== */
+.manual-layout-vertical { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 12px; }
+.manual-layout-vertical .manual-content { overflow-y: auto; padding-right: 4px; font-size: 13.5px; line-height: 1.8; color: var(--c-text-2); min-height: 0; }
+.manual-tabs-wrap { display: flex; align-items: center; margin-bottom: 16px; border-bottom: 1.5px solid var(--c-border); }
+.manual-tabs-scroll { flex: 1; min-width: 0; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding-bottom: 1px; }
+.manual-tabs-scroll::-webkit-scrollbar { display: none; }
+.manual-tab { flex: 0 0 auto; padding: 9px 12px; font-size: 12px; font-weight: 700; border: none; background: transparent; color: var(--c-text-3); border-bottom: 2.5px solid transparent; margin-bottom: -2px; white-space: nowrap; cursor: pointer; transition: all .2s; }
+.manual-tab:hover { color: var(--c-primary-dark); background: var(--c-primary-soft); }
+.manual-tab.active { color: var(--c-primary-dark); border-bottom-color: var(--c-primary); }
+
+/* ===== 新增：数据预设关联面板样式 ===== */
+.resp-panel { background: var(--c-purple-soft); border-radius: 8px; padding: 12px 14px; margin: -2px 0 6px; font-size: 12.5px; }
+.resp-panel .panel-title { font-weight: 700; color: var(--c-purple-text); margin-bottom: 6px; }
+.resp-panel label { display: flex; align-items: center; gap: 8px; padding: 5px 4px; cursor: pointer; border-radius: 5px; }
+.resp-panel input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--c-purple-text); margin: 0; }
+.resp-panel .empty-tip { font-size: 11.5px; color: var(--c-text-3); }
+
+/* ===== 新增：批量改量弹窗样式 ===== */
+.dialog-overlay.sub-dialog { z-index: 10010; }
+.dialog-box .theme-toggle { margin-bottom: 10px; }
+.dialog-box .info-field { margin-bottom: 10px; }
+.dialog-box .info-field label { display: block; font-size: 12.5px; font-weight: 700; color: var(--c-text-2); margin-bottom: 6px; }
+.dialog-box .info-field input { width: 100%; padding: 10px 12px; font-size: 14px; border: 1.5px solid var(--c-border); border-radius: 9px; background: var(--c-surface); color: var(--c-text); outline: none; }
