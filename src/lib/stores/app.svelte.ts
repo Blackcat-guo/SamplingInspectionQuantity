@@ -2453,3 +2453,151 @@ export function openPresetNavDialog(): void {
 export function closePresetNavDialog(): void {
   presetNavDialog.show = false;
 }
+
+/* ============================================================
+   N2 · 预分类派生（class 封装，绕过 Svelte 5 禁止导出 $derived 的限制）
+   ============================================================ */
+class PresetDerivedStore {
+  /** 当前产品适用的共享预分类（productIds = null | [] | [ids]） */
+  visibleSharedPresets = $derived.by<GlobalPreset[]>(() => {
+    const pid = app.currentProductId;
+    return app.globalPresets.filter((gp) => {
+      if (gp.productIds === null) return true;                       // 全部生效
+      if (Array.isArray(gp.productIds) && gp.productIds.length === 0) return false;  // 都不生效
+      return gp.productIds.includes(pid);                            // 部分生效
+    });
+  });
+
+  /** 共享名 nameKey 集合（用于与本地预分类去重） */
+  globalPresetNameKeys = $derived<Set<string>>(
+    new Set(this.visibleSharedPresets.map((gp) => nameKey(gp.name))),
+  );
+
+  /** 本产品预分类，排除与共享重名 */
+  localOnlyPresets = $derived.by<string[]>(() => {
+    const p = currentProduct();
+    if (!p) return [];
+    const shared = this.globalPresetNameKeys;
+    return p.presets.filter((x) => !shared.has(nameKey(x)));
+  });
+}
+export const presetDerived = new PresetDerivedStore();
+
+/* ============================================================
+   N2 · 三态判定（纯函数）
+   ============================================================ */
+export type PresetItemState = 'in-current' | 'in-other' | 'fresh';
+
+/**
+ * 判断某个预分类名在指定分组中的状态：
+ * - in-current：已在本组
+ * - in-other  ：在本产品的其他分组
+ * - fresh     ：全新，可加入
+ */
+export function getPresetItemState(group: Group, itemName: string): PresetItemState {
+  const p = currentProduct();
+  if (!p) return 'fresh';
+  const k = nameKey(itemName);
+  if (group.items.some((it) => nameKey(it.name) === k)) return 'in-current';
+  if (
+    p.groups.some(
+      (g) => g.id !== group.id && g.items.some((it) => nameKey(it.name) === k),
+    )
+  )
+    return 'in-other';
+  return 'fresh';
+}
+
+/* ============================================================
+   N2 · 共享预分类 CRUD
+   快照策略（按组长 Q3 批复）：
+     - 新增 / 重命名 / 删除 → pushGlobalSnapshot（低频、重要）
+     - 勾选 / 取消勾选生效产品 → 不走快照（高频）
+     - 全选 / 全不生效 → pushGlobalSnapshot（语义切换）
+   ============================================================ */
+export function addGlobalPreset(name: string): boolean {
+  const v = String(name || '').trim();
+  if (!v) return false;
+  if (app.globalPresets.some((gp) => nameKey(gp.name) === nameKey(v))) {
+    pushToast('已存在同名共享预分类', 'error');
+    return false;
+  }
+  history.pushGlobalSnapshot(
+    app.products, app.dataPresets, app.globalPresets, app.settings,
+    '新增共享预分类',
+  );
+  app.globalPresets.push({ id: uid(), name: v, productIds: null });
+  scheduleSave();
+  logOperation(`新增共享预分类「${v}」`);
+  return true;
+}
+
+export function renameGlobalPreset(id: string, newName: string): boolean {
+  const gp = app.globalPresets.find((x) => x.id === id);
+  if (!gp) return false;
+  const v = String(newName || '').trim();
+  if (!v) return false;
+  if (gp.name === v) return true;
+  if (app.globalPresets.some((x) => x.id !== id && nameKey(x.name) === nameKey(v))) {
+    pushToast('已存在同名共享预分类', 'error');
+    return false;
+  }
+  history.pushGlobalSnapshot(
+    app.products, app.dataPresets, app.globalPresets, app.settings,
+    '重命名共享预分类',
+  );
+  gp.name = v;
+  scheduleSave();
+  return true;
+}
+
+export function removeGlobalPreset(id: string): void {
+  const idx = app.globalPresets.findIndex((x) => x.id === id);
+  if (idx < 0) return;
+  history.pushGlobalSnapshot(
+    app.products, app.dataPresets, app.globalPresets, app.settings,
+    '删除共享预分类',
+  );
+  app.globalPresets.splice(idx, 1);
+  scheduleSave();
+  logOperation('删除共享预分类');
+}
+
+/**
+ * 切换某产品在共享预分类中的生效状态。
+ * 特殊处理：如果当前是 null（全部生效），取消勾选任一项时，
+ * 需展开为"除 pid 外全部"的数组，语义等价。
+ */
+export function toggleGpProduct(gp: GlobalPreset, pid: string): void {
+  if (gp.productIds === null) {
+    // 从"全部生效"取消某一项 → 转为"除该产品外全部生效"
+    gp.productIds = app.products.map((p) => p.id).filter((x) => x !== pid);
+  } else {
+    const arr = gp.productIds.slice();
+    const i = arr.indexOf(pid);
+    if (i >= 0) arr.splice(i, 1);
+    else arr.push(pid);
+    gp.productIds = arr;
+  }
+  scheduleSave();
+}
+
+export function setAllGpProducts(gp: GlobalPreset): void {
+  if (gp.productIds === null) return;
+  history.pushGlobalSnapshot(
+    app.products, app.dataPresets, app.globalPresets, app.settings,
+    '共享预分类全部生效',
+  );
+  gp.productIds = null;
+  scheduleSave();
+}
+
+export function setNoneGpProducts(gp: GlobalPreset): void {
+  if (Array.isArray(gp.productIds) && gp.productIds.length === 0) return;
+  history.pushGlobalSnapshot(
+    app.products, app.dataPresets, app.globalPresets, app.settings,
+    '共享预分类全部不生效',
+  );
+  gp.productIds = [];
+  scheduleSave();
+}
