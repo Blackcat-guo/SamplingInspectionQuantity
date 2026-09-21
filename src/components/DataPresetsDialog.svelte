@@ -1,5 +1,6 @@
 <script lang="ts">
   import Dialog from './Dialog.svelte';
+  import NavGridDialog from './NavGridDialog.svelte';
   import {
     app, addDataPreset, removeCustomerById, removeSupplierByName, renameSupplier, renameCustomerById,
     normalResponsibles, specialResponsibles, pushToast, scheduleSave, uid, nameKey,
@@ -9,15 +10,12 @@
     selectAllProductsForCustomer, selectAllProductsForSupplier,
     countSupplierProducts, countCustomerProducts, getFilteredProductsForPicker,
     setProductPickerFilter,
-    // 模块 G
     productMatchesSpecialGroup, productEffectiveForSpecialGroup,
     addSpecialGroup, removeSpecialGroup, renameSpecialGroup,
     toggleSpecialGroupResp, toggleSpecialGroupSample,
     setSpecialGroupItems, specialUIState,
     toggleSpecialGroupProducts, toggleSpecialRespPanel,
-    // 模块 K
     presetPages, pageSizeFor, setPresetPage,
-    presetNavDialog, openPresetNavDialog, closePresetNavDialog,
   } from '../lib/stores/app.svelte';
 
   let { open = $bindable(false), onOpenSettings } = $props<{
@@ -26,8 +24,9 @@
   }>();
 
   let tab = $state('customer');
+  let presetNavOpen = $state(false);
 
-  const tabs = [
+  const dataTabs = [
     { key: 'customer', label: '客户' },
     { key: 'supplier', label: '供应商' },
     { key: 'incoming', label: '来料数量' },
@@ -46,7 +45,10 @@
   let newSpecialGroup = $state('');
   let newPresetGroup = $state('');
 
-  // ✅ Bug 7 修复：用 $derived 计算当前页/页数/切片，不在渲染期间改状态
+  function pickPresetTab(key: string) {
+    tab = key;
+  }
+
   const pageSize = $derived(pageSizeFor());
 
   const customerPages = $derived(Math.max(1, Math.ceil(app.dataPresets.customers.length / pageSize)));
@@ -150,16 +152,15 @@
 </script>
 
 <Dialog bind:open title="📚 数据预设" subtitle="预设客户、供应商、来料数量、工序、负责人、特殊分组、预分组。" wide>
-
-<div class="dp-tabs-wrap">
-  {#each tabs as t (t.key)}
-    <button class="dp-tab" class:active={tab === t.key} onclick={() => (tab = t.key)}>{t.label}</button>
-  {/each}
-  <div style="margin-left:auto;display:flex;gap:4px">
-    <button class="dp-tab" title="Tab 导航" onclick={openPresetNavDialog}>≡</button>
-    <button class="dp-tab" title="打开设置" onclick={onOpenSettings}>⚙️</button>
+  <div class="dp-tabs-wrap">
+    {#each dataTabs as t (t.key)}
+      <button class="dp-tab" class:active={tab === t.key} onclick={() => (tab = t.key)}>{t.label}</button>
+    {/each}
+    <div class="dp-tab-actions">
+      <button class="dp-expand-btn" title="Tab 导航" onclick={() => (presetNavOpen = true)}>≡</button>
+      <button class="dp-expand-btn" title="打开设置" onclick={onOpenSettings}>⚙️</button>
+    </div>
   </div>
-</div>
 
   <div class="dialog-list">
     {#if tab === 'customer'}
@@ -438,7 +439,6 @@
           <input class="main-name-input" value={sg.name} maxlength="30"
                  onblur={(e) => renameSpecialGroup(sg.id, (e.target as HTMLInputElement).value)} />
           <div class="row-actions">
-            <!-- ✅ Bug 1 修复：改用 toggleSpecialRespPanel -->
             <button class="scope-btn" onclick={() => toggleSpecialRespPanel(sg.id)}>
               负责人({sg.responsibleIds.length})
             </button>
@@ -463,7 +463,6 @@
             <div class="panel-title">选择该特殊分组的负责人</div>
             {#each specialResponsibles() as r (r.id)}
               <label class="responsible-item">
-                <!-- ✅ 这个仍是两参数版本，正确 -->
                 <input type="checkbox" checked={sg.responsibleIds.includes(r.id)}
                        onchange={() => toggleSpecialGroupResp(sg.id, r.id)} />
                 <span>@{r.name}</span>
@@ -570,31 +569,12 @@
     <button class="cancel" onclick={() => (open = false)}>关闭</button>
   </div>
 </Dialog>
-{#if presetNavDialog.show}
-  <div
-    class="dialog-overlay sub-dialog"
-    role="presentation"
-    onclick={(e) => { if (e.target === e.currentTarget) closePresetNavDialog(); }}
-  >
-    <div class="dialog-box" role="dialog" aria-modal="true" style="max-width:520px">
-      <h3>📚 数据预设导航</h3>
-      <p class="sub">点击分类直接切换，无需在页面内平铺展开。</p>
-      <div class="preset-nav-grid">
-        {#each tabs as t (t.key)}
-          <button
-            type="button"
-            class="preset-nav-item"
-            class:active={tab === t.key}
-            onclick={() => {
-              tab = t.key;
-              closePresetNavDialog();
-            }}
-          >{t.label}</button>
-        {/each}
-      </div>
-      <div class="dialog-actions" style="margin-top:16px">
-        <button class="cancel" onclick={closePresetNavDialog}>取消</button>
-      </div>
-    </div>
-  </div>
-{/if}
+
+<NavGridDialog
+  bind:open={presetNavOpen}
+  title="📚 数据预设导航"
+  subtitle="点击分类直接切换，无需在页面内平铺展开。"
+  items={dataTabs}
+  activeKey={tab}
+  onSelect={pickPresetTab}
+/>
