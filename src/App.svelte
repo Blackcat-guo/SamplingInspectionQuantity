@@ -128,6 +128,10 @@
 
         <MergePanel onOpenShare={() => (shareMenuOpen = true)} />
         <OutputPanel />
+          {#if app.settings.showRecognizeTools !== false}
+           <SpeechInput />
+           <RecognizePanel />
+           {/if}
         <GroupList />
       </div>
     {/if}
