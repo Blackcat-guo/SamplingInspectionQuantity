@@ -30,7 +30,7 @@ const defaultSettings = (): Settings => ({
   summaryTemplate: DEFAULT_TPL,
   showVoice: true,
   showImageOcr: true,
-  showRecognizeTools: true,   // ★ v3.4 任务 4
+  showRecognizeTools: true,
   experienceLevel: 'auto',
   animationLevel: 'normal',
   showZeroQtyItems: true,
@@ -1243,18 +1243,14 @@ export function applyPayload(payload: any): void {
     specialGroups: cleanSpecialGroups(dp.specialGroups || dp.specialCategories),
     presetGroups: cleanPresetGroups(dp.presetGroups),
   };
-
   const s = (payload && typeof payload === 'object' && payload.settings) ? payload.settings : {};
   const tpl = (typeof s.summaryTemplate === 'string' && s.summaryTemplate.trim())
     ? (LEGACY_TPLS.includes(s.summaryTemplate) ? DEFAULT_TPL : s.summaryTemplate)
     : DEFAULT_TPL;
-
-  // ★ v3.4 任务 4：数据迁移（旧数据 → showRecognizeTools）
   const migratedShowRecognizeTools: boolean =
     typeof s.showRecognizeTools === 'boolean'
       ? s.showRecognizeTools
       : (s.showVoice !== false || s.showImageOcr !== false);
-
   Object.assign(app.settings, {
     ...defaultSettings(),
     summaryTemplate: tpl,
@@ -1555,7 +1551,6 @@ export function moveGroupTo(fromIndex: number, toIndex: number): boolean {
 
 /* ============================================================
    模块 S-1：从预分组新建分组
-   入口：GroupList.svelte 的"添加分组栏"
    ============================================================ */
 export async function createGroupFromPreset(presetGroupId: string): Promise<boolean> {
   const pg = app.dataPresets.presetGroups.find((x) => x.id === presetGroupId);
@@ -1615,7 +1610,6 @@ export async function createGroupFromPreset(presetGroupId: string): Promise<bool
 
 /* ============================================================
    模块 S-2：预分组追加到现有分组
-   保留 store 函数（GroupCard 已移除入口，但其他模块可能调用）
    ============================================================ */
 export function applyPresetGroupToGroup(g: Group, presetGroupId: string): number {
   const pg = app.dataPresets.presetGroups.find((x) => x.id === presetGroupId);
@@ -1884,7 +1878,7 @@ export function toggleSpecialRespPanel(id: string): void {
 }
 
 /* ============================================================
-   模块 L：部分导出 / 部分导入（数据格式与 counts.html 100% 兼容）
+   模块 L：部分导出 / 部分导入
    ============================================================ */
 export interface ExportOptions {
   products: boolean;
@@ -2094,7 +2088,7 @@ export function parseJsData(text: string): any {
 }
 
 /* ============================================================
-   任务 A：本产品汇总模块的 store 包装
+   任务 A：本产品汇总模块
    ============================================================ */
 export function outputText(): string {
   return buildOutputText(true);
@@ -2104,7 +2098,7 @@ export function outputCopyText(): string {
 }
 
 /* ============================================================
-   任务 D：显示 Tab 的 setter 包装
+   任务 D：显示 Tab setter
    ============================================================ */
 export function setShowTopNavText(v: boolean): void {
   app.settings.showTopNavText = v;
@@ -2130,7 +2124,6 @@ export function setShowOcr(v: boolean): void {
   app.settings.showImageOcr = v;
   scheduleSave();
 }
-/** ★ v3.4 任务 4：统一识别工具开关 */
 export function setShowRecognizeTools(v: boolean): void {
   app.settings.showRecognizeTools = v;
   app.settings.showVoice = v;
@@ -2166,7 +2159,7 @@ export function experienceHint(): string {
 }
 
 /* ============================================================
-   任务 C：说明书 9 章（内容已去具体化，全部使用代称）
+   任务 C：说明书 9 章
    ============================================================ */
 export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] = [
   {
@@ -2289,6 +2282,55 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
 </blockquote>
 <h4>4.3 共享预分类生效范围</h4>
 <p>每项共享预分类可设置：<code>null</code>（全部产品）/ <code>[]</code>（不生效）/ <code>[ids]</code>（部分产品）。</p>
+<h4>4.4 语音输入</h4>
+<p><b>环境要求</b>：HTTPS 或 localhost（HTTP 下浏览器不授权麦克风），且浏览器支持 <code>SpeechRecognition</code> API（Chrome / Edge 桌面版支持，部分内置浏览器不支持）。不满足条件时语音面板自动隐藏。</p>
+<ol>
+  <li>点「🎤 开始语音」→ 首次会请求麦克风权限</li>
+  <li>对着麦克风说话，实时文本区显示识别结果（灰色斜体为临时结果）</li>
+  <li>点「停止语音」→ 点「填入识别文本」或「生成候选列表」</li>
+</ol>
+<blockquote>📘 <b>案例：语音录入分类A</b><br>
+① 点「开始语音」，说「分类A 分类B 分类C」<br>
+② 点「停止语音」<br>
+③ 点「生成候选列表」→ 候选表出现 3 项<br>
+④ 点「应用选中的 3 项」→ 落入「识别新增」组
+</blockquote>
+<h4>4.5 图片识别（OCR）</h4>
+<p>调用 OCR.space 的 HTTPS 接口（无需后端）。API Key 存 sessionStorage，关闭标签页即清除。</p>
+<ol>
+  <li>在「OCR API Key」输入框填入 Key（可留空使用 demo key，次数受限）</li>
+  <li>点「从相册选择图片」→ 可多选（建议 ≤ 2MB/张）</li>
+  <li>点「开始识别」→ 进度条走完，识别文本自动追加到下方文本区</li>
+</ol>
+<blockquote>📘 <b>案例：微信截图 OCR</b><br>
+① 从相册选择 2 张截图 → 缩略图墙显示<br>
+② 点「开始识别」→ 状态显示「完成：成功 2 张」<br>
+③ 文本区自动填入识别内容
+</blockquote>
+<h4>4.6 识别文本与候选列表</h4>
+<p>文本来源：语音 / OCR / 手动粘贴。三种拆分方式：</p>
+<ul>
+  <li><b>智能拆分</b>：换行 + 中文标点（，、；）+ 双空格；单空格保留</li>
+  <li><b>仅空格和逗号</b>：按逗号 / 顿号 / 分号 / 双空格切分</li>
+  <li><b>按行拆分</b>：每行一个分类，不做标点切分</li>
+</ul>
+<ol>
+  <li>确认文本区内容 → 选拆分方式</li>
+  <li>点「生成候选列表」→ 每项显示匹配状态</li>
+  <li>勾选 / 取消勾选 → 点「应用选中的 N 项」或「全部应用」</li>
+</ol>
+<h4>4.7 完整案例：从截图到分组</h4>
+<blockquote>📘 <b>端到端流程</b><br>
+① 微信收到不良品照片，保存到相册<br>
+② 打开本应用 → 选中「产品1」<br>
+③ 识别工具区 → 「从相册选择图片」→ 选 2 张<br>
+④ 点「开始识别」→ 文本区自动填入「分类A 分类B 分类C」<br>
+⑤ 点「生成候选列表」→ 3 项全部未命中（因为产品1 还没有这些分类）<br>
+⑥ 目标分组选「分组A」→ 点「应用选中的 3 项」<br>
+⑦ 分组A 出现 3 个分类，数量均为 1<br>
+⑧ 按 <kbd>Ctrl</kbd>+<kbd>Z</kbd> 可整体撤回
+</blockquote>
+<p><b>来源防护</b>：候选生成后如果切换产品，候选表上方会出现「⚠️ 候选生成于其他产品，请重新生成」提示，点应用会被拒绝，避免误落到错误产品。</p>
 `,
   },
   {
@@ -2455,80 +2497,22 @@ export function closePresetNavDialog(): void {
 }
 
 /* ============================================================
-   N2 · 预分类派生（class 封装，绕过 Svelte 5 禁止导出 $derived 的限制）
+   N2 · 预分类派生
    ============================================================ */
 class PresetDerivedStore {
-  /** 当前产品适用的共享预分类（productIds = null | [] | [ids]） */
-  visibleSharedPresets = $derived.by<GlobalPreset[]>(() => {
-    const pid = app.currentProductId;
-    return app.globalPresets.filter((gp) => {
-      if (gp.productIds === null) return true;                       // 全部生效
-      if (Array.isArray(gp.productIds) && gp.productIds.length === 0) return false;  // 都不生效
-      return gp.productIds.includes(pid);                            // 部分生效
-    });
-  });
-
-  /** 共享名 nameKey 集合（用于与本地预分类去重） */
-  globalPresetNameKeys = $derived<Set<string>>(
-    new Set(this.visibleSharedPresets.map((gp) => nameKey(gp.name))),
-  );
-
-  /** 本产品预分类，排除与共享重名 */
-  localOnlyPresets = $derived.by<string[]>(() => {
-    const p = currentProduct();
-    if (!p) return [];
-    const shared = this.globalPresetNameKeys;
-    return p.presets.filter((x) => !shared.has(nameKey(x)));
-  });
-}
-export const presetDerived = new PresetDerivedStore();
-
-/* ============================================================
-   N2 · 三态判定（纯函数）
-   ============================================================ */
-export type PresetItemState = 'in-current' | 'in-other' | 'fresh';
-
-/**
- * 判断某个预分类名在指定分组中的状态：
- * - in-current：已在本组
- * - in-other  ：在本产品的其他分组
- * - fresh     ：全新，可加入
- */
-export function getPresetItemState(group: Group, itemName: string): PresetItemState {
-  const p = currentProduct();
-  if (!p) return 'fresh';
-  const k = nameKey(itemName);
-  if (group.items.some((it) => nameKey(it.name) === k)) return 'in-current';
-  if (
-    p.groups.some(
-      (g) => g.id !== group.id && g.items.some((it) => nameKey(it.name) === k),
-    )
-  )
-    return 'in-other';
-  return 'fresh';
-}
-
-/* ============================================================
-   N2 · 预分类派生（class 封装，绕过 Svelte 5 禁止导出 $derived 的限制）
-   ✅ 修正：$derived / $derived.by 不接受泛型参数，改用属性类型注解
-   ============================================================ */
-class PresetDerivedStore {
-  /** 当前产品适用的共享预分类（productIds = null | [] | [ids]） */
   visibleSharedPresets: GlobalPreset[] = $derived.by(() => {
     const pid = app.currentProductId;
     return app.globalPresets.filter((gp) => {
-      if (gp.productIds === null) return true;                       // 全部生效
-      if (Array.isArray(gp.productIds) && gp.productIds.length === 0) return false;  // 都不生效
-      return gp.productIds.includes(pid);                            // 部分生效
+      if (gp.productIds === null) return true;
+      if (Array.isArray(gp.productIds) && gp.productIds.length === 0) return false;
+      return gp.productIds.includes(pid);
     });
   });
 
-  /** 共享名 nameKey 集合（用于与本地预分类去重） */
   globalPresetNameKeys: Set<string> = $derived(
     new Set(this.visibleSharedPresets.map((gp) => nameKey(gp.name))),
   );
 
-  /** 本产品预分类，排除与共享重名 */
   localOnlyPresets: string[] = $derived.by(() => {
     const p = currentProduct();
     if (!p) return [];
@@ -2539,16 +2523,10 @@ class PresetDerivedStore {
 export const presetDerived = new PresetDerivedStore();
 
 /* ============================================================
-   N2 · 三态判定（纯函数）
+   N2 · 三态判定
    ============================================================ */
 export type PresetItemState = 'in-current' | 'in-other' | 'fresh';
 
-/**
- * 判断某个预分类名在指定分组中的状态：
- * - in-current：已在本组
- * - in-other  ：在本产品的其他分组
- * - fresh     ：全新，可加入
- */
 export function getPresetItemState(group: Group, itemName: string): PresetItemState {
   const p = currentProduct();
   if (!p) return 'fresh';
@@ -2565,10 +2543,6 @@ export function getPresetItemState(group: Group, itemName: string): PresetItemSt
 
 /* ============================================================
    N2 · 共享预分类 CRUD
-   快照策略（按组长 Q3 批复）：
-     - 新增 / 重命名 / 删除 → pushGlobalSnapshot（低频、重要）
-     - 勾选 / 取消勾选生效产品 → 不走快照（高频）
-     - 全选 / 全不生效 → pushGlobalSnapshot（语义切换）
    ============================================================ */
 export function addGlobalPreset(name: string): boolean {
   const v = String(name || '').trim();
@@ -2618,14 +2592,8 @@ export function removeGlobalPreset(id: string): void {
   logOperation('删除共享预分类');
 }
 
-/**
- * 切换某产品在共享预分类中的生效状态。
- * 特殊处理：如果当前是 null（全部生效），取消勾选任一项时，
- * 需展开为"除 pid 外全部"的数组，语义等价。
- */
 export function toggleGpProduct(gp: GlobalPreset, pid: string): void {
   if (gp.productIds === null) {
-    // 从"全部生效"取消某一项 → 转为"除该产品外全部生效"
     gp.productIds = app.products.map((p) => p.id).filter((x) => x !== pid);
   } else {
     const arr = gp.productIds.slice();
@@ -2658,36 +2626,31 @@ export function setNoneGpProducts(gp: GlobalPreset): void {
 }
 
 /* ============================================================
-   阶段 5B-1 · 识别工具（语音 + OCR + 识别文本 + 候选）
-   所有共享状态放 recognizeState（对象封装，符合 Svelte 5 规范）
+   阶段 5B-1 · 识别工具
    ============================================================ */
-
-/* ---------------- 类型 ---------------- */
 export interface Candidate {
   id: string;
   text: string;
-  matched: boolean;      // 是否命中当前产品已有分类
-  groupId: string;       // 命中时为现有分组 id；未命中时 '__auto__'
-  checked: boolean;      // 用户勾选
+  matched: boolean;
+  groupId: string;
+  checked: boolean;
 }
 
-/* ---------------- 状态对象 ---------------- */
 export const recognizeState = $state({
   text: '',
   candidates: [] as Candidate[],
-  generateSignal: 0,                       // 计数器：语音/OCR 请求生成候选
+  candidatesSourcePid: '',                   // ★ F1
+  generateSignal: 0,
   splitMode: 'smart' as 'smart' | 'comma' | 'line',
 
-  // OCR
   ocrApiKey: '',
   ocrRunning: false,
   ocrProgress: 0,
   ocrStatus: '',
   ocrStatusType: '' as '' | 'success' | 'error' | 'warn',
   ocrFiles: [] as File[],
-  ocrPreviews: [] as string[],             // Object URL，需 revoke
+  ocrPreviews: [] as string[],
 
-  // 语音
   voiceRunning: false,
   voiceFinalText: '',
   voiceInterimText: '',
@@ -2695,9 +2658,6 @@ export const recognizeState = $state({
   voiceStatusType: '' as '' | 'success' | 'error',
 });
 
-/* ============================================================
-   文本操作
-   ============================================================ */
 export function setRecognizeText(text: string): void {
   recognizeState.text = String(text ?? '');
 }
@@ -2719,9 +2679,6 @@ export function requestGenerateCandidates(): void {
   recognizeState.generateSignal++;
 }
 
-/* ============================================================
-   拆分工具
-   ============================================================ */
 export function splitRecognizeText(mode: 'smart' | 'comma' | 'line' = 'smart'): string[] {
   const raw = recognizeState.text || '';
   if (!raw.trim()) return [];
@@ -2731,7 +2688,6 @@ export function splitRecognizeText(mode: 'smart' | 'comma' | 'line' = 'smart'): 
   } else if (mode === 'comma') {
     parts = raw.split(/[,，、;；]+|\s{2,}/);
   } else {
-    // smart：换行优先，其次逗号顿号分号，再其次双空格
     parts = raw
       .split(/[\n\r]+/)
       .flatMap((line) => line.split(/[,，、;；]+|\s{2,}/));
@@ -2749,9 +2705,6 @@ export function splitRecognizeText(mode: 'smart' | 'comma' | 'line' = 'smart'): 
   return out;
 }
 
-/* ============================================================
-   候选生成
-   ============================================================ */
 export function doGenerateCandidates(): void {
   const p = currentProduct();
   if (!p) {
@@ -2764,7 +2717,6 @@ export function doGenerateCandidates(): void {
     return;
   }
 
-  // 建索引：当前产品所有分组内分类（nameKey → groupId）
   const index = new Map<string, string>();
   p.groups.forEach((g) => {
     g.items.forEach((it) => {
@@ -2786,12 +2738,10 @@ export function doGenerateCandidates(): void {
   });
 
   recognizeState.candidates = candidates;
+  recognizeState.candidatesSourcePid = p.id;   // ★ F1
   pushToast(`已生成 ${candidates.length} 个候选`);
 }
 
-/* ============================================================
-   候选操作
-   ============================================================ */
 export function toggleCandidate(id: string): void {
   recognizeState.candidates = recognizeState.candidates.map((c) =>
     c.id === id ? { ...c, checked: !c.checked } : c,
@@ -2808,9 +2758,6 @@ export function toggleAllCandidates(checked: boolean): void {
   recognizeState.candidates = recognizeState.candidates.map((c) => ({ ...c, checked }));
 }
 
-/* ============================================================
-   应用候选（内部共用）
-   ============================================================ */
 function findOrCreateAutoGroup(): Group | null {
   const p = currentProduct();
   if (!p) return null;
@@ -2833,6 +2780,15 @@ function applyCandidatesImpl(list: Candidate[]): void {
   if (!p) return;
   if (!list.length) return;
 
+  // ★ F1：来源一致性防护
+  if (
+    recognizeState.candidatesSourcePid &&
+    recognizeState.candidatesSourcePid !== p.id
+  ) {
+    pushToast('候选来自其他产品，请重新生成', 'error', 3000);
+    return;
+  }
+
   history.pushSnapshot(app.products, p.id);
 
   let hitCount = 0;
@@ -2842,7 +2798,6 @@ function applyCandidatesImpl(list: Candidate[]): void {
     const k = nameKey(c.text);
 
     if (c.matched) {
-      // 命中已有分类：qty += 1
       const g = p.groups.find((x) => x.id === c.groupId);
       const it = g?.items.find((x) => nameKey(x.name) === k);
       if (it) {
@@ -2850,10 +2805,8 @@ function applyCandidatesImpl(list: Candidate[]): void {
         hitCount++;
         continue;
       }
-      // fallthrough：目标分组被删了 → 当作新分类处理
     }
 
-    // 未命中 / 目标失效 → 落入目标分组（或"识别新增"）
     let target: Group | null = null;
     if (c.groupId === '__auto__') {
       target = findOrCreateAutoGroup();
@@ -2871,7 +2824,6 @@ function applyCandidatesImpl(list: Candidate[]): void {
       target.items.push({ name: c.text, qty: 1 });
       addCount++;
     }
-    // 写入本产品预分类
     if (!p.presets.some((x) => nameKey(x) === k)) {
       p.presets.push(c.text);
     }
@@ -2889,7 +2841,6 @@ export function applySelectedCandidates(): void {
     return;
   }
   applyCandidatesImpl(list);
-  // 移除已应用的候选项
   const appliedIds = new Set(list.map((c) => c.id));
   recognizeState.candidates = recognizeState.candidates.filter(
     (c) => !appliedIds.has(c.id),
@@ -2897,7 +2848,6 @@ export function applySelectedCandidates(): void {
 }
 
 export function applyAllRecognizedText(): void {
-  // 直接以当前文本为准，重新拆分并全部应用（忽略 candidates 勾选状态）
   const parts = splitRecognizeText(recognizeState.splitMode);
   if (!parts.length) {
     pushToast('识别文本为空', 'error');
@@ -2906,7 +2856,6 @@ export function applyAllRecognizedText(): void {
   const p = currentProduct();
   if (!p) return;
 
-  // 建匹配索引
   const index = new Map<string, string>();
   p.groups.forEach((g) => {
     g.items.forEach((it) => {
@@ -2927,13 +2876,12 @@ export function applyAllRecognizedText(): void {
     };
   });
 
+  recognizeState.candidatesSourcePid = p.id;   // ★ F1
   applyCandidatesImpl(list);
   recognizeState.candidates = [];
 }
 
-/* ============================================================
-   OCR · Key 管理
-   ============================================================ */
+/* ---------------- OCR ---------------- */
 const OCR_KEY_STORE = 'ocr_api_key_v1';
 
 export function saveOcrApiKey(key: string): void {
@@ -2957,10 +2905,7 @@ export function loadOcrApiKey(): void {
   }
 }
 
-/* ============================================================
-   OCR · 文件管理
-   ============================================================ */
-const MAX_OCR_FILE_BYTES = 2_000_000; // 2MB
+const MAX_OCR_FILE_BYTES = 2_000_000;
 
 export function addOcrFiles(files: File[]): void {
   const accepted: File[] = [];
@@ -3004,9 +2949,6 @@ export function clearOcrFiles(): void {
   recognizeState.ocrStatusType = '';
 }
 
-/* ============================================================
-   OCR · 识别
-   ============================================================ */
 async function recognizeOneImage(file: File): Promise<string> {
   const fd = new FormData();
   fd.append('file', file);
@@ -3090,9 +3032,7 @@ export async function startOcrRecognition(): Promise<void> {
   }
 }
 
-/* ============================================================
-   语音识别 · 环境检测
-   ============================================================ */
+/* ---------------- 语音 ---------------- */
 export function isSecureContext(): boolean {
   try { return !!window.isSecureContext; } catch { return false; }
 }
@@ -3105,9 +3045,6 @@ export function hasSpeechRecognition(): boolean {
   } catch { return false; }
 }
 
-/* ============================================================
-   语音识别 · 实例管理（模块级单例，不导出）
-   ============================================================ */
 let voiceRec: any = null;
 let voiceSessionActive = false;
 let voiceRestartTimer: ReturnType<typeof setTimeout> | null = null;
@@ -3180,7 +3117,6 @@ export function startVoiceRecognition(): void {
       voiceRec.onend = () => {
         recognizeState.voiceInterimText = '';
         if (!voiceSessionActive || !voiceRec) return;
-        // continuous 模式下浏览器可能自动结束 → 延时重启
         if (voiceRestartTimer) clearTimeout(voiceRestartTimer);
         voiceRestartTimer = setTimeout(() => {
           voiceRestartTimer = null;
@@ -3203,9 +3139,7 @@ export function startVoiceRecognition(): void {
     recognizeState.voiceStatusType = '';
     try {
       voiceRec.start();
-    } catch {
-      // already started
-    }
+    } catch { /* already started */ }
   } catch (e: any) {
     recognizeState.voiceRunning = false;
     recognizeState.voiceStatus = '启动失败：' + (e?.message || '未知错误');
@@ -3255,9 +3189,6 @@ export function applyVoiceToCandidates(): void {
   requestGenerateCandidates();
 }
 
-/* ============================================================
-   OCR Key 启动时自动加载（供组件 onMount 调用）
-   ============================================================ */
 export function initRecognizeTools(): void {
   loadOcrApiKey();
 }
