@@ -2656,3 +2656,608 @@ export function setNoneGpProducts(gp: GlobalPreset): void {
   gp.productIds = [];
   scheduleSave();
 }
+
+/* ============================================================
+   阶段 5B-1 · 识别工具（语音 + OCR + 识别文本 + 候选）
+   所有共享状态放 recognizeState（对象封装，符合 Svelte 5 规范）
+   ============================================================ */
+
+/* ---------------- 类型 ---------------- */
+export interface Candidate {
+  id: string;
+  text: string;
+  matched: boolean;      // 是否命中当前产品已有分类
+  groupId: string;       // 命中时为现有分组 id；未命中时 '__auto__'
+  checked: boolean;      // 用户勾选
+}
+
+/* ---------------- 状态对象 ---------------- */
+export const recognizeState = $state({
+  text: '',
+  candidates: [] as Candidate[],
+  generateSignal: 0,                       // 计数器：语音/OCR 请求生成候选
+  splitMode: 'smart' as 'smart' | 'comma' | 'line',
+
+  // OCR
+  ocrApiKey: '',
+  ocrRunning: false,
+  ocrProgress: 0,
+  ocrStatus: '',
+  ocrStatusType: '' as '' | 'success' | 'error' | 'warn',
+  ocrFiles: [] as File[],
+  ocrPreviews: [] as string[],             // Object URL，需 revoke
+
+  // 语音
+  voiceRunning: false,
+  voiceFinalText: '',
+  voiceInterimText: '',
+  voiceStatus: '',
+  voiceStatusType: '' as '' | 'success' | 'error',
+});
+
+/* ============================================================
+   文本操作
+   ============================================================ */
+export function setRecognizeText(text: string): void {
+  recognizeState.text = String(text ?? '');
+}
+
+export function appendRecognizeText(text: string): void {
+  const t = String(text ?? '').trim();
+  if (!t) return;
+  recognizeState.text = recognizeState.text
+    ? recognizeState.text + '\n' + t
+    : t;
+}
+
+export function clearRecognizeText(): void {
+  recognizeState.text = '';
+  recognizeState.candidates = [];
+}
+
+export function requestGenerateCandidates(): void {
+  recognizeState.generateSignal++;
+}
+
+/* ============================================================
+   拆分工具
+   ============================================================ */
+export function splitRecognizeText(mode: 'smart' | 'comma' | 'line' = 'smart'): string[] {
+  const raw = recognizeState.text || '';
+  if (!raw.trim()) return [];
+  let parts: string[];
+  if (mode === 'line') {
+    parts = raw.split(/[\n\r]+/);
+  } else if (mode === 'comma') {
+    parts = raw.split(/[,，、;；]+|\s{2,}/);
+  } else {
+    // smart：换行优先，其次逗号顿号分号，再其次双空格
+    parts = raw
+      .split(/[\n\r]+/)
+      .flatMap((line) => line.split(/[,，、;；]+|\s{2,}/));
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const p of parts) {
+    const v = p.trim();
+    if (!v) continue;
+    const k = nameKey(v);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(v);
+  }
+  return out;
+}
+
+/* ============================================================
+   候选生成
+   ============================================================ */
+export function doGenerateCandidates(): void {
+  const p = currentProduct();
+  if (!p) {
+    pushToast('请先选择产品', 'error');
+    return;
+  }
+  const parts = splitRecognizeText(recognizeState.splitMode);
+  if (!parts.length) {
+    pushToast('识别文本为空', 'error');
+    return;
+  }
+
+  // 建索引：当前产品所有分组内分类（nameKey → groupId）
+  const index = new Map<string, string>();
+  p.groups.forEach((g) => {
+    g.items.forEach((it) => {
+      const k = nameKey(it.name);
+      if (!index.has(k)) index.set(k, g.id);
+    });
+  });
+
+  const candidates: Candidate[] = parts.map((text) => {
+    const k = nameKey(text);
+    const gid = index.get(k);
+    return {
+      id: k,
+      text,
+      matched: !!gid,
+      groupId: gid || '__auto__',
+      checked: true,
+    };
+  });
+
+  recognizeState.candidates = candidates;
+  pushToast(`已生成 ${candidates.length} 个候选`);
+}
+
+/* ============================================================
+   候选操作
+   ============================================================ */
+export function toggleCandidate(id: string): void {
+  recognizeState.candidates = recognizeState.candidates.map((c) =>
+    c.id === id ? { ...c, checked: !c.checked } : c,
+  );
+}
+
+export function setCandidateGroup(id: string, groupId: string): void {
+  recognizeState.candidates = recognizeState.candidates.map((c) =>
+    c.id === id ? { ...c, groupId } : c,
+  );
+}
+
+export function toggleAllCandidates(checked: boolean): void {
+  recognizeState.candidates = recognizeState.candidates.map((c) => ({ ...c, checked }));
+}
+
+/* ============================================================
+   应用候选（内部共用）
+   ============================================================ */
+function findOrCreateAutoGroup(): Group | null {
+  const p = currentProduct();
+  if (!p) return null;
+  let g = p.groups.find((x) => x.name === AUTO_GROUP_NAME);
+  if (!g) {
+    g = {
+      id: uid(),
+      name: AUTO_GROUP_NAME,
+      total: 0,
+      totalIsAuto: false,
+      items: [],
+    };
+    p.groups.push(g);
+  }
+  return g;
+}
+
+function applyCandidatesImpl(list: Candidate[]): void {
+  const p = currentProduct();
+  if (!p) return;
+  if (!list.length) return;
+
+  history.pushSnapshot(app.products, p.id);
+
+  let hitCount = 0;
+  let addCount = 0;
+
+  for (const c of list) {
+    const k = nameKey(c.text);
+
+    if (c.matched) {
+      // 命中已有分类：qty += 1
+      const g = p.groups.find((x) => x.id === c.groupId);
+      const it = g?.items.find((x) => nameKey(x.name) === k);
+      if (it) {
+        it.qty = (it.qty || 0) + 1;
+        hitCount++;
+        continue;
+      }
+      // fallthrough：目标分组被删了 → 当作新分类处理
+    }
+
+    // 未命中 / 目标失效 → 落入目标分组（或"识别新增"）
+    let target: Group | null = null;
+    if (c.groupId === '__auto__') {
+      target = findOrCreateAutoGroup();
+    } else {
+      target = p.groups.find((x) => x.id === c.groupId) || null;
+      if (!target) target = findOrCreateAutoGroup();
+    }
+    if (!target) continue;
+
+    const exist = target.items.find((x) => nameKey(x.name) === k);
+    if (exist) {
+      exist.qty = (exist.qty || 0) + 1;
+      hitCount++;
+    } else {
+      target.items.push({ name: c.text, qty: 1 });
+      addCount++;
+    }
+    // 写入本产品预分类
+    if (!p.presets.some((x) => nameKey(x) === k)) {
+      p.presets.push(c.text);
+    }
+  }
+
+  scheduleSave();
+  logOperation(`识别应用：命中 ${hitCount}，新增 ${addCount}`);
+  pushToast(`应用完成：命中 ${hitCount}，新增 ${addCount}`);
+}
+
+export function applySelectedCandidates(): void {
+  const list = recognizeState.candidates.filter((c) => c.checked);
+  if (!list.length) {
+    pushToast('未勾选任何候选', 'error');
+    return;
+  }
+  applyCandidatesImpl(list);
+  // 移除已应用的候选项
+  const appliedIds = new Set(list.map((c) => c.id));
+  recognizeState.candidates = recognizeState.candidates.filter(
+    (c) => !appliedIds.has(c.id),
+  );
+}
+
+export function applyAllRecognizedText(): void {
+  // 直接以当前文本为准，重新拆分并全部应用（忽略 candidates 勾选状态）
+  const parts = splitRecognizeText(recognizeState.splitMode);
+  if (!parts.length) {
+    pushToast('识别文本为空', 'error');
+    return;
+  }
+  const p = currentProduct();
+  if (!p) return;
+
+  // 建匹配索引
+  const index = new Map<string, string>();
+  p.groups.forEach((g) => {
+    g.items.forEach((it) => {
+      const k = nameKey(it.name);
+      if (!index.has(k)) index.set(k, g.id);
+    });
+  });
+
+  const list: Candidate[] = parts.map((text) => {
+    const k = nameKey(text);
+    const gid = index.get(k);
+    return {
+      id: k,
+      text,
+      matched: !!gid,
+      groupId: gid || '__auto__',
+      checked: true,
+    };
+  });
+
+  applyCandidatesImpl(list);
+  recognizeState.candidates = [];
+}
+
+/* ============================================================
+   OCR · Key 管理
+   ============================================================ */
+const OCR_KEY_STORE = 'ocr_api_key_v1';
+
+export function saveOcrApiKey(key: string): void {
+  recognizeState.ocrApiKey = String(key ?? '').trim();
+  try {
+    if (recognizeState.ocrApiKey) {
+      sessionStorage.setItem(OCR_KEY_STORE, recognizeState.ocrApiKey);
+    } else {
+      sessionStorage.removeItem(OCR_KEY_STORE);
+    }
+  } catch { /* ignore */ }
+  pushToast(recognizeState.ocrApiKey ? 'OCR Key 已保存' : 'OCR Key 已清除');
+}
+
+export function loadOcrApiKey(): void {
+  try {
+    const v = sessionStorage.getItem(OCR_KEY_STORE) || '';
+    recognizeState.ocrApiKey = v;
+  } catch {
+    recognizeState.ocrApiKey = '';
+  }
+}
+
+/* ============================================================
+   OCR · 文件管理
+   ============================================================ */
+const MAX_OCR_FILE_BYTES = 2_000_000; // 2MB
+
+export function addOcrFiles(files: File[]): void {
+  const accepted: File[] = [];
+  for (const f of files) {
+    if (!f.type.startsWith('image/')) {
+      pushToast(`${f.name} 不是图片`, 'error', 2400);
+      continue;
+    }
+    if (f.size > MAX_OCR_FILE_BYTES) {
+      pushToast(`${f.name} 超过 2MB，请压缩后再上传`, 'error', 2600);
+      continue;
+    }
+    accepted.push(f);
+  }
+  if (!accepted.length) return;
+  recognizeState.ocrFiles = [...recognizeState.ocrFiles, ...accepted];
+  recognizeState.ocrPreviews = [
+    ...recognizeState.ocrPreviews,
+    ...accepted.map((f) => URL.createObjectURL(f)),
+  ];
+}
+
+export function removeOcrFile(index: number): void {
+  if (index < 0 || index >= recognizeState.ocrFiles.length) return;
+  const url = recognizeState.ocrPreviews[index];
+  if (url) {
+    try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+  }
+  recognizeState.ocrFiles = recognizeState.ocrFiles.filter((_, i) => i !== index);
+  recognizeState.ocrPreviews = recognizeState.ocrPreviews.filter((_, i) => i !== index);
+}
+
+export function clearOcrFiles(): void {
+  recognizeState.ocrPreviews.forEach((url) => {
+    try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+  });
+  recognizeState.ocrFiles = [];
+  recognizeState.ocrPreviews = [];
+  recognizeState.ocrProgress = 0;
+  recognizeState.ocrStatus = '';
+  recognizeState.ocrStatusType = '';
+}
+
+/* ============================================================
+   OCR · 识别
+   ============================================================ */
+async function recognizeOneImage(file: File): Promise<string> {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('language', 'chs');
+  fd.append('isOverlayRequired', 'false');
+  fd.append('OCREngine', '2');
+  fd.append('scale', 'true');
+
+  const key = recognizeState.ocrApiKey || 'helloworld';
+  const res = await fetch('https://api.ocr.space/parse/image', {
+    method: 'POST',
+    headers: { apikey: key },
+    body: fd,
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data: any = await res.json();
+  if (data?.IsErroredOnProcessing) {
+    const msg = Array.isArray(data.ErrorMessage)
+      ? data.ErrorMessage.join(' ')
+      : (data.ErrorMessage || 'OCR 失败');
+    throw new Error(msg);
+  }
+  const parsed = data?.ParsedResults || [];
+  return parsed.map((p: any) => p.ParsedText || '').join('\n').trim();
+}
+
+export async function startOcrRecognition(): Promise<void> {
+  if (recognizeState.ocrRunning) return;
+  if (!recognizeState.ocrFiles.length) {
+    pushToast('请先选择图片', 'error');
+    return;
+  }
+
+  recognizeState.ocrRunning = true;
+  recognizeState.ocrProgress = 0;
+  recognizeState.ocrStatus = `识别中… 0/${recognizeState.ocrFiles.length}`;
+  recognizeState.ocrStatusType = '';
+
+  const files = recognizeState.ocrFiles.slice();
+  let done = 0;
+  let ok = 0;
+  let fail = 0;
+  const texts: string[] = [];
+
+  await Promise.allSettled(
+    files.map(async (f) => {
+      try {
+        const t = await recognizeOneImage(f);
+        if (t) {
+          texts.push(t);
+          ok++;
+        } else {
+          fail++;
+        }
+      } catch (e: any) {
+        fail++;
+        console.warn('OCR error:', e?.message || e);
+      } finally {
+        done++;
+        recognizeState.ocrProgress = Math.round((done / files.length) * 100);
+        recognizeState.ocrStatus = `识别中… ${done}/${files.length}`;
+      }
+    }),
+  );
+
+  recognizeState.ocrRunning = false;
+
+  if (texts.length) {
+    appendRecognizeText(texts.join('\n'));
+    const both = fail > 0;
+    recognizeState.ocrStatus = both
+      ? `完成：成功 ${ok} / 失败 ${fail}`
+      : `完成：成功 ${ok} 张`;
+    recognizeState.ocrStatusType = both ? 'warn' : 'success';
+    logOperation(`OCR 识别完成，成功 ${ok} 张，失败 ${fail} 张`);
+    pushToast(both ? `部分成功：成功 ${ok} / 失败 ${fail}` : `已识别 ${ok} 张`, both ? 'info' : 'success');
+  } else {
+    recognizeState.ocrStatus = `全部失败（${fail} 张）`;
+    recognizeState.ocrStatusType = 'error';
+    pushToast('未识别到文本', 'error');
+  }
+}
+
+/* ============================================================
+   语音识别 · 环境检测
+   ============================================================ */
+export function isSecureContext(): boolean {
+  try { return !!window.isSecureContext; } catch { return false; }
+}
+export function hasMediaDevices(): boolean {
+  try { return !!(navigator.mediaDevices?.getUserMedia); } catch { return false; }
+}
+export function hasSpeechRecognition(): boolean {
+  try {
+    return !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+  } catch { return false; }
+}
+
+/* ============================================================
+   语音识别 · 实例管理（模块级单例，不导出）
+   ============================================================ */
+let voiceRec: any = null;
+let voiceSessionActive = false;
+let voiceRestartTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function startVoiceRecognition(): void {
+  if (recognizeState.voiceRunning) return;
+
+  if (!isSecureContext()) {
+    recognizeState.voiceStatus = '非 HTTPS 环境，无法录音';
+    recognizeState.voiceStatusType = 'error';
+    pushToast('语音识别需在 HTTPS 或 localhost 下使用', 'error', 2600);
+    return;
+  }
+  if (!hasSpeechRecognition()) {
+    recognizeState.voiceStatus = '当前浏览器不支持语音识别';
+    recognizeState.voiceStatusType = 'error';
+    pushToast('当前浏览器不支持语音识别', 'error', 2600);
+    return;
+  }
+
+  const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+  try {
+    if (!voiceRec) {
+      voiceRec = new SR();
+      voiceRec.lang = 'zh-CN';
+      voiceRec.continuous = true;
+      voiceRec.interimResults = true;
+
+      voiceRec.onresult = (event: any) => {
+        let finalText = '';
+        let interimText = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const r = event.results[i];
+          const t = r[0]?.transcript || '';
+          if (r.isFinal) finalText += t;
+          else interimText += t;
+        }
+        if (finalText.trim()) {
+          const clean = finalText.trim().replace(/[,，]+$/, '');
+          if (clean) {
+            recognizeState.voiceFinalText +=
+              (recognizeState.voiceFinalText ? ' ' : '') + clean;
+          }
+        }
+        recognizeState.voiceInterimText = interimText.trim();
+      };
+
+      voiceRec.onerror = (e: any) => {
+        const err = e?.error || '';
+        if (err === 'not-allowed' || err === 'service-not-allowed') {
+          recognizeState.voiceStatus = '语音识别被拒绝（请检查麦克风权限）';
+          recognizeState.voiceStatusType = 'error';
+        } else if (err === 'audio-capture') {
+          recognizeState.voiceStatus = '无法访问麦克风';
+          recognizeState.voiceStatusType = 'error';
+        } else if (err === 'no-speech') {
+          recognizeState.voiceStatus = '未检测到语音';
+          recognizeState.voiceStatusType = '';
+        } else {
+          recognizeState.voiceStatus = `识别错误：${err || '未知'}`;
+          recognizeState.voiceStatusType = 'error';
+        }
+        if (err === 'not-allowed' || err === 'service-not-allowed' || err === 'audio-capture') {
+          voiceSessionActive = false;
+          recognizeState.voiceRunning = false;
+        }
+      };
+
+      voiceRec.onend = () => {
+        recognizeState.voiceInterimText = '';
+        if (!voiceSessionActive || !voiceRec) return;
+        // continuous 模式下浏览器可能自动结束 → 延时重启
+        if (voiceRestartTimer) clearTimeout(voiceRestartTimer);
+        voiceRestartTimer = setTimeout(() => {
+          voiceRestartTimer = null;
+          if (!voiceSessionActive || !voiceRec) return;
+          try {
+            voiceRec.start();
+          } catch {
+            voiceSessionActive = false;
+            recognizeState.voiceRunning = false;
+            recognizeState.voiceStatus = '语音已停止';
+            recognizeState.voiceStatusType = '';
+          }
+        }, 250);
+      };
+    }
+
+    voiceSessionActive = true;
+    recognizeState.voiceRunning = true;
+    recognizeState.voiceStatus = '正在聆听…';
+    recognizeState.voiceStatusType = '';
+    try {
+      voiceRec.start();
+    } catch {
+      // already started
+    }
+  } catch (e: any) {
+    recognizeState.voiceRunning = false;
+    recognizeState.voiceStatus = '启动失败：' + (e?.message || '未知错误');
+    recognizeState.voiceStatusType = 'error';
+    pushToast('语音启动失败', 'error');
+  }
+}
+
+export function stopVoiceRecognition(): void {
+  voiceSessionActive = false;
+  if (voiceRestartTimer) {
+    clearTimeout(voiceRestartTimer);
+    voiceRestartTimer = null;
+  }
+  recognizeState.voiceRunning = false;
+  recognizeState.voiceStatus = '已停止';
+  recognizeState.voiceStatusType = '';
+  try { voiceRec?.stop?.(); } catch { /* ignore */ }
+}
+
+export function clearVoiceText(): void {
+  recognizeState.voiceFinalText = '';
+  recognizeState.voiceInterimText = '';
+  recognizeState.voiceStatus = '';
+  recognizeState.voiceStatusType = '';
+}
+
+export function applyVoiceToRecognizeText(): void {
+  const t = (recognizeState.voiceFinalText + ' ' + recognizeState.voiceInterimText).trim();
+  if (!t) {
+    pushToast('没有可填入的文本', 'error');
+    return;
+  }
+  appendRecognizeText(t);
+  clearVoiceText();
+  pushToast('已填入识别文本');
+}
+
+export function applyVoiceToCandidates(): void {
+  const t = (recognizeState.voiceFinalText + ' ' + recognizeState.voiceInterimText).trim();
+  if (!t) {
+    pushToast('没有可生成的文本', 'error');
+    return;
+  }
+  setRecognizeText(t);
+  clearVoiceText();
+  requestGenerateCandidates();
+}
+
+/* ============================================================
+   OCR Key 启动时自动加载（供组件 onMount 调用）
+   ============================================================ */
+export function initRecognizeTools(): void {
+  loadOcrApiKey();
+}
