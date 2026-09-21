@@ -67,10 +67,9 @@
   <section class="box">
     <div class="box-head">
       <span class="box-title">🎤 语音输入</span>
-      <span class="box-badge badge-{badge.cls}">{badge.text}</span>
+      <span class="box-badge recognize-badge-{badge.cls}">{badge.text}</span>
     </div>
 
-    <!-- 诊断卡 -->
     <div class="voice-env-card">
       <div class="voice-env-row">
         <span>安全上下文（HTTPS）</span>
@@ -93,7 +92,6 @@
       </div>
     </div>
 
-    <!-- 录音按钮 -->
     <div class="voice-actions">
       {#if !recognizeState.voiceRunning}
         <button
@@ -113,7 +111,6 @@
       {/if}
     </div>
 
-    <!-- 实时文本区 -->
     <div class="voice-text-area">
       {#if hasText}
         <span class="recognize-voice-final">{recognizeState.voiceFinalText}</span>
@@ -133,7 +130,6 @@
       </div>
     {/if}
 
-    <!-- 应用按钮行 -->
     <div class="voice-apply-row">
       <button
         class="mini-batch-btn"
