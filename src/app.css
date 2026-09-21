@@ -18,13 +18,13 @@
   --ease:cubic-bezier(.34,1.15,.64,1);
   color-scheme:light;
   /* ===== z-index 层级规范 ===== */
---z-main-actions: 9000;
---z-sidebar-overlay: 9998;
---z-sidebar: 9999;
---z-dropdown: 21000;      /* 下拉菜单：高于所有弹窗 */
---z-dialog: 20000;        /* 主对话框 */
---z-dialog-sub: 20100;    /* 子对话框（弹窗上再弹窗） */
---z-toast: 2147483600;    /* 最高 */
+  --z-main-actions: 9000;
+  --z-sidebar-overlay: 9998;
+  --z-sidebar: 9999;
+  --z-dropdown: 21000;      /* 下拉菜单：高于所有弹窗 */
+  --z-dialog: 20000;        /* 主对话框 */
+  --z-dialog-sub: 20100;    /* 子对话框（弹窗上再弹窗） */
+  --z-toast: 2147483600;    /* 最高 */
 }
 html[data-theme="dark"]{
   --c-primary:#818cf8;--c-primary-dark:#a5b4fc;--c-primary-2:#a78bfa;
