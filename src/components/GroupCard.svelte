@@ -12,6 +12,8 @@
     presetDerived,
     getPresetItemState,
     scheduleAutoRespSync,
+    removeGroup,
+    resetGroup,
   } from '../lib/stores/app.svelte';
   import type { Group } from '../lib/core/schema';
 
@@ -25,7 +27,6 @@
     Array.isArray(app.settings.collapsedGroups) && app.settings.collapsedGroups.includes(g.id),
   );
 
-  /* ---------- 折叠 ---------- */
   function toggleCollapse() {
     const arr = Array.isArray(app.settings.collapsedGroups)
       ? app.settings.collapsedGroups.slice()
@@ -37,7 +38,6 @@
     scheduleSave();
   }
 
-  /* ---------- 分类数量 ---------- */
   function onQtyInput(itemName: string, e: Event) {
     const key = g.id + '|' + nameKey(itemName);
     const raw = (e.target as HTMLInputElement).value.replace(/\D/g, '');
@@ -93,22 +93,14 @@
     const sel = groupSelection[group.id] || [];
     return group.items.length > 0 && sel.length === group.items.length;
   }
+
   function onResetGroup() {
-    if (!confirm(`重置分组「${g.name}」？`)) return;
-    g.total = 0;
-    g.totalIsAuto = undefined;
-    g.items.forEach((it) => { it.qty = 0; });
-    scheduleSave();
-    logOperation(`重置分组「${g.name}」`);
+    resetGroup(realIndex);
   }
   function onDeleteGroup() {
-    const cur = currentProduct();
-    if (!cur) return;
-    if (!confirm(`删除分组「${g.name}」？`)) return;
-    cur.groups.splice(realIndex, 1);
-    scheduleSave();
-    logOperation(`删除分组「${g.name}」`);
+    removeGroup(realIndex);
   }
+
   function onBulkAddItems() {
     const raw = prompt(`向「${g.name}」批量添加分类（每行一个）：`);
     if (!raw) return;
@@ -237,7 +229,6 @@
     if (idx >= 0) dragState.overIndex = idx;
   }
 
-  // ★ 修正 2：加守卫，避免 handle.onpointerup 与 window.pointerup 双触发
   async function endDrag() {
     if (!dragState.dragging) return;
     window.removeEventListener('pointermove', onWindowMove);
@@ -260,7 +251,7 @@
     dragState.overIndex = -1;
   }
 
-  /* ---------- N4：预分类下拉 ---------- */
+  /* ---------- 预分类下拉 ---------- */
   const sharedItems = $derived(presetDerived.visibleSharedPresets);
   const localItems = $derived(presetDerived.localOnlyPresets);
 
@@ -359,7 +350,6 @@
     <button class="group-collapse" onclick={toggleCollapse} aria-label={collapsed ? '展开' : '折叠'}>
       {collapsed ? '▸' : '▾'}
     </button>
-    <!-- ★ 修正 3：补 onpointercancel -->
     <span
       class="drag-handle"
       class:kb-active={kbMode}
@@ -462,7 +452,6 @@
       />
       <button onclick={onAddItem}>添加</button>
 
-      <!-- ★ N4：预分类下拉按钮 -->
       <div class="preset-wrap">
         <button
           class="preset-btn"
@@ -559,7 +548,6 @@
   </div>
 {/if}
 
-<!-- ★ N4：预分类下拉（同级渲染，{if} 块不在 .group 内） -->
 {#if pickerOpen}
   <div
     class="preset-picker-overlay"
