@@ -1,5 +1,6 @@
 <script lang="ts">
   import Dialog from './Dialog.svelte';
+  import NavGridDialog from './NavGridDialog.svelte';
   import {
     app, setSetting, setExperience, setThemeMode,
     storage,
@@ -21,8 +22,9 @@
   let tab = $state('general');
   let exportOpen = $state(false);
   let importOpen = $state(false);
+  let settingsNavOpen = $state(false);
 
-  const tabs = [
+  const settingsTabs = [
     { key: 'general', label: '通用' },
     { key: 'display', label: '显示' },
     { key: 'backup', label: '备份与恢复' },
@@ -35,6 +37,10 @@
   const currentManualHtml = $derived.by(
     () => MANUAL_SECTIONS.find((s) => s.id === manualActive)?.content || '',
   );
+
+  function pickSettingsTab(key: string) {
+    tab = key;
+  }
 
   function factoryReset() {
     if (!confirm('⚠️ 恢复出厂设置会清空所有数据，确定继续？')) return;
@@ -55,9 +61,12 @@
 
 <Dialog bind:open title="⚙️ 设置" subtitle="通用 · 显示 · 备份与恢复 · 操作日志 · 说明书 · 关于" wide>
   <div class="dp-tabs-wrap">
-    {#each tabs as t (t.key)}
+    {#each settingsTabs as t (t.key)}
       <button class="dp-tab" class:active={tab === t.key} onclick={() => (tab = t.key)}>{t.label}</button>
     {/each}
+    <div class="dp-tab-actions">
+      <button class="dp-expand-btn" title="Tab 导航" onclick={() => (settingsNavOpen = true)}>≡</button>
+    </div>
   </div>
 
   <div class="dialog-list">
@@ -234,6 +243,15 @@
     <button class="cancel" onclick={() => (open = false)}>关闭</button>
   </div>
 </Dialog>
+
+<NavGridDialog
+  bind:open={settingsNavOpen}
+  title="⚙️ 设置导航"
+  subtitle="点击分类直接切换，无需在页面内平铺展开。"
+  items={settingsTabs}
+  activeKey={tab}
+  onSelect={pickSettingsTab}
+/>
 
 <ExportDialog bind:open={exportOpen} />
 <ImportDialog bind:open={importOpen} />
