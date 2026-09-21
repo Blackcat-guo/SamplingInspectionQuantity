@@ -198,6 +198,11 @@
 <!-- ========== 候选列表 ========== -->
 {#if recognizeState.candidates.length}
   <section class="box">
+    {#if recognizeState.candidatesSourcePid && recognizeState.candidatesSourcePid !== currentProduct()?.id}
+      <div class="recognize-status warn">
+        ⚠️ 候选生成于其他产品，请重新生成
+      </div>
+    {/if}
     <div class="recognize-candidate-list">
       <div class="recognize-candidate-head">
         <span>共 {totalCount} 项 · 已选 {selectedCount} 项</span>
