@@ -2,21 +2,16 @@
   import {
     app, currentProduct, currentPresets, nameKey,
     scheduleSave, pushToast, logOperation,
+    presetDerived,
   } from '../lib/stores/app.svelte';
 
   const p = $derived(currentProduct());
   const presets = $derived(currentPresets());
   let input = $state('');
 
-  const visibleShared = $derived.by(() => {
-    if (!p) return [];
-    return app.globalPresets.filter((gp) => {
-      if (Array.isArray(gp.productIds) && gp.productIds.length === 0) return false;
-      if (gp.productIds === null) return true;
-      return gp.productIds.includes(p.id);
-    });
-  });
-  const sharedKeys = $derived(new Set(visibleShared.map((g) => nameKey(g.name))));
+  // ✅ N3：改用 store 派生（响应式在 class 实例内维护）
+  const visibleShared = $derived(presetDerived.visibleSharedPresets);
+  const sharedKeys = $derived(presetDerived.globalPresetNameKeys);
 
   function add() {
     const cur = currentProduct();
