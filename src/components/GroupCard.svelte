@@ -237,7 +237,9 @@
     if (idx >= 0) dragState.overIndex = idx;
   }
 
+  // ★ 修正 2：加守卫，避免 handle.onpointerup 与 window.pointerup 双触发
   async function endDrag() {
+    if (!dragState.dragging) return;
     window.removeEventListener('pointermove', onWindowMove);
     window.removeEventListener('pointerup', onWindowUp);
     window.removeEventListener('pointercancel', onWindowUp);
@@ -266,14 +268,6 @@
   let pickerX = $state(0);
   let pickerY = $state(0);
   let triggerEl: HTMLElement | null = null;
-
-  /** 将下拉菜单节点移动到 body，绕开 .group 的 content-visibility 裁切 */
-  function portal(node: HTMLElement) {
-    document.body.appendChild(node);
-    return {
-      destroy() { node.remove(); },
-    };
-  }
 
   function openPicker(e: MouseEvent) {
     if (pickerOpen) {
@@ -365,6 +359,7 @@
     <button class="group-collapse" onclick={toggleCollapse} aria-label={collapsed ? '展开' : '折叠'}>
       {collapsed ? '▸' : '▾'}
     </button>
+    <!-- ★ 修正 3：补 onpointercancel -->
     <span
       class="drag-handle"
       class:kb-active={kbMode}
@@ -375,6 +370,7 @@
       onpointerdown={onHandlePointerDown}
       onpointermove={onHandlePointerMove}
       onpointerup={onHandlePointerUp}
+      onpointercancel={onHandlePointerUp}
       onkeydown={onDragKeydown}
     >⠿</span>
     <input
@@ -563,7 +559,7 @@
   </div>
 {/if}
 
-<!-- ★ N4：预分类下拉（Portal 到 body） -->
+<!-- ★ N4：预分类下拉（同级渲染，{if} 块不在 .group 内） -->
 {#if pickerOpen}
   <div
     class="preset-picker-overlay"
