@@ -17,6 +17,14 @@
   --t-base:.35s;
   --ease:cubic-bezier(.34,1.15,.64,1);
   color-scheme:light;
+  /* ===== z-index 层级规范 ===== */
+--z-main-actions: 9000;
+--z-sidebar-overlay: 9998;
+--z-sidebar: 9999;
+--z-dropdown: 21000;      /* 下拉菜单：高于所有弹窗 */
+--z-dialog: 20000;        /* 主对话框 */
+--z-dialog-sub: 20100;    /* 子对话框（弹窗上再弹窗） */
+--z-toast: 2147483600;    /* 最高 */
 }
 html[data-theme="dark"]{
   --c-primary:#818cf8;--c-primary-dark:#a5b4fc;--c-primary-2:#a78bfa;
@@ -665,3 +673,46 @@ button.share-option{width:100%;text-align:left;font-family:inherit}
   color: var(--c-primary-dark);
   box-shadow: 0 0 0 2px rgba(99, 102, 241, .15);
 }
+/* ===== 阶段 3：Tab 行右侧按钮 ===== */
+.dp-tab-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.dp-expand-btn {
+  flex: 0 0 auto;
+  min-width: 36px;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-weight: 700;
+  border: 1.5px solid var(--c-border);
+  border-radius: 9px;
+  background: var(--c-surface);
+  color: var(--c-text-3);
+  cursor: pointer;
+  line-height: 1;
+  transition: all .2s;
+}
+.dp-expand-btn:hover {
+  background: var(--c-primary-soft);
+  border-color: var(--c-primary-border);
+  color: var(--c-primary-dark);
+}
+
+/* ===== 阶段 3：NavGridDialog 尺寸 ===== */
+.nav-grid-dialog {
+  max-width: 520px;
+}
+
+/* ===== 阶段 3：把现有浮层的 z-index 改为变量 ===== */
+.overlay { z-index: var(--z-sidebar-overlay); }
+.sidebar { z-index: var(--z-sidebar); }
+.main-top-actions { z-index: var(--z-main-actions); }
+.dialog-overlay { z-index: var(--z-dialog); }
+.dialog-overlay.sub-dialog { z-index: var(--z-dialog-sub); }
+.toast-stack { z-index: var(--z-toast); }
+
+/* 修复 preset-menu 层级倒置（原 100 → 21000） */
+.preset-menu { z-index: var(--z-dropdown); }
