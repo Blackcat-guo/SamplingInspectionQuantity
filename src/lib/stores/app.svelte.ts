@@ -2509,6 +2509,61 @@ export function getPresetItemState(group: Group, itemName: string): PresetItemSt
 }
 
 /* ============================================================
+   N2 · 预分类派生（class 封装，绕过 Svelte 5 禁止导出 $derived 的限制）
+   ✅ 修正：$derived / $derived.by 不接受泛型参数，改用属性类型注解
+   ============================================================ */
+class PresetDerivedStore {
+  /** 当前产品适用的共享预分类（productIds = null | [] | [ids]） */
+  visibleSharedPresets: GlobalPreset[] = $derived.by(() => {
+    const pid = app.currentProductId;
+    return app.globalPresets.filter((gp) => {
+      if (gp.productIds === null) return true;                       // 全部生效
+      if (Array.isArray(gp.productIds) && gp.productIds.length === 0) return false;  // 都不生效
+      return gp.productIds.includes(pid);                            // 部分生效
+    });
+  });
+
+  /** 共享名 nameKey 集合（用于与本地预分类去重） */
+  globalPresetNameKeys: Set<string> = $derived(
+    new Set(this.visibleSharedPresets.map((gp) => nameKey(gp.name))),
+  );
+
+  /** 本产品预分类，排除与共享重名 */
+  localOnlyPresets: string[] = $derived.by(() => {
+    const p = currentProduct();
+    if (!p) return [];
+    const shared = this.globalPresetNameKeys;
+    return p.presets.filter((x) => !shared.has(nameKey(x)));
+  });
+}
+export const presetDerived = new PresetDerivedStore();
+
+/* ============================================================
+   N2 · 三态判定（纯函数）
+   ============================================================ */
+export type PresetItemState = 'in-current' | 'in-other' | 'fresh';
+
+/**
+ * 判断某个预分类名在指定分组中的状态：
+ * - in-current：已在本组
+ * - in-other  ：在本产品的其他分组
+ * - fresh     ：全新，可加入
+ */
+export function getPresetItemState(group: Group, itemName: string): PresetItemState {
+  const p = currentProduct();
+  if (!p) return 'fresh';
+  const k = nameKey(itemName);
+  if (group.items.some((it) => nameKey(it.name) === k)) return 'in-current';
+  if (
+    p.groups.some(
+      (g) => g.id !== group.id && g.items.some((it) => nameKey(it.name) === k),
+    )
+  )
+    return 'in-other';
+  return 'fresh';
+}
+
+/* ============================================================
    N2 · 共享预分类 CRUD
    快照策略（按组长 Q3 批复）：
      - 新增 / 重命名 / 删除 → pushGlobalSnapshot（低频、重要）
