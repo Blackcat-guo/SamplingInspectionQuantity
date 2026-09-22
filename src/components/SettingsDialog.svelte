@@ -1,6 +1,5 @@
 <script lang="ts">
   import Dialog from './Dialog.svelte';
-  import NavGridDialog from './NavGridDialog.svelte';
   import {
     app, setSetting, setExperience, setThemeMode,
     storage,
@@ -22,9 +21,8 @@
   let tab = $state('general');
   let exportOpen = $state(false);
   let importOpen = $state(false);
-  let settingsNavOpen = $state(false);
 
-  const settingsTabs = [
+  const tabs = [
     { key: 'general', label: '通用' },
     { key: 'display', label: '显示' },
     { key: 'backup', label: '备份与恢复' },
@@ -38,10 +36,6 @@
     () => MANUAL_SECTIONS.find((s) => s.id === manualActive)?.content || '',
   );
 
-  function pickSettingsTab(key: string) {
-    tab = key;
-  }
-
   function factoryReset() {
     if (!confirm('⚠️ 恢复出厂设置会清空所有数据，确定继续？')) return;
     if (!confirm('再次确认：此操作不可恢复。')) return;
@@ -49,9 +43,7 @@
       const keys: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k && (k.startsWith(storage.ROOT_KEY) || k === storage.THEME_KEY || k === storage.WORK_TIME_KEY)) {
-          keys.push(k);
-        }
+        if (k && (k.startsWith(storage.ROOT_KEY) || k === storage.THEME_KEY || k === storage.WORK_TIME_KEY)) keys.push(k);
       }
       keys.forEach((k) => localStorage.removeItem(k));
     } catch { /* ignore */ }
@@ -61,12 +53,9 @@
 
 <Dialog bind:open title="⚙️ 设置" subtitle="通用 · 显示 · 备份与恢复 · 操作日志 · 说明书 · 关于" wide>
   <div class="dp-tabs-wrap">
-    {#each settingsTabs as t (t.key)}
+    {#each tabs as t (t.key)}
       <button class="dp-tab" class:active={tab === t.key} onclick={() => (tab = t.key)}>{t.label}</button>
     {/each}
-    <div class="dp-tab-actions">
-      <button class="dp-expand-btn" title="Tab 导航" onclick={() => (settingsNavOpen = true)}>≡</button>
-    </div>
   </div>
 
   <div class="dialog-list">
@@ -77,19 +66,13 @@
         <button class:active={app.themeMode === 'dark'} onclick={() => setThemeMode('dark')}>🌙 深色</button>
       </div>
       <label class="display-toggle">
-        <input
-          type="checkbox"
-          checked={app.settings.compactMode}
-          onchange={(e) => setSetting('compactMode', (e.target as HTMLInputElement).checked)}
-        />
+        <input type="checkbox" checked={app.settings.compactMode}
+               onchange={(e) => setSetting('compactMode', (e.target as HTMLInputElement).checked)} />
         <span>📐 界面紧凑模式</span>
       </label>
       <label class="display-toggle">
-        <input
-          type="checkbox"
-          checked={app.settings.confirmBeforeDelete}
-          onchange={(e) => setSetting('confirmBeforeDelete', (e.target as HTMLInputElement).checked)}
-        />
+        <input type="checkbox" checked={app.settings.confirmBeforeDelete}
+               onchange={(e) => setSetting('confirmBeforeDelete', (e.target as HTMLInputElement).checked)} />
         <span>🗑 删除前二次确认</span>
       </label>
       <button class="backup-action" onclick={onOpenDataPresets}>📚 打开数据预设</button>
@@ -130,55 +113,36 @@
       </div>
 
       <label class="display-toggle">
-        <input
-          type="checkbox"
-          checked={app.settings.showTopNavText !== false}
-          onchange={(e) => setShowTopNavText((e.target as HTMLInputElement).checked)}
-        />
+        <input type="checkbox" checked={app.settings.showTopNavText !== false}
+               onchange={(e) => setShowTopNavText((e.target as HTMLInputElement).checked)} />
         <span>🔤 显示导航栏文字描述</span>
         <small>{app.settings.showTopNavText !== false ? '已显示' : '仅显示图标（更紧凑）'}</small>
       </label>
 
       <label class="display-toggle">
-        <input
-          type="checkbox"
-          checked={app.settings.showMainTips !== false}
-          onchange={(e) => setShowMainTips((e.target as HTMLInputElement).checked)}
-        />
+        <input type="checkbox" checked={app.settings.showMainTips !== false}
+               onchange={(e) => setShowMainTips((e.target as HTMLInputElement).checked)} />
         <span>💬 显示主界面文字描述</span>
         <small>{app.settings.showMainTips !== false ? '已显示' : '已隐藏（更紧凑）'}</small>
       </label>
 
       <label class="display-toggle">
-        <input
-          type="checkbox"
-          checked={app.settings.showZeroQtyItems !== false}
-          onchange={(e) => setShowZeroQty((e.target as HTMLInputElement).checked)}
-        />
+        <input type="checkbox" checked={app.settings.showZeroQtyItems !== false}
+               onchange={(e) => setShowZeroQty((e.target as HTMLInputElement).checked)} />
         <span>📊 汇总与预览中显示数量为 0 的分类</span>
         <small>{app.settings.showZeroQtyItems !== false ? '已开启' : '已隐藏'}</small>
       </label>
 
       <label class="display-toggle">
-        <input
-          type="checkbox"
-          checked={app.settings.mergeMultiProductSummary !== false}
-          onchange={(e) => setMergeMultiProductSummary((e.target as HTMLInputElement).checked)}
-        />
+        <input type="checkbox" checked={app.settings.mergeMultiProductSummary !== false}
+               onchange={(e) => setMergeMultiProductSummary((e.target as HTMLInputElement).checked)} />
         <span>📊 多产品汇总时合并「问题描述」</span>
-        <small>
-          {app.settings.mergeMultiProductSummary !== false
-            ? '按分组名聚合，适合关联分析'
-            : '每个产品独立一行，适合逐料号追溯'}
-        </small>
+        <small>{app.settings.mergeMultiProductSummary !== false ? '按分组名聚合，适合关联分析' : '每个产品独立一行，适合逐料号追溯'}</small>
       </label>
 
       <label class="display-toggle">
-        <input
-          type="checkbox"
-          checked={app.settings.showRecognizeTools !== false}
-          onchange={(e) => setShowRecognizeTools((e.target as HTMLInputElement).checked)}
-        />
+        <input type="checkbox" checked={app.settings.showRecognizeTools !== false}
+               onchange={(e) => setShowRecognizeTools((e.target as HTMLInputElement).checked)} />
         <span>🛠 显示识别工具</span>
         <small>{app.settings.showRecognizeTools !== false ? '已开启' : '已隐藏'}</small>
       </label>
@@ -221,11 +185,8 @@
         <div class="manual-tabs-wrap">
           <div class="manual-tabs-scroll">
             {#each MANUAL_SECTIONS as sec (sec.id)}
-              <button
-                class="manual-tab"
-                class:active={manualActive === sec.id}
-                onclick={() => (manualActive = sec.id)}
-              >{sec.title}</button>
+              <button class="manual-tab" class:active={manualActive === sec.id}
+                      onclick={() => (manualActive = sec.id)}>{sec.title}</button>
             {/each}
           </div>
         </div>
@@ -234,7 +195,7 @@
     {/if}
 
     {#if tab === 'about'}
-      <p class="backup-note"><b>版本：</b>v3.4（Svelte 5 重构版）</p>
+      <p class="backup-note"><b>版本：</b>v3.5（Svelte 5 重构版）</p>
       <p class="backup-note">本版本使用 Svelte 5 编译时框架，运行时开销极低，产物体积缩小 60%+。</p>
     {/if}
   </div>
@@ -243,15 +204,6 @@
     <button class="cancel" onclick={() => (open = false)}>关闭</button>
   </div>
 </Dialog>
-
-<NavGridDialog
-  bind:open={settingsNavOpen}
-  title="⚙️ 设置导航"
-  subtitle="点击分类直接切换，无需在页面内平铺展开。"
-  items={settingsTabs}
-  activeKey={tab}
-  onSelect={pickSettingsTab}
-/>
 
 <ExportDialog bind:open={exportOpen} />
 <ImportDialog bind:open={importOpen} />
