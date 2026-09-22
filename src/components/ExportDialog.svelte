@@ -16,13 +16,10 @@
 
   function doExport() {
     if (!incProducts && !incPresets && !incSettings) {
-      pushToast('请至少勾选一个模块', 'error');
-      return;
+      pushToast('请至少勾选一个模块', 'error'); return;
     }
     const text = buildPartialExport({
-      products: incProducts,
-      dataPresets: incPresets,
-      settings: incSettings,
+      products: incProducts, dataPresets: incPresets, settings: incSettings,
     });
     const blob = new Blob([text], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
