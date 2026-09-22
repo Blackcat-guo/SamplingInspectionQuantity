@@ -16,7 +16,6 @@
     setSpecialGroupItems, specialUIState,
     toggleSpecialGroupProducts, toggleSpecialRespPanel,
     presetPages, pageSizeFor, setPresetPage,
-    // ✅ N3：共享预分类 CRUD
     addGlobalPreset, renameGlobalPreset, removeGlobalPreset,
     toggleGpProduct, setAllGpProducts, setNoneGpProducts,
   } from '../lib/stores/app.svelte';
@@ -38,7 +37,7 @@
     { key: 'responsible', label: '负责人' },
     { key: 'special', label: '特殊分组' },
     { key: 'presetGroup', label: '预分组' },
-    { key: 'globalPreset', label: '共享预分类' },   // ★ N3 新增
+    { key: 'globalPreset', label: '共享预分类' },
   ];
 
   let newCustomer = $state('');
@@ -50,110 +49,83 @@
   let newSpecialGroup = $state('');
   let newPresetGroup = $state('');
 
-  // ✅ N3：共享预分类 Tab 局部状态
   let newGlobalPreset = $state('');
   let expandedGpId = $state('');
   let gpFilter = $state('');
 
-  function pickPresetTab(key: string) {
-    tab = key;
-  }
+  function pickPresetTab(key: string) { tab = key; }
 
-  /* ---------- N3 共享预分类辅助 ---------- */
+  /* ---------- 共享预分类辅助 ---------- */
   function toggleGpPanel(id: string) {
     expandedGpId = expandedGpId === id ? '' : id;
     gpFilter = '';
   }
-
   function isGpChecked(gp: GlobalPreset, pid: string): boolean {
     if (gp.productIds === null) return true;
     return gp.productIds.includes(pid);
   }
-
   function gpProductLabel(gp: GlobalPreset): string {
     const n = gp.productIds === null ? app.products.length : gp.productIds.length;
     return `产品(${n})`;
   }
-
   function filteredGpProducts(): Product[] {
     const q = gpFilter.trim().toLowerCase();
     if (!q) return app.products;
     return app.products.filter((p) => p.name.toLowerCase().includes(q));
   }
-
   function onAddGp() {
     if (addGlobalPreset(newGlobalPreset)) newGlobalPreset = '';
   }
 
-  /* ---------- 分页计算 ---------- */
+  /* ---------- 分页 ---------- */
   const pageSize = $derived(pageSizeFor());
 
   const customerPages = $derived(Math.max(1, Math.ceil(app.dataPresets.customers.length / pageSize)));
   const customerPage = $derived(Math.min(presetPages.customer || 1, customerPages));
-  const customerList = $derived(
-    app.dataPresets.customers.slice((customerPage - 1) * pageSize, customerPage * pageSize),
-  );
+  const customerList = $derived(app.dataPresets.customers.slice((customerPage - 1) * pageSize, customerPage * pageSize));
 
   const supplierPages = $derived(Math.max(1, Math.ceil(app.dataPresets.suppliers.length / pageSize)));
   const supplierPage = $derived(Math.min(presetPages.supplier || 1, supplierPages));
-  const supplierList = $derived(
-    app.dataPresets.suppliers.slice((supplierPage - 1) * pageSize, supplierPage * pageSize),
-  );
+  const supplierList = $derived(app.dataPresets.suppliers.slice((supplierPage - 1) * pageSize, supplierPage * pageSize));
 
   const incomingPages = $derived(Math.max(1, Math.ceil(app.dataPresets.incomingQtyPresets.length / pageSize)));
   const incomingPage = $derived(Math.min(presetPages.incoming || 1, incomingPages));
-  const incomingList = $derived(
-    app.dataPresets.incomingQtyPresets.slice((incomingPage - 1) * pageSize, incomingPage * pageSize),
-  );
+  const incomingList = $derived(app.dataPresets.incomingQtyPresets.slice((incomingPage - 1) * pageSize, incomingPage * pageSize));
 
   const processPages = $derived(Math.max(1, Math.ceil(app.dataPresets.processes.length / pageSize)));
   const processPage = $derived(Math.min(presetPages.process || 1, processPages));
-  const processList = $derived(
-    app.dataPresets.processes.slice((processPage - 1) * pageSize, processPage * pageSize),
-  );
+  const processList = $derived(app.dataPresets.processes.slice((processPage - 1) * pageSize, processPage * pageSize));
 
   const normalRespArr = $derived(normalResponsibles());
   const respPages = $derived(Math.max(1, Math.ceil(normalRespArr.length / pageSize)));
   const respPage = $derived(Math.min(presetPages.responsible || 1, respPages));
-  const respList = $derived(
-    normalRespArr.slice((respPage - 1) * pageSize, respPage * pageSize),
-  );
+  const respList = $derived(normalRespArr.slice((respPage - 1) * pageSize, respPage * pageSize));
 
   const specialPages = $derived(Math.max(1, Math.ceil(app.dataPresets.specialGroups.length / pageSize)));
   const specialPage = $derived(Math.min(presetPages.special || 1, specialPages));
-  const specialList = $derived(
-    app.dataPresets.specialGroups.slice((specialPage - 1) * pageSize, specialPage * pageSize),
-  );
+  const specialList = $derived(app.dataPresets.specialGroups.slice((specialPage - 1) * pageSize, specialPage * pageSize));
 
   const pgPages = $derived(Math.max(1, Math.ceil(app.dataPresets.presetGroups.length / pageSize)));
   const pgPage = $derived(Math.min(presetPages.presetGroup || 1, pgPages));
-  const pgList = $derived(
-    app.dataPresets.presetGroups.slice((pgPage - 1) * pageSize, pgPage * pageSize),
-  );
+  const pgList = $derived(app.dataPresets.presetGroups.slice((pgPage - 1) * pageSize, pgPage * pageSize));
 
   function bulkText() {
     const raw = prompt('批量添加（每行一个 / 逗号分隔）：');
     if (!raw) return [];
     return raw.split(/[\n,，、;；]+/).map((s) => s.trim()).filter(Boolean);
   }
-
   function prevPage(key: string) { setPresetPage(key, (presetPages[key] || 1) - 1); }
   function nextPage(key: string) { setPresetPage(key, (presetPages[key] || 1) + 1); }
 
   function addSpecial() {
     if (!newSpecialGroup.trim()) return;
-    if (addSpecialGroup(newSpecialGroup)) {
-      newSpecialGroup = '';
-      pushToast('已添加特殊分组');
-    }
+    if (addSpecialGroup(newSpecialGroup)) { newSpecialGroup = ''; pushToast('已添加特殊分组'); }
   }
-
   function addPresetGroup() {
     const v = newPresetGroup.trim();
     if (!v) return;
     if (app.dataPresets.presetGroups.some((p) => nameKey(p.name) === nameKey(v))) {
-      pushToast('已存在同名预分组', 'error');
-      return;
+      pushToast('已存在同名预分组', 'error'); return;
     }
     app.dataPresets.presetGroups.push({ id: uid(), name: v, items: [] });
     scheduleSave();
@@ -476,12 +448,8 @@
           <input class="main-name-input" value={sg.name} maxlength="30"
                  onblur={(e) => renameSpecialGroup(sg.id, (e.target as HTMLInputElement).value)} />
           <div class="row-actions">
-            <button class="scope-btn" onclick={() => toggleSpecialRespPanel(sg.id)}>
-              负责人({sg.responsibleIds.length})
-            </button>
-            <button class="scope-btn" onclick={() => toggleSpecialGroupProducts(sg.id)}>
-              关联产品({app.products.length})
-            </button>
+            <button class="scope-btn" onclick={() => toggleSpecialRespPanel(sg.id)}>负责人({sg.responsibleIds.length})</button>
+            <button class="scope-btn" onclick={() => toggleSpecialGroupProducts(sg.id)}>关联产品({app.products.length})</button>
             <button class="scope-btn" onclick={() => editSpecialGroupItems(sg.id)}>编辑分类</button>
             <button class="del" onclick={() => removeSpecialGroup(sg.id)}>✕</button>
           </div>
@@ -490,8 +458,7 @@
           分类：{sg.items.join('、') || '（空）'}
           <label style="display:inline-flex;align-items:center;gap:4px;margin-left:8px;cursor:pointer">
             <input type="checkbox" checked={sg.requireSample}
-                   onchange={() => toggleSpecialGroupSample(sg.id)} />
-            仅样品触发
+                   onchange={() => toggleSpecialGroupSample(sg.id)} /> 仅样品触发
           </label>
         </div>
 
@@ -512,23 +479,12 @@
           <div class="resp-panel">
             <div class="panel-title">关联产品（按当前分组命中情况）</div>
             <div class="panel-toolbar">
-              <input
-                value={specialUIState.filter}
-                oninput={(e) => (specialUIState.filter = (e.target as HTMLInputElement).value)}
-                placeholder="🔍 过滤产品…"
-              />
-              <button
-                class:active={specialUIState.mode === 'all'}
-                onclick={() => (specialUIState.mode = 'all')}
-              >全部</button>
-              <button
-                class:active={specialUIState.mode === 'hit'}
-                onclick={() => (specialUIState.mode = 'hit')}
-              >仅命中</button>
-              <button
-                class:active={specialUIState.mode === 'effective'}
-                onclick={() => (specialUIState.mode = 'effective')}
-              >仅生效</button>
+              <input value={specialUIState.filter}
+                     oninput={(e) => (specialUIState.filter = (e.target as HTMLInputElement).value)}
+                     placeholder="🔍 过滤产品…" />
+              <button class:active={specialUIState.mode === 'all'} onclick={() => (specialUIState.mode = 'all')}>全部</button>
+              <button class:active={specialUIState.mode === 'hit'} onclick={() => (specialUIState.mode = 'hit')}>仅命中</button>
+              <button class:active={specialUIState.mode === 'effective'} onclick={() => (specialUIState.mode = 'effective')}>仅生效</button>
             </div>
             {#each app.products.filter((p) => {
               const q = specialUIState.filter.trim().toLowerCase();
@@ -541,9 +497,7 @@
             }) as p (p.id)}
               <div class="responsible-item" style="cursor:default">
                 <span style="flex:1">
-                  {p.name}{#if p.isSample}
-                    <span style="color:var(--c-purple-text);font-size:11px">· 样品</span>
-                  {/if}
+                  {p.name}{#if p.isSample}<span style="color:var(--c-purple-text);font-size:11px">· 样品</span>{/if}
                 </span>
                 <span style="font-size:11px;color:var(--c-text-3)">
                   {#if productEffectiveForSpecialGroup(p, sg)}✅ 生效
@@ -555,9 +509,7 @@
           </div>
         {/if}
       {/each}
-      {#if !app.dataPresets.specialGroups.length}
-        <div class="transfer-empty">还没有特殊分组</div>
-      {/if}
+      {#if !app.dataPresets.specialGroups.length}<div class="transfer-empty">还没有特殊分组</div>{/if}
       <div class="preset-add-row">
         <input bind:value={newSpecialGroup} placeholder="输入特殊分组名称…" maxlength="30"
                onkeydown={(e) => { if (e.key === 'Enter') addSpecial(); }} />
@@ -581,9 +533,7 @@
           <input class="main-name-input" value={p.name} maxlength="30"
                  onblur={(e) => renamePresetGroup(p.id, (e.target as HTMLInputElement).value)} />
           <div class="row-actions">
-            <button class="scope-btn" onclick={() => editPresetGroupItems(p.id)}>
-              编辑分类({p.items.length})
-            </button>
+            <button class="scope-btn" onclick={() => editPresetGroupItems(p.id)}>编辑分类({p.items.length})</button>
             <button class="del" onclick={() => removePresetGroup(p.id)}>✕</button>
           </div>
         </div>
@@ -591,9 +541,7 @@
           {p.items.length ? p.items.join('、') : '（空，点"编辑分类"添加）'}
         </div>
       {/each}
-      {#if !app.dataPresets.presetGroups.length}
-        <div class="transfer-empty">还没有预分组</div>
-      {/if}
+      {#if !app.dataPresets.presetGroups.length}<div class="transfer-empty">还没有预分组</div>{/if}
       <div class="preset-add-row">
         <input bind:value={newPresetGroup} placeholder="输入预分组名称…" maxlength="30"
                onkeydown={(e) => { if (e.key === 'Enter') addPresetGroup(); }} />
@@ -605,38 +553,26 @@
       <div class="panel-head-row">
         <span class="panel-head-text">共享预分类（{app.globalPresets.length}）</span>
       </div>
-
       {#each app.globalPresets as gp (gp.id)}
         <div class="preset-edit-row">
-          <input
-            class="main-name-input"
-            value={gp.name}
-            maxlength="30"
-            onblur={(e) => {
-              const el = e.target as HTMLInputElement;
-              const ok = renameGlobalPreset(gp.id, el.value);
-              if (!ok) el.value = gp.name;   // 失败回滚
-            }}
-          />
+          <input class="main-name-input" value={gp.name} maxlength="30"
+                 onblur={(e) => {
+                   const el = e.target as HTMLInputElement;
+                   const ok = renameGlobalPreset(gp.id, el.value);
+                   if (!ok) el.value = gp.name;
+                 }} />
           <div class="row-actions">
-            <button class="scope-btn" onclick={() => toggleGpPanel(gp.id)}>
-              {gpProductLabel(gp)}
-            </button>
+            <button class="scope-btn" onclick={() => toggleGpPanel(gp.id)}>{gpProductLabel(gp)}</button>
             <button class="del" onclick={() => removeGlobalPreset(gp.id)}>✕</button>
           </div>
         </div>
-
         {#if expandedGpId === gp.id}
           <div class="resp-panel">
-            <div class="panel-title">
-              「{gp.name}」生效的产品（默认全部生效）
-            </div>
+            <div class="panel-title">「{gp.name}」生效的产品（默认全部生效）</div>
             <div class="panel-toolbar">
-              <input
-                value={gpFilter}
-                oninput={(e) => (gpFilter = (e.target as HTMLInputElement).value)}
-                placeholder="🔍 过滤产品…"
-              />
+              <input value={gpFilter}
+                     oninput={(e) => (gpFilter = (e.target as HTMLInputElement).value)}
+                     placeholder="🔍 过滤产品…" />
               <button onclick={() => setAllGpProducts(gp)}>全选</button>
               <button onclick={() => setNoneGpProducts(gp)}>全不生效</button>
             </div>
@@ -645,11 +581,8 @@
             {:else}
               {#each filteredGpProducts() as p (p.id)}
                 <label class="responsible-item">
-                  <input
-                    type="checkbox"
-                    checked={isGpChecked(gp, p.id)}
-                    onchange={() => toggleGpProduct(gp, p.id)}
-                  />
+                  <input type="checkbox" checked={isGpChecked(gp, p.id)}
+                         onchange={() => toggleGpProduct(gp, p.id)} />
                   <span>{p.name}</span>
                 </label>
               {/each}
@@ -660,18 +593,10 @@
           </div>
         {/if}
       {/each}
-
-      {#if !app.globalPresets.length}
-        <div class="transfer-empty">还没有共享预分类</div>
-      {/if}
-
+      {#if !app.globalPresets.length}<div class="transfer-empty">还没有共享预分类</div>{/if}
       <div class="preset-add-row">
-        <input
-          bind:value={newGlobalPreset}
-          placeholder="输入共享预分类名称…"
-          maxlength="30"
-          onkeydown={(e) => { if (e.key === 'Enter') onAddGp(); }}
-        />
+        <input bind:value={newGlobalPreset} placeholder="输入共享预分类名称…" maxlength="30"
+               onkeydown={(e) => { if (e.key === 'Enter') onAddGp(); }} />
         <button onclick={onAddGp}>添加</button>
       </div>
     {/if}
