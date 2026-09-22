@@ -38,7 +38,6 @@
   const currentManualHtml = $derived.by(
     () => MANUAL_SECTIONS.find((s) => s.id === manualActive)?.content || '',
   );
-
   const manualNavItems = $derived(
     MANUAL_SECTIONS.map((s) => ({ key: s.id, label: s.title })),
   );
@@ -64,7 +63,7 @@
 </script>
 
 <Dialog bind:open title="⚙️ 设置" subtitle="通用 · 显示 · 备份与恢复 · 操作日志 · 说明书 · 关于" wide>
-  <!-- 主 Tab 行：左侧滚动 + 右侧固定 ≡ -->
+  <!-- 主 Tab 行：左侧滚动 + 右侧 [≡] [📚] 固定按钮 -->
   <div class="dp-tabs-outer">
     <div class="dp-tabs-scroll">
       {#each tabs as t (t.key)}
@@ -73,6 +72,7 @@
     </div>
     <div class="dp-tab-actions">
       <button class="dp-expand-btn" title="Tab 导航" onclick={() => (settingsNavOpen = true)}>≡</button>
+      <button class="dp-expand-btn" title="打开数据预设" onclick={onOpenDataPresets}>📚</button>
     </div>
   </div>
 
@@ -99,7 +99,6 @@
         />
         <span>🗑 删除前二次确认</span>
       </label>
-      <button class="backup-action" onclick={onOpenDataPresets}>📚 打开数据预设</button>
     {/if}
 
     {#if tab === 'display'}
@@ -229,11 +228,8 @@
         <div class="manual-tabs-wrap">
           <div class="manual-tabs-scroll">
             {#each MANUAL_SECTIONS as sec (sec.id)}
-              <button
-                class="manual-tab"
-                class:active={manualActive === sec.id}
-                onclick={() => (manualActive = sec.id)}
-              >{sec.title}</button>
+              <button class="manual-tab" class:active={manualActive === sec.id}
+                      onclick={() => (manualActive = sec.id)}>{sec.title}</button>
             {/each}
           </div>
           <div class="manual-tabs-actions">
@@ -245,7 +241,7 @@
     {/if}
 
     {#if tab === 'about'}
-      <p class="backup-note"><b>版本：</b>v3.5（Svelte 5 重构版）</p>
+      <p class="backup-note"><b>版本：</b>v3.6（Svelte 5 重构版）</p>
       <p class="backup-note">本版本使用 Svelte 5 编译时框架，运行时开销极低，产物体积缩小 60%+。</p>
     {/if}
   </div>
