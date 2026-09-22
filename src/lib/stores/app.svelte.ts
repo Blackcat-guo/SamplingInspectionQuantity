@@ -28,7 +28,9 @@ export interface ToastItem {
 
 const defaultSettings = (): Settings => ({
   summaryTemplate: DEFAULT_TPL,
-  showVoice: true, showImageOcr: true,
+  showVoice: true,
+  showImageOcr: true,
+  showRecognizeTools: true,
   experienceLevel: 'auto',
   animationLevel: 'normal',
   showZeroQtyItems: true,
@@ -1245,11 +1247,16 @@ export function applyPayload(payload: any): void {
   const tpl = (typeof s.summaryTemplate === 'string' && s.summaryTemplate.trim())
     ? (LEGACY_TPLS.includes(s.summaryTemplate) ? DEFAULT_TPL : s.summaryTemplate)
     : DEFAULT_TPL;
+  const migratedShowRecognizeTools: boolean =
+    typeof s.showRecognizeTools === 'boolean'
+      ? s.showRecognizeTools
+      : (s.showVoice !== false || s.showImageOcr !== false);
   Object.assign(app.settings, {
     ...defaultSettings(),
     summaryTemplate: tpl,
     showVoice: s.showVoice !== false,
     showImageOcr: s.showImageOcr !== false,
+    showRecognizeTools: migratedShowRecognizeTools,
     showZeroQtyItems: s.showZeroQtyItems !== false,
     mergeMultiProductSummary: s.mergeMultiProductSummary !== false,
     animationLevel: ['normal', 'reduced', 'none'].includes(s.animationLevel) ? s.animationLevel : 'normal',
@@ -1543,7 +1550,66 @@ export function moveGroupTo(fromIndex: number, toIndex: number): boolean {
 }
 
 /* ============================================================
-   模块 S：预分组应用到现有分组
+   模块 S-1：从预分组新建分组
+   ============================================================ */
+export async function createGroupFromPreset(presetGroupId: string): Promise<boolean> {
+  const pg = app.dataPresets.presetGroups.find((x) => x.id === presetGroupId);
+  if (!pg) return false;
+  const p = currentProduct();
+  if (!p) return false;
+
+  if (p.groups.some((g) => nameKey(g.name) === nameKey(pg.name))) {
+    pushToast(`已存在同名分组：${pg.name}`, 'error', 2600);
+    return false;
+  }
+
+  const existing = new Set<string>();
+  p.groups.forEach((g) =>
+    g.items.forEach((it) => existing.add(nameKey(it.name))),
+  );
+  const seen = new Set<string>();
+  const finalItems: string[] = [];
+  for (const raw of pg.items) {
+    const k = nameKey(raw);
+    if (!k) continue;
+    if (seen.has(k)) continue;
+    if (existing.has(k)) continue;
+    seen.add(k);
+    finalItems.push(raw);
+  }
+
+  const threshold = app.settings.bulkAddConfirmThreshold || 5;
+  if (finalItems.length > threshold) {
+    const ok = await askConfirm({
+      title: '创建新分组',
+      message: `将从「${pg.name}」创建 ${finalItems.length} 个分类，是否继续？`,
+      confirmText: '创建',
+    });
+    if (!ok) return false;
+  }
+
+  history.pushSnapshot(app.products, p.id);
+  const initTotal = calcSampling(p.incomingQty || 0);
+  p.groups.push({
+    id: uid(),
+    name: pg.name,
+    total: initTotal,
+    totalIsAuto: true,
+    items: finalItems.map((name) => ({ name, qty: 0 })),
+  });
+  scheduleSave();
+  logOperation(`从预分组「${pg.name}」创建新分组（${finalItems.length} 个分类）`);
+
+  if (finalItems.length === 0) {
+    pushToast(`已创建空分组「${pg.name}」`);
+  } else {
+    pushToast(`已创建「${pg.name}」（+${finalItems.length}）`);
+  }
+  return true;
+}
+
+/* ============================================================
+   模块 S-2：预分组追加到现有分组
    ============================================================ */
 export function applyPresetGroupToGroup(g: Group, presetGroupId: string): number {
   const pg = app.dataPresets.presetGroups.find((x) => x.id === presetGroupId);
@@ -1564,16 +1630,15 @@ export function applyPresetGroupToGroup(g: Group, presetGroupId: string): number
   });
   if (!added.length) return 0;
 
-  // ✅ Bug 3 修复：推入历史栈
   history.pushSnapshot(app.products, p.id);
   added.forEach((name) => g.items.push({ name, qty: 0 }));
   scheduleSave();
-  logOperation(`将预分组「${pg.name}」应用到「${g.name}」（+${added.length}）`);
+  logOperation(`将预分组「${pg.name}」追加到「${g.name}」（+${added.length}）`);
   return added.length;
 }
 
 /* ============================================================
-   模块 K：数据预设分页（只读，不在 render 期改状态）
+   模块 K：数据预设分页
    ============================================================ */
 export function pageSizeFor(): number {
   try {
@@ -1602,7 +1667,6 @@ export function setPresetPage(key: string, page: number): void {
   presetPages[key] = Math.max(1, page);
 }
 
-// ✅ Bug 7 修复：只读函数，不在 render 期间修改状态
 export function getPresetPage(key: string, total: number): number {
   const size = pageSizeFor();
   const pages = Math.max(1, Math.ceil(total / size));
@@ -1769,7 +1833,6 @@ export function renameSpecialGroup(id: string, name: string): void {
   scheduleSave();
 }
 
-/** 切换特殊分组与某负责人的关联（勾选/取消） */
 export function toggleSpecialGroupResp(sgId: string, respId: string): void {
   const sg = app.dataPresets.specialGroups.find((x) => x.id === sgId);
   if (!sg) return;
@@ -1796,7 +1859,6 @@ export function setSpecialGroupItems(sgId: string, text: string): void {
   scheduleSave();
 }
 
-/* 特殊分组 UI 状态 */
 export const specialUIState = $state({
   expandedProductsId: '',
   filter: '',
@@ -1810,7 +1872,6 @@ export function toggleSpecialGroupProducts(id: string): void {
   specialUIState.filter = '';
 }
 
-// ✅ Bug 1 修复：原 toggleSpecialGroupResp(id) 重命名为 toggleSpecialRespPanel
 export function toggleSpecialRespPanel(id: string): void {
   specialUIState.expandedRespId = specialUIState.expandedRespId === id ? '' : id;
   specialUIState.expandedProductsId = '';
@@ -1833,40 +1894,58 @@ export interface ImportOptions {
 }
 
 export function buildPartialExport(opts: ExportOptions): string {
-  const out: any = {
+  const payload: any = {
     app: 'category-counts',
     version: 5,
     exportedAt: new Date().toISOString(),
     partial: true,
-    modules: {},
   };
   if (opts.products) {
-    out.modules.products = {
-      products: app.products,
-      globalPresets: app.globalPresets,
-      mergeSelectedIds: app.mergeSelectedIds,
-      currentProductId: app.currentProductId,
-    };
+    payload.products = app.products;
+    payload.globalPresets = app.globalPresets;
+    payload.mergeSelectedIds = app.mergeSelectedIds;
+    payload.currentProductId = app.currentProductId;
   }
-  if (opts.dataPresets) out.modules.dataPresets = app.dataPresets;
-  if (opts.settings) out.modules.settings = app.settings;
-  return JSON.stringify(out, null, 2);
+  if (opts.dataPresets) payload.dataPresets = app.dataPresets;
+  if (opts.settings) payload.settings = app.settings;
+  return JSON.stringify(payload, null, 2);
 }
 
 export function summarizeImport(raw: any): string {
-  const mod = raw?.modules;
-  if (!mod) {
-    return `${(raw?.products || []).length} 产品 · ${(raw?.dataPresets?.customers || []).length} 客户 · ${(raw?.dataPresets?.suppliers || []).length} 供应商`;
-  }
   const parts: string[] = [];
-  if (mod.products) parts.push(`${(mod.products.products || []).length} 产品`);
-  if (mod.dataPresets) {
-    parts.push(`${(mod.dataPresets.customers || []).length} 客户`);
-    parts.push(`${(mod.dataPresets.suppliers || []).length} 供应商`);
-    parts.push(`${(mod.dataPresets.specialGroups || []).length} 特殊分组`);
+  if (Array.isArray(raw?.products)) parts.push(`${raw.products.length} 产品`);
+  const dp = raw?.dataPresets;
+  if (dp) {
+    parts.push(`${(dp.customers || []).length} 客户`);
+    parts.push(`${(dp.suppliers || []).length} 供应商`);
+    parts.push(`${(dp.specialGroups || []).length} 特殊分组`);
   }
-  if (mod.settings) parts.push('全局设置');
-  return parts.join(' · ');
+  if (raw?.settings) parts.push('全局设置');
+  return parts.join(' · ') || '空文件';
+}
+
+export function detectImportModules(raw: any): {
+  products: boolean;
+  dataPresets: boolean;
+  settings: boolean;
+} {
+  return {
+    products: Array.isArray(raw?.products),
+    dataPresets: !!raw?.dataPresets,
+    settings: !!raw?.settings,
+  };
+}
+
+function cleanupResponsibleIds(): void {
+  const valid = new Set(app.dataPresets.responsiblePersons.map((r) => r.id));
+  app.dataPresets.customers.forEach((c) => {
+    const f = c.responsibleIds.filter((id) => valid.has(id));
+    if (f.length !== c.responsibleIds.length) c.responsibleIds = f;
+  });
+  app.dataPresets.specialGroups.forEach((sg) => {
+    const f = sg.responsibleIds.filter((id) => valid.has(id));
+    if (f.length !== sg.responsibleIds.length) sg.responsibleIds = f;
+  });
 }
 
 export function importPartialPayload(
@@ -1875,26 +1954,23 @@ export function importPartialPayload(
 ): { added: number; replaced: number } {
   let added = 0;
   let replaced = 0;
-  const mod = raw?.modules;
-  if (!mod) {
-    applyPayload(raw);
-    return { added: 1, replaced: 0 };
-  }
 
-  if (opts.products && mod.products) {
-    const newProducts = (mod.products.products || []).map(normalizeProduct);
+  if (opts.products && Array.isArray(raw?.products)) {
+    const newProducts = raw.products.map(normalizeProduct);
     if (opts.mode === 'overwrite') {
       app.products = newProducts;
-      app.globalPresets = cleanGlobalPresets(mod.products.globalPresets || []);
-      app.mergeSelectedIds = Array.isArray(mod.products.mergeSelectedIds)
-        ? mod.products.mergeSelectedIds
+      app.globalPresets = cleanGlobalPresets(raw.globalPresets || []);
+      app.mergeSelectedIds = Array.isArray(raw.mergeSelectedIds)
+        ? raw.mergeSelectedIds.filter((x: unknown) => typeof x === 'string')
         : [];
       app.currentProductId =
-        mod.products.currentProductId || newProducts[0]?.id || '';
+        raw.currentProductId && newProducts.some((p: Product) => p.id === raw.currentProductId)
+          ? raw.currentProductId
+          : newProducts[0]?.id || '';
       replaced += newProducts.length;
     } else {
       const byName = new Map(app.products.map((p) => [nameKey(p.name), p]));
-      newProducts.forEach((np) => {
+      newProducts.forEach((np: Product) => {
         const k = nameKey(np.name);
         if (byName.has(k)) replaced++;
         else {
@@ -1902,9 +1978,9 @@ export function importPartialPayload(
           added++;
         }
       });
-      if (Array.isArray(mod.products.globalPresets)) {
+      if (Array.isArray(raw.globalPresets)) {
         const seen = new Set(app.globalPresets.map((g) => nameKey(g.name)));
-        cleanGlobalPresets(mod.products.globalPresets).forEach((g) => {
+        cleanGlobalPresets(raw.globalPresets).forEach((g) => {
           if (!seen.has(nameKey(g.name))) {
             app.globalPresets.push(g);
             added++;
@@ -1914,8 +1990,8 @@ export function importPartialPayload(
     }
   }
 
-  if (opts.dataPresets && mod.dataPresets) {
-    const dp = mod.dataPresets;
+  if (opts.dataPresets && raw?.dataPresets) {
+    const dp = raw.dataPresets;
     if (opts.mode === 'overwrite') {
       app.dataPresets = {
         suppliers: cleanStringList(dp.suppliers),
@@ -1929,72 +2005,50 @@ export function importPartialPayload(
         presetGroups: cleanPresetGroups(dp.presetGroups),
       };
       replaced += 1;
-      // ✅ Bug 5 修复：覆盖 dataPresets 后清理产品上的失效绑定
+      cleanupResponsibleIds();
       cleanupOrphanProductBindings();
     } else {
       const sup = new Set(app.dataPresets.suppliers.map(nameKey));
       (dp.suppliers || []).forEach((s: string) => {
-        if (!sup.has(nameKey(s))) {
-          app.dataPresets.suppliers.push(s);
-          added++;
-        }
+        if (!sup.has(nameKey(s))) { app.dataPresets.suppliers.push(s); added++; }
       });
       const cust = new Set(app.dataPresets.customers.map((c) => nameKey(c.name)));
       cleanCustomers(dp.customers).forEach((c) => {
-        if (!cust.has(nameKey(c.name))) {
-          app.dataPresets.customers.push(c);
-          added++;
-        }
+        if (!cust.has(nameKey(c.name))) { app.dataPresets.customers.push(c); added++; }
       });
       const inq = new Set(app.dataPresets.incomingQtyPresets);
       cleanNumberList(dp.incomingQtyPresets).forEach((n) => {
-        if (!inq.has(n)) {
-          app.dataPresets.incomingQtyPresets.push(n);
-          added++;
-        }
+        if (!inq.has(n)) { app.dataPresets.incomingQtyPresets.push(n); added++; }
       });
       const proc = new Set(app.dataPresets.processes.map(nameKey));
       (dp.processes || []).forEach((s: string) => {
-        if (!proc.has(nameKey(s))) {
-          app.dataPresets.processes.push(s);
-          added++;
-        }
+        if (!proc.has(nameKey(s))) { app.dataPresets.processes.push(s); added++; }
       });
-      const resp = new Set(
-        app.dataPresets.responsiblePersons.map((r) => nameKey(r.name)),
-      );
+      const resp = new Set(app.dataPresets.responsiblePersons.map((r) => nameKey(r.name)));
       cleanResponsiblePersons(dp.responsiblePersons).forEach((r) => {
         if (!resp.has(nameKey(r.name))) {
-          app.dataPresets.responsiblePersons.push(r);
-          added++;
+          app.dataPresets.responsiblePersons.push(r); added++;
         }
       });
       const sg = new Set(app.dataPresets.specialGroups.map((s) => nameKey(s.name)));
       cleanSpecialGroups(dp.specialGroups).forEach((s) => {
-        if (!sg.has(nameKey(s.name))) {
-          app.dataPresets.specialGroups.push(s);
-          added++;
-        }
+        if (!sg.has(nameKey(s.name))) { app.dataPresets.specialGroups.push(s); added++; }
       });
-      const pg = new Set(
-        app.dataPresets.presetGroups.map((p) => nameKey(p.name)),
-      );
+      const pg = new Set(app.dataPresets.presetGroups.map((p) => nameKey(p.name)));
       cleanPresetGroups(dp.presetGroups).forEach((p) => {
-        if (!pg.has(nameKey(p.name))) {
-          app.dataPresets.presetGroups.push(p);
-          added++;
-        }
+        if (!pg.has(nameKey(p.name))) { app.dataPresets.presetGroups.push(p); added++; }
       });
+      cleanupResponsibleIds();
     }
   }
 
-  if (opts.settings && mod.settings) {
+  if (opts.settings && raw?.settings) {
     if (opts.mode === 'overwrite') {
-      Object.assign(app.settings, { ...defaultSettings(), ...mod.settings });
+      Object.assign(app.settings, { ...defaultSettings(), ...raw.settings });
     } else {
-      Object.keys(mod.settings).forEach((k) => {
+      Object.keys(raw.settings).forEach((k) => {
         if ((app.settings as any)[k] === undefined) {
-          (app.settings as any)[k] = mod.settings[k];
+          (app.settings as any)[k] = raw.settings[k];
         }
       });
     }
@@ -2004,12 +2058,10 @@ export function importPartialPayload(
   return { added, replaced };
 }
 
-/** 解析 .js 文件内容（拒绝危险关键字） */
 export function parseJsData(text: string): any {
   const trimmed = String(text || '').trim();
   if (!trimmed) throw new Error('空文件');
 
-  // ✅ Bug 6 修复：先剥离字符串/模板字面量，再检测危险关键字
   const stripped = trimmed
     .replace(/'(?:[^'\\]|\\.)*'/g, "''")
     .replace(/"(?:[^"\\]|\\.)*"/g, '""')
@@ -2033,4 +2085,1110 @@ export function parseJsData(text: string): any {
       .replace(/,(\s*[}\]])/g, '$1');
     return JSON.parse(converted);
   }
+}
+
+/* ============================================================
+   任务 A：本产品汇总模块
+   ============================================================ */
+export function outputText(): string {
+  return buildOutputText(true);
+}
+export function outputCopyText(): string {
+  return buildOutputText(false);
+}
+
+/* ============================================================
+   任务 D：显示 Tab setter
+   ============================================================ */
+export function setShowTopNavText(v: boolean): void {
+  app.settings.showTopNavText = v;
+  scheduleSave();
+}
+export function setShowMainTips(v: boolean): void {
+  app.settings.showMainTips = v;
+  scheduleSave();
+}
+export function setShowZeroQty(v: boolean): void {
+  app.settings.showZeroQtyItems = v;
+  scheduleSave();
+}
+export function setMergeMultiProductSummary(v: boolean): void {
+  app.settings.mergeMultiProductSummary = v;
+  scheduleSave();
+}
+export function setShowVoice(v: boolean): void {
+  app.settings.showVoice = v;
+  scheduleSave();
+}
+export function setShowOcr(v: boolean): void {
+  app.settings.showImageOcr = v;
+  scheduleSave();
+}
+export function setShowRecognizeTools(v: boolean): void {
+  app.settings.showRecognizeTools = v;
+  app.settings.showVoice = v;
+  app.settings.showImageOcr = v;
+  scheduleSave();
+}
+export function setFontSize(key: 'small' | 'standard' | 'large'): void {
+  app.settings.fontSize = key;
+  applyFontSize();
+  scheduleSave();
+}
+export function setAnimationLevel(key: 'normal' | 'reduced' | 'none'): void {
+  app.settings.animationLevel = key;
+  scheduleSave();
+}
+export function fontSizeLabel(): string {
+  const m: Record<string, string> = { small: '小', standard: '标准', large: '大' };
+  return m[app.settings.fontSize] || '标准';
+}
+export function animationLevelLabel(): string {
+  const m: Record<string, string> = { normal: '标准', reduced: '柔和', none: '关闭' };
+  return m[app.settings.animationLevel] || '标准';
+}
+export function experienceLevelLabel(): string {
+  const lv = app.settings.experienceLevel;
+  return lv === 'auto' ? `自动（${autoLevel()}）` : lv === 'elegant' ? '优雅' : lv === 'standard' ? '标准' : '兼容';
+}
+export function experienceHint(): string {
+  const lv = effectiveLevel();
+  return lv === 'elegant' ? '全动画 + 毛玻璃，适合高端设备'
+    : lv === 'compat' ? '关闭动画与毛玻璃，适合低端设备与老旧浏览器'
+    : '平衡性能与观感（推荐）';
+}
+
+/* ============================================================
+   任务 C：说明书 9 章
+   ============================================================ */
+export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] = [
+  {
+    id: 'quickstart',
+    title: '第一章 · 快速开始',
+    content: `
+<h4>1.1 三步上手</h4>
+<ol>
+  <li>左上角「＋ 添加产品」录入产品名</li>
+  <li>「添加分组」→ 输入 3 或 1-3 批量创建</li>
+  <li>在分组内添加分类并录入数量</li>
+</ol>
+<blockquote>📘 <b>案例：产品1 完整录入</b><br>
+① 添加产品输入 <code>产品1</code><br>
+② 添加分组输入 <code>3</code> → 得到「分组1 / 分组2 / 分组3」<br>
+③ 在分组1 输入 <code>分类A</code> 回车<br>
+④ 数量 +1 至 5，总数量填 20<br>
+⑤ 下方「本产品汇总」自动生成：
+<pre>客户：客户A
+供应商来料：供应商A
+发生工序：工序A
+料号及来料批量：
+产品1，来料1000PCS
+问题描述：
+抽检20PCS,
+分组1：分类A5PCS，不良率25%</pre>
+</blockquote>
+<h4>1.2 保存位置</h4>
+<p>数据自动保存在浏览器 <code>localStorage</code>，键名 <code>category_counts_v5</code>。关闭页面不会丢失。</p>
+`,
+  },
+  {
+    id: 'product',
+    title: '第二章 · 产品管理',
+    content: `
+<h4>2.1 支持的批量操作</h4>
+<ul>
+  <li>批量添加（一行一个 / 逗号分隔）</li>
+  <li>复制产品（整组数据结构复制，含分组、预分类）</li>
+  <li>批量勾选删除（侧栏「☑ 批量管理」）</li>
+  <li>内联重命名（✏️ 就地编辑，Enter 保存，Esc 取消）</li>
+</ul>
+<blockquote>📘 <b>案例：批量添加 3 个相近产品</b><br>
+在「添加产品」文本域输入：
+<pre>产品1
+产品2
+产品3</pre>
+或写成一行：<code>产品1, 产品2, 产品3</code><br>
+点「添加 3 个产品」→ 侧栏立刻出现 3 个产品，共用同一组「统一设置」的供应商 / 客户 / 工序。
+</blockquote>
+<h4>2.2 样品标记</h4>
+<p>勾选后该产品参与「特殊分组」负责人联动判定（当特殊分组设置「仅样品触发」时生效）。</p>
+`,
+  },
+  {
+    id: 'group',
+    title: '第三章 · 分组与分类',
+    content: `
+<h4>3.1 添加分组</h4>
+<ul>
+  <li>输入单数字 <code>3</code> → 创建「分组1 ~ 分组3」</li>
+  <li>输入区间 <code>1-3</code> → 创建「分组1 ~ 分组3」</li>
+  <li>输入逗号 <code>1,3,5</code> → 创建「分组1、分组3、分组5」</li>
+  <li>输入文字 <code>分组A</code> → 创建名为「分组A」的分组</li>
+</ul>
+<h4>3.2 一键标准分组</h4>
+<p>点「📋 标准分组」→ 一键添加 分组A / 分组B / 分组C 三组。</p>
+<h4>3.3 ★ 从预分组一键建组（重点）</h4>
+<p>添加分组栏右侧「📦 预分组 ▾」→ 点击下拉项 → 立即新建一个分组，组名 = 预分组名，分类 = 预分组的 items（自动去重）。</p>
+<blockquote>📘 <b>案例：从预分组一键建组</b><br>
+① 数据预设 → 预分组 → 新增「常见分类组」，items 填入：
+<pre>分类A
+分类B
+分类C
+分类D</pre>
+② 回到主面板，添加分组栏点击「📦 预分组 ▾」<br>
+③ 点「常见分类组」→ 主面板出现一个新分组，包含 4 个分类<br>
+④ 若这 4 个分类在本产品其他分组已存在，自动跳过<br>
+⑤ 按 <kbd>Ctrl</kbd>+<kbd>Z</kbd> 可整体撤回该新组
+</blockquote>
+<h4>3.4 分组内操作</h4>
+<ul>
+  <li><b>折叠</b>：点击 ▾/▸ 切换，折叠时显示分类名预览</li>
+  <li><b>拖拽排序</b>：长按 ⠿ 260ms 后拖动</li>
+  <li><b>键盘排序</b>：聚焦 ⠿ 按 Enter 进入，↑↓ 移动，Esc 退出</li>
+  <li><b>批量改量</b>：批量删除/改量 → 勾选 → 改量（× 系数 / = 定值）</li>
+  <li><b>分类转移</b>：点 ↔ 转移到其他分组</li>
+</ul>
+`,
+  },
+  {
+    id: 'preset',
+    title: '第四章 · 数据预设',
+    content: `
+<h4>4.1 可预设的内容</h4>
+<ul>
+  <li>客户（可绑定负责人）</li>
+  <li>供应商</li>
+  <li>来料数量</li>
+  <li>工序</li>
+  <li>临时处理方式</li>
+  <li>负责人（常规 / 特殊分组）</li>
+  <li>特殊分组（关联分类 + 负责人）</li>
+  <li>共享预分类（生效范围勾选产品）</li>
+  <li>预分组</li>
+  <li>样品（样品 Tab）</li>
+</ul>
+<h4>4.2 ★ 特殊分组负责人自动联动</h4>
+<blockquote>📘 <b>案例：客户绑定负责人 + 特殊分组命中</b><br>
+① 数据预设 → 客户 → 新增「客户A」，勾选负责人 @张三<br>
+② 数据预设 → 特殊分组 → 新增「特殊组A」
+<ul>
+  <li>分类：分类A、分类B</li>
+  <li>负责人：@李四</li>
+  <li>勾选「仅样品触发」</li>
+</ul>
+③ 主面板选一个「客户=客户A、样品=true」的产品，且含「分类A」<br>
+④ 多产品汇总 → 负责人自动带出：<b>@张三 @李四</b><br>
+⑤ 手动 ✕ 移除 @李四 → 切换产品组合后不再加回（否决集合）
+</blockquote>
+<h4>4.3 共享预分类生效范围</h4>
+<p>每项共享预分类可设置：<code>null</code>（全部产品）/ <code>[]</code>（不生效）/ <code>[ids]</code>（部分产品）。</p>
+<h4>4.4 语音输入</h4>
+<p><b>环境要求</b>：HTTPS 或 localhost（HTTP 下浏览器不授权麦克风），且浏览器支持 <code>SpeechRecognition</code> API（Chrome / Edge 桌面版支持，部分内置浏览器不支持）。不满足条件时语音面板自动隐藏。</p>
+<ol>
+  <li>点「🎤 开始语音」→ 首次会请求麦克风权限</li>
+  <li>对着麦克风说话，实时文本区显示识别结果（灰色斜体为临时结果）</li>
+  <li>点「停止语音」→ 点「填入识别文本」或「生成候选列表」</li>
+</ol>
+<blockquote>📘 <b>案例：语音录入分类A</b><br>
+① 点「开始语音」，说「分类A 分类B 分类C」<br>
+② 点「停止语音」<br>
+③ 点「生成候选列表」→ 候选表出现 3 项<br>
+④ 点「应用选中的 3 项」→ 落入「识别新增」组
+</blockquote>
+<h4>4.5 图片识别（OCR）</h4>
+<p>调用 OCR.space 的 HTTPS 接口（无需后端）。API Key 存 sessionStorage，关闭标签页即清除。</p>
+<ol>
+  <li>在「OCR API Key」输入框填入 Key（可留空使用 demo key，次数受限）</li>
+  <li>点「从相册选择图片」→ 可多选（建议 ≤ 2MB/张）</li>
+  <li>点「开始识别」→ 进度条走完，识别文本自动追加到下方文本区</li>
+</ol>
+<blockquote>📘 <b>案例：微信截图 OCR</b><br>
+① 从相册选择 2 张截图 → 缩略图墙显示<br>
+② 点「开始识别」→ 状态显示「完成：成功 2 张」<br>
+③ 文本区自动填入识别内容
+</blockquote>
+<h4>4.6 识别文本与候选列表</h4>
+<p>文本来源：语音 / OCR / 手动粘贴。三种拆分方式：</p>
+<ul>
+  <li><b>智能拆分</b>：换行 + 中文标点（，、；）+ 双空格；单空格保留</li>
+  <li><b>仅空格和逗号</b>：按逗号 / 顿号 / 分号 / 双空格切分</li>
+  <li><b>按行拆分</b>：每行一个分类，不做标点切分</li>
+</ul>
+<ol>
+  <li>确认文本区内容 → 选拆分方式</li>
+  <li>点「生成候选列表」→ 每项显示匹配状态</li>
+  <li>勾选 / 取消勾选 → 点「应用选中的 N 项」或「全部应用」</li>
+</ol>
+<h4>4.7 完整案例：从截图到分组</h4>
+<blockquote>📘 <b>端到端流程</b><br>
+① 微信收到不良品照片，保存到相册<br>
+② 打开本应用 → 选中「产品1」<br>
+③ 识别工具区 → 「从相册选择图片」→ 选 2 张<br>
+④ 点「开始识别」→ 文本区自动填入「分类A 分类B 分类C」<br>
+⑤ 点「生成候选列表」→ 3 项全部未命中（因为产品1 还没有这些分类）<br>
+⑥ 目标分组选「分组A」→ 点「应用选中的 3 项」<br>
+⑦ 分组A 出现 3 个分类，数量均为 1<br>
+⑧ 按 <kbd>Ctrl</kbd>+<kbd>Z</kbd> 可整体撤回
+</blockquote>
+<p><b>来源防护</b>：候选生成后如果切换产品，候选表上方会出现「⚠️ 候选生成于其他产品，请重新生成」提示，点应用会被拒绝，避免误落到错误产品。</p>
+`,
+  },
+  {
+    id: 'merge',
+    title: '第五章 · 多产品汇总',
+    content: `
+<h4>5.1 汇总规则</h4>
+<p>只能选择 <b>同供应商 + 同客户</b> 的产品一起汇总；不同组合自动分组显示。</p>
+<h4>5.2 两种汇总格式</h4>
+<ul>
+  <li><b>合并描述</b>（默认）：同分组名聚合，分类合并累加</li>
+  <li><b>逐料号拆分</b>：每个产品独立一行</li>
+</ul>
+<blockquote>📘 <b>案例：三产品合并输出</b><br>
+选中 3 个产品，供应商=供应商A，客户=客户A：
+<pre>产品1：来料1000，抽检20
+产品2：来料2000，抽检32
+产品3：来料500，抽检13</pre>
+合并描述输出：
+<pre>客户：客户A
+供应商来料：供应商A
+料号及来料批量：
+产品1，来料1000PCS
+产品2，来料2000PCS
+产品3，来料500PCS
+问题描述：
+各抽检20PCS,
+分组A：分类A10PCS，不良率50%
+分组B：分类B5PCS，不良率25%</pre>
+</blockquote>
+<h4>5.3 本产品汇总（独立区块）</h4>
+<p>多产品汇总下方有「本产品汇总」，只显示当前产品。支持前段 / 后段附加。</p>
+`,
+  },
+  {
+    id: 'work',
+    title: '第六章 · 工时计算',
+    content: `
+<h4>6.1 三个关键参数</h4>
+<ul>
+  <li>上班时间 / 下班时间（支持跨天：如 22:00 ~ 次日 06:00）</li>
+  <li>休息时间段（最多 10 段，自动合并重叠）</li>
+  <li>加班基准：18:00 之后计为加班</li>
+</ul>
+<blockquote>📘 <b>案例 A：标准工作日</b><br>
+上班 09:00 / 下班 18:00 / 休息 12:00~13:00<br>
+输出：总 9h，休息 1h，实际 8h，加班 0h
+</blockquote>
+<blockquote>📘 <b>案例 B：加班日</b><br>
+上班 09:00 / 下班 21:00 / 休息 12:00~13:00 + 18:00~18:30<br>
+输出：总 12h，休息 1.5h，实际 10.5h，加班 2.5h
+</blockquote>
+<blockquote>📘 <b>案例 C：跨天夜班</b><br>
+上班 22:00 / 下班 06:00（次日）/ 无休息<br>
+输出：总 8h，休息 0h，实际 8h，加班 0h
+</blockquote>
+<h4>6.2 复制按钮</h4>
+<p>底部三个按钮分别复制：时间段 / 加班段 / 加班时长。</p>
+`,
+  },
+  {
+    id: 'io',
+    title: '第七章 · 导入导出',
+    content: `
+<h4>7.1 两种导出</h4>
+<ul>
+  <li><b>导出数据</b>：弹窗中勾选需要的模块（产品 / 预设 / 设置）</li>
+  <li><b>导入数据</b>：选文件 → 自动检测模块 → 勾选 + 选择模式</li>
+</ul>
+<h4>7.2 支持的文件格式</h4>
+<ul>
+  <li><code>.json</code>：标准格式，推荐</li>
+  <li><code>.js</code>：支持 <code>export default {...}</code> / <code>const data = {...}</code> / <code>window.data = {...}</code></li>
+</ul>
+<blockquote>📘 <b>案例：备份 + 恢复</b><br>
+① 设置 → 备份与恢复 → 「💾 导出数据」<br>
+② 保持三模块全勾选 → 点「导出选中内容」<br>
+③ 下载 <code>抽检数量统计_部分数据_日期.json</code> 保存到网盘<br>
+④ 换设备后 → 「📥 导入数据」→ 选文件<br>
+⑤ 弹窗显示摘要「N 产品 · M 客户 · K 供应商 · J 特殊分组」<br>
+⑥ 保持「合并」模式 → 点「确认导入」→ Toast 提示「导入完成」
+</blockquote>
+<h4>7.3 覆盖模式</h4>
+<p>选择「覆盖」模式时会二次确认，且自动清理负责人 ID 悬空引用。</p>
+`,
+  },
+  {
+    id: 'shortcut',
+    title: '第八章 · 快捷键',
+    content: `
+<h4>8.1 全局快捷键</h4>
+<table style="width:100%;border-collapse:collapse">
+  <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>撤回上一步操作</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td><td>恢复（重做）</td></tr>
+  <tr><td><kbd>Esc</kbd></td><td>关闭当前弹窗</td></tr>
+</table>
+<h4>8.2 分组内快捷键</h4>
+<ul>
+  <li>聚焦 ⠿ 按 <kbd>Enter</kbd> → 进入键盘排序</li>
+  <li>排序中 <kbd>↑</kbd>/<kbd>↓</kbd> → 上/下移</li>
+  <li>排序中 <kbd>Esc</kbd> → 退出排序</li>
+</ul>
+<blockquote>📘 <b>案例：撤回误删</b><br>
+① 误删了「分组A」 → 立刻按 <kbd>Ctrl</kbd>+<kbd>Z</kbd><br>
+② Toast 显示「已撤回：删除分组「分组A」」<br>
+③ 分组恢复原位<br>
+④ 注意：撤回栈有容量上限（50 步 / 4MB），超限自动丢弃最早记录
+</blockquote>
+`,
+  },
+  {
+    id: 'faq',
+    title: '第九章 · 常见问题',
+    content: `
+<h4>Q1 · 撤回按钮灰着？</h4>
+<p>说明历史栈为空。<b>修改前</b>需要先保存，或者该操作本身不推历史栈（如：查看类操作）。</p>
+<h4>Q2 · 抽检数不随来料变化？</h4>
+<p>检查该分组的「总数量」是否显示 <code>· 已手改</code>。若是，说明用户手动改过，系统不再自动同步。点击分组头 ↻ 重置该组可恢复联动。</p>
+<h4>Q3 · 特殊分组没带出负责人？</h4>
+<p>四种可能原因：<br>
+① 客户没绑定负责人<br>
+② 特殊分组的分类名与产品实际分类名不匹配<br>
+③ 特殊分组勾选了"仅样品触发"，但当前产品未标记为样品<br>
+④ 该负责人被用户在标签中手动 ✕ 移除（进入否决集合）</p>
+<h4>Q4 · 数据存哪？会丢吗？</h4>
+<p>存在浏览器 <code>localStorage</code>。以下情况会丢：<br>
+· 清理浏览器缓存 / 数据<br>
+· 使用隐私模式<br>
+· 换设备 / 换浏览器<br>
+· 手动「恢复出厂设置」<br>
+<b>强烈建议定期导出备份。</b></p>
+<h4>Q5 · 主题切换卡顿？</h4>
+<p>设置 → 显示 → 体验等级切到「兼容」关闭所有动画，或「动画强度」设为「关闭」。</p>
+<h4>Q6 · 什么时候显示"全检"？</h4>
+<p>当产品「各分组总数量之和 = 来料数量」时，系统自动判定为全检。例如来料 100，三个分组总量分别是 30 / 40 / 30，合计 100 → 显示"全检"。</p>
+<h4>Q7 · 分享按钮怎么用？</h4>
+<p>点「📤 分享」→ 选择方式：<br>
+· 系统分享（推荐，可直接选目标 App）<br>
+· 微信 / 钉钉 / 飞书 / QQ（复制后跳转 App，需手动粘贴）<br>
+· 邮件（直接调起邮件客户端）<br>
+· 仅复制到剪贴板</p>
+<h4>Q8 · 预分组下拉从哪来？</h4>
+<p>数据预设 → 预分组 Tab。新增预分组后，添加分组栏会出现「📦 预分组 ▾」菜单项。</p>
+<h4>Q9 · 为什么有些分类在别的分组灰着？</h4>
+<p>同一产品内分类名唯一。若某分类已在其他分组存在，添加时会被拒绝，避免不良率重复统计。</p>
+<h4>Q10 · 语音 / OCR 面板不显示？</h4>
+<p>两种情况：<br>
+① 浏览器不支持（语音依赖 <code>SpeechRecognition</code>，需要 HTTPS 或 localhost）<br>
+② 设置 → 显示中关闭了「显示识别工具」开关</p>
+`,
+  },
+];
+
+/* ============================================================
+   任务 E：数据预设导航弹窗状态
+   ============================================================ */
+export const presetNavDialog = $state<{ show: boolean }>({ show: false });
+
+export function openPresetNavDialog(): void {
+  presetNavDialog.show = true;
+}
+export function closePresetNavDialog(): void {
+  presetNavDialog.show = false;
+}
+
+/* ============================================================
+   N2 · 预分类派生
+   ============================================================ */
+class PresetDerivedStore {
+  visibleSharedPresets: GlobalPreset[] = $derived.by(() => {
+    const pid = app.currentProductId;
+    return app.globalPresets.filter((gp) => {
+      if (gp.productIds === null) return true;
+      if (Array.isArray(gp.productIds) && gp.productIds.length === 0) return false;
+      return gp.productIds.includes(pid);
+    });
+  });
+
+  globalPresetNameKeys: Set<string> = $derived(
+    new Set(this.visibleSharedPresets.map((gp) => nameKey(gp.name))),
+  );
+
+  localOnlyPresets: string[] = $derived.by(() => {
+    const p = currentProduct();
+    if (!p) return [];
+    const shared = this.globalPresetNameKeys;
+    return p.presets.filter((x) => !shared.has(nameKey(x)));
+  });
+}
+export const presetDerived = new PresetDerivedStore();
+
+/* ============================================================
+   N2 · 三态判定
+   ============================================================ */
+export type PresetItemState = 'in-current' | 'in-other' | 'fresh';
+
+export function getPresetItemState(group: Group, itemName: string): PresetItemState {
+  const p = currentProduct();
+  if (!p) return 'fresh';
+  const k = nameKey(itemName);
+  if (group.items.some((it) => nameKey(it.name) === k)) return 'in-current';
+  if (
+    p.groups.some(
+      (g) => g.id !== group.id && g.items.some((it) => nameKey(it.name) === k),
+    )
+  )
+    return 'in-other';
+  return 'fresh';
+}
+
+/* ============================================================
+   N2 · 共享预分类 CRUD
+   ============================================================ */
+export function addGlobalPreset(name: string): boolean {
+  const v = String(name || '').trim();
+  if (!v) return false;
+  if (app.globalPresets.some((gp) => nameKey(gp.name) === nameKey(v))) {
+    pushToast('已存在同名共享预分类', 'error');
+    return false;
+  }
+  history.pushGlobalSnapshot(
+    app.products, app.dataPresets, app.globalPresets, app.settings,
+    '新增共享预分类',
+  );
+  app.globalPresets.push({ id: uid(), name: v, productIds: null });
+  scheduleSave();
+  logOperation(`新增共享预分类「${v}」`);
+  return true;
+}
+
+export function renameGlobalPreset(id: string, newName: string): boolean {
+  const gp = app.globalPresets.find((x) => x.id === id);
+  if (!gp) return false;
+  const v = String(newName || '').trim();
+  if (!v) return false;
+  if (gp.name === v) return true;
+  if (app.globalPresets.some((x) => x.id !== id && nameKey(x.name) === nameKey(v))) {
+    pushToast('已存在同名共享预分类', 'error');
+    return false;
+  }
+  history.pushGlobalSnapshot(
+    app.products, app.dataPresets, app.globalPresets, app.settings,
+    '重命名共享预分类',
+  );
+  gp.name = v;
+  scheduleSave();
+  return true;
+}
+
+export function removeGlobalPreset(id: string): void {
+  const idx = app.globalPresets.findIndex((x) => x.id === id);
+  if (idx < 0) return;
+  history.pushGlobalSnapshot(
+    app.products, app.dataPresets, app.globalPresets, app.settings,
+    '删除共享预分类',
+  );
+  app.globalPresets.splice(idx, 1);
+  scheduleSave();
+  logOperation('删除共享预分类');
+}
+
+export function toggleGpProduct(gp: GlobalPreset, pid: string): void {
+  if (gp.productIds === null) {
+    gp.productIds = app.products.map((p) => p.id).filter((x) => x !== pid);
+  } else {
+    const arr = gp.productIds.slice();
+    const i = arr.indexOf(pid);
+    if (i >= 0) arr.splice(i, 1);
+    else arr.push(pid);
+    gp.productIds = arr;
+  }
+  scheduleSave();
+}
+
+export function setAllGpProducts(gp: GlobalPreset): void {
+  if (gp.productIds === null) return;
+  history.pushGlobalSnapshot(
+    app.products, app.dataPresets, app.globalPresets, app.settings,
+    '共享预分类全部生效',
+  );
+  gp.productIds = null;
+  scheduleSave();
+}
+
+export function setNoneGpProducts(gp: GlobalPreset): void {
+  if (Array.isArray(gp.productIds) && gp.productIds.length === 0) return;
+  history.pushGlobalSnapshot(
+    app.products, app.dataPresets, app.globalPresets, app.settings,
+    '共享预分类全部不生效',
+  );
+  gp.productIds = [];
+  scheduleSave();
+}
+
+/* ============================================================
+   阶段 5B-1 · 识别工具
+   ============================================================ */
+export interface Candidate {
+  id: string;
+  text: string;
+  matched: boolean;
+  groupId: string;
+  checked: boolean;
+}
+
+export const recognizeState = $state({
+  text: '',
+  candidates: [] as Candidate[],
+  candidatesSourcePid: '',                   // ★ F1
+  generateSignal: 0,
+  splitMode: 'smart' as 'smart' | 'comma' | 'line',
+
+  ocrApiKey: '',
+  ocrRunning: false,
+  ocrProgress: 0,
+  ocrStatus: '',
+  ocrStatusType: '' as '' | 'success' | 'error' | 'warn',
+  ocrFiles: [] as File[],
+  ocrPreviews: [] as string[],
+
+  voiceRunning: false,
+  voiceFinalText: '',
+  voiceInterimText: '',
+  voiceStatus: '',
+  voiceStatusType: '' as '' | 'success' | 'error',
+});
+
+export function setRecognizeText(text: string): void {
+  recognizeState.text = String(text ?? '');
+}
+
+export function appendRecognizeText(text: string): void {
+  const t = String(text ?? '').trim();
+  if (!t) return;
+  recognizeState.text = recognizeState.text
+    ? recognizeState.text + '\n' + t
+    : t;
+}
+
+export function clearRecognizeText(): void {
+  recognizeState.text = '';
+  recognizeState.candidates = [];
+}
+
+export function requestGenerateCandidates(): void {
+  recognizeState.generateSignal++;
+}
+
+export function splitRecognizeText(mode: 'smart' | 'comma' | 'line' = 'smart'): string[] {
+  const raw = recognizeState.text || '';
+  if (!raw.trim()) return [];
+  let parts: string[];
+  if (mode === 'line') {
+    parts = raw.split(/[\n\r]+/);
+  } else if (mode === 'comma') {
+    parts = raw.split(/[,，、;；]+|\s{2,}/);
+  } else {
+    parts = raw
+      .split(/[\n\r]+/)
+      .flatMap((line) => line.split(/[,，、;；]+|\s{2,}/));
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const p of parts) {
+    const v = p.trim();
+    if (!v) continue;
+    const k = nameKey(v);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(v);
+  }
+  return out;
+}
+
+export function doGenerateCandidates(): void {
+  const p = currentProduct();
+  if (!p) {
+    pushToast('请先选择产品', 'error');
+    return;
+  }
+  const parts = splitRecognizeText(recognizeState.splitMode);
+  if (!parts.length) {
+    pushToast('识别文本为空', 'error');
+    return;
+  }
+
+  const index = new Map<string, string>();
+  p.groups.forEach((g) => {
+    g.items.forEach((it) => {
+      const k = nameKey(it.name);
+      if (!index.has(k)) index.set(k, g.id);
+    });
+  });
+
+  const candidates: Candidate[] = parts.map((text) => {
+    const k = nameKey(text);
+    const gid = index.get(k);
+    return {
+      id: k,
+      text,
+      matched: !!gid,
+      groupId: gid || '__auto__',
+      checked: true,
+    };
+  });
+
+  recognizeState.candidates = candidates;
+  recognizeState.candidatesSourcePid = p.id;   // ★ F1
+  pushToast(`已生成 ${candidates.length} 个候选`);
+}
+
+export function toggleCandidate(id: string): void {
+  recognizeState.candidates = recognizeState.candidates.map((c) =>
+    c.id === id ? { ...c, checked: !c.checked } : c,
+  );
+}
+
+export function setCandidateGroup(id: string, groupId: string): void {
+  recognizeState.candidates = recognizeState.candidates.map((c) =>
+    c.id === id ? { ...c, groupId } : c,
+  );
+}
+
+export function toggleAllCandidates(checked: boolean): void {
+  recognizeState.candidates = recognizeState.candidates.map((c) => ({ ...c, checked }));
+}
+
+function findOrCreateAutoGroup(): Group | null {
+  const p = currentProduct();
+  if (!p) return null;
+  let g = p.groups.find((x) => x.name === AUTO_GROUP_NAME);
+  if (!g) {
+    g = {
+      id: uid(),
+      name: AUTO_GROUP_NAME,
+      total: 0,
+      totalIsAuto: false,
+      items: [],
+    };
+    p.groups.push(g);
+  }
+  return g;
+}
+
+function applyCandidatesImpl(list: Candidate[]): void {
+  const p = currentProduct();
+  if (!p) return;
+  if (!list.length) return;
+
+  // ★ F1：来源一致性防护
+  if (
+    recognizeState.candidatesSourcePid &&
+    recognizeState.candidatesSourcePid !== p.id
+  ) {
+    pushToast('候选来自其他产品，请重新生成', 'error', 3000);
+    return;
+  }
+
+  history.pushSnapshot(app.products, p.id);
+
+  let hitCount = 0;
+  let addCount = 0;
+
+  for (const c of list) {
+    const k = nameKey(c.text);
+
+    if (c.matched) {
+      const g = p.groups.find((x) => x.id === c.groupId);
+      const it = g?.items.find((x) => nameKey(x.name) === k);
+      if (it) {
+        it.qty = (it.qty || 0) + 1;
+        hitCount++;
+        continue;
+      }
+    }
+
+    let target: Group | null = null;
+    if (c.groupId === '__auto__') {
+      target = findOrCreateAutoGroup();
+    } else {
+      target = p.groups.find((x) => x.id === c.groupId) || null;
+      if (!target) target = findOrCreateAutoGroup();
+    }
+    if (!target) continue;
+
+    const exist = target.items.find((x) => nameKey(x.name) === k);
+    if (exist) {
+      exist.qty = (exist.qty || 0) + 1;
+      hitCount++;
+    } else {
+      target.items.push({ name: c.text, qty: 1 });
+      addCount++;
+    }
+    if (!p.presets.some((x) => nameKey(x) === k)) {
+      p.presets.push(c.text);
+    }
+  }
+
+  scheduleSave();
+  logOperation(`识别应用：命中 ${hitCount}，新增 ${addCount}`);
+  pushToast(`应用完成：命中 ${hitCount}，新增 ${addCount}`);
+}
+
+export function applySelectedCandidates(): void {
+  const list = recognizeState.candidates.filter((c) => c.checked);
+  if (!list.length) {
+    pushToast('未勾选任何候选', 'error');
+    return;
+  }
+  applyCandidatesImpl(list);
+  const appliedIds = new Set(list.map((c) => c.id));
+  recognizeState.candidates = recognizeState.candidates.filter(
+    (c) => !appliedIds.has(c.id),
+  );
+}
+
+export function applyAllRecognizedText(): void {
+  const parts = splitRecognizeText(recognizeState.splitMode);
+  if (!parts.length) {
+    pushToast('识别文本为空', 'error');
+    return;
+  }
+  const p = currentProduct();
+  if (!p) return;
+
+  const index = new Map<string, string>();
+  p.groups.forEach((g) => {
+    g.items.forEach((it) => {
+      const k = nameKey(it.name);
+      if (!index.has(k)) index.set(k, g.id);
+    });
+  });
+
+  const list: Candidate[] = parts.map((text) => {
+    const k = nameKey(text);
+    const gid = index.get(k);
+    return {
+      id: k,
+      text,
+      matched: !!gid,
+      groupId: gid || '__auto__',
+      checked: true,
+    };
+  });
+
+  recognizeState.candidatesSourcePid = p.id;   // ★ F1
+  applyCandidatesImpl(list);
+  recognizeState.candidates = [];
+}
+
+/* ---------------- OCR ---------------- */
+const OCR_KEY_STORE = 'ocr_api_key_v1';
+
+export function saveOcrApiKey(key: string): void {
+  recognizeState.ocrApiKey = String(key ?? '').trim();
+  try {
+    if (recognizeState.ocrApiKey) {
+      sessionStorage.setItem(OCR_KEY_STORE, recognizeState.ocrApiKey);
+    } else {
+      sessionStorage.removeItem(OCR_KEY_STORE);
+    }
+  } catch { /* ignore */ }
+  pushToast(recognizeState.ocrApiKey ? 'OCR Key 已保存' : 'OCR Key 已清除');
+}
+
+export function loadOcrApiKey(): void {
+  try {
+    const v = sessionStorage.getItem(OCR_KEY_STORE) || '';
+    recognizeState.ocrApiKey = v;
+  } catch {
+    recognizeState.ocrApiKey = '';
+  }
+}
+
+const MAX_OCR_FILE_BYTES = 2_000_000;
+
+export function addOcrFiles(files: File[]): void {
+  const accepted: File[] = [];
+  for (const f of files) {
+    if (!f.type.startsWith('image/')) {
+      pushToast(`${f.name} 不是图片`, 'error', 2400);
+      continue;
+    }
+    if (f.size > MAX_OCR_FILE_BYTES) {
+      pushToast(`${f.name} 超过 2MB，请压缩后再上传`, 'error', 2600);
+      continue;
+    }
+    accepted.push(f);
+  }
+  if (!accepted.length) return;
+  recognizeState.ocrFiles = [...recognizeState.ocrFiles, ...accepted];
+  recognizeState.ocrPreviews = [
+    ...recognizeState.ocrPreviews,
+    ...accepted.map((f) => URL.createObjectURL(f)),
+  ];
+}
+
+export function removeOcrFile(index: number): void {
+  if (index < 0 || index >= recognizeState.ocrFiles.length) return;
+  const url = recognizeState.ocrPreviews[index];
+  if (url) {
+    try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+  }
+  recognizeState.ocrFiles = recognizeState.ocrFiles.filter((_, i) => i !== index);
+  recognizeState.ocrPreviews = recognizeState.ocrPreviews.filter((_, i) => i !== index);
+}
+
+export function clearOcrFiles(): void {
+  recognizeState.ocrPreviews.forEach((url) => {
+    try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+  });
+  recognizeState.ocrFiles = [];
+  recognizeState.ocrPreviews = [];
+  recognizeState.ocrProgress = 0;
+  recognizeState.ocrStatus = '';
+  recognizeState.ocrStatusType = '';
+}
+
+async function recognizeOneImage(file: File): Promise<string> {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('language', 'chs');
+  fd.append('isOverlayRequired', 'false');
+  fd.append('OCREngine', '2');
+  fd.append('scale', 'true');
+
+  const key = recognizeState.ocrApiKey || 'helloworld';
+  const res = await fetch('https://api.ocr.space/parse/image', {
+    method: 'POST',
+    headers: { apikey: key },
+    body: fd,
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data: any = await res.json();
+  if (data?.IsErroredOnProcessing) {
+    const msg = Array.isArray(data.ErrorMessage)
+      ? data.ErrorMessage.join(' ')
+      : (data.ErrorMessage || 'OCR 失败');
+    throw new Error(msg);
+  }
+  const parsed = data?.ParsedResults || [];
+  return parsed.map((p: any) => p.ParsedText || '').join('\n').trim();
+}
+
+export async function startOcrRecognition(): Promise<void> {
+  if (recognizeState.ocrRunning) return;
+  if (!recognizeState.ocrFiles.length) {
+    pushToast('请先选择图片', 'error');
+    return;
+  }
+
+  recognizeState.ocrRunning = true;
+  recognizeState.ocrProgress = 0;
+  recognizeState.ocrStatus = `识别中… 0/${recognizeState.ocrFiles.length}`;
+  recognizeState.ocrStatusType = '';
+
+  const files = recognizeState.ocrFiles.slice();
+  let done = 0;
+  let ok = 0;
+  let fail = 0;
+  const texts: string[] = [];
+
+  await Promise.allSettled(
+    files.map(async (f) => {
+      try {
+        const t = await recognizeOneImage(f);
+        if (t) {
+          texts.push(t);
+          ok++;
+        } else {
+          fail++;
+        }
+      } catch (e: any) {
+        fail++;
+        console.warn('OCR error:', e?.message || e);
+      } finally {
+        done++;
+        recognizeState.ocrProgress = Math.round((done / files.length) * 100);
+        recognizeState.ocrStatus = `识别中… ${done}/${files.length}`;
+      }
+    }),
+  );
+
+  recognizeState.ocrRunning = false;
+
+  if (texts.length) {
+    appendRecognizeText(texts.join('\n'));
+    const both = fail > 0;
+    recognizeState.ocrStatus = both
+      ? `完成：成功 ${ok} / 失败 ${fail}`
+      : `完成：成功 ${ok} 张`;
+    recognizeState.ocrStatusType = both ? 'warn' : 'success';
+    logOperation(`OCR 识别完成，成功 ${ok} 张，失败 ${fail} 张`);
+    pushToast(both ? `部分成功：成功 ${ok} / 失败 ${fail}` : `已识别 ${ok} 张`, both ? 'info' : 'success');
+  } else {
+    recognizeState.ocrStatus = `全部失败（${fail} 张）`;
+    recognizeState.ocrStatusType = 'error';
+    pushToast('未识别到文本', 'error');
+  }
+}
+
+/* ---------------- 语音 ---------------- */
+export function isSecureContext(): boolean {
+  try { return !!window.isSecureContext; } catch { return false; }
+}
+export function hasMediaDevices(): boolean {
+  try { return !!(navigator.mediaDevices?.getUserMedia); } catch { return false; }
+}
+export function hasSpeechRecognition(): boolean {
+  try {
+    return !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+  } catch { return false; }
+}
+
+let voiceRec: any = null;
+let voiceSessionActive = false;
+let voiceRestartTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function startVoiceRecognition(): void {
+  if (recognizeState.voiceRunning) return;
+
+  if (!isSecureContext()) {
+    recognizeState.voiceStatus = '非 HTTPS 环境，无法录音';
+    recognizeState.voiceStatusType = 'error';
+    pushToast('语音识别需在 HTTPS 或 localhost 下使用', 'error', 2600);
+    return;
+  }
+  if (!hasSpeechRecognition()) {
+    recognizeState.voiceStatus = '当前浏览器不支持语音识别';
+    recognizeState.voiceStatusType = 'error';
+    pushToast('当前浏览器不支持语音识别', 'error', 2600);
+    return;
+  }
+
+  const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+  try {
+    if (!voiceRec) {
+      voiceRec = new SR();
+      voiceRec.lang = 'zh-CN';
+      voiceRec.continuous = true;
+      voiceRec.interimResults = true;
+
+      voiceRec.onresult = (event: any) => {
+        let finalText = '';
+        let interimText = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const r = event.results[i];
+          const t = r[0]?.transcript || '';
+          if (r.isFinal) finalText += t;
+          else interimText += t;
+        }
+        if (finalText.trim()) {
+          const clean = finalText.trim().replace(/[,，]+$/, '');
+          if (clean) {
+            recognizeState.voiceFinalText +=
+              (recognizeState.voiceFinalText ? ' ' : '') + clean;
+          }
+        }
+        recognizeState.voiceInterimText = interimText.trim();
+      };
+
+      voiceRec.onerror = (e: any) => {
+        const err = e?.error || '';
+        if (err === 'not-allowed' || err === 'service-not-allowed') {
+          recognizeState.voiceStatus = '语音识别被拒绝（请检查麦克风权限）';
+          recognizeState.voiceStatusType = 'error';
+        } else if (err === 'audio-capture') {
+          recognizeState.voiceStatus = '无法访问麦克风';
+          recognizeState.voiceStatusType = 'error';
+        } else if (err === 'no-speech') {
+          recognizeState.voiceStatus = '未检测到语音';
+          recognizeState.voiceStatusType = '';
+        } else {
+          recognizeState.voiceStatus = `识别错误：${err || '未知'}`;
+          recognizeState.voiceStatusType = 'error';
+        }
+        if (err === 'not-allowed' || err === 'service-not-allowed' || err === 'audio-capture') {
+          voiceSessionActive = false;
+          recognizeState.voiceRunning = false;
+        }
+      };
+
+      voiceRec.onend = () => {
+        recognizeState.voiceInterimText = '';
+        if (!voiceSessionActive || !voiceRec) return;
+        if (voiceRestartTimer) clearTimeout(voiceRestartTimer);
+        voiceRestartTimer = setTimeout(() => {
+          voiceRestartTimer = null;
+          if (!voiceSessionActive || !voiceRec) return;
+          try {
+            voiceRec.start();
+          } catch {
+            voiceSessionActive = false;
+            recognizeState.voiceRunning = false;
+            recognizeState.voiceStatus = '语音已停止';
+            recognizeState.voiceStatusType = '';
+          }
+        }, 250);
+      };
+    }
+
+    voiceSessionActive = true;
+    recognizeState.voiceRunning = true;
+    recognizeState.voiceStatus = '正在聆听…';
+    recognizeState.voiceStatusType = '';
+    try {
+      voiceRec.start();
+    } catch { /* already started */ }
+  } catch (e: any) {
+    recognizeState.voiceRunning = false;
+    recognizeState.voiceStatus = '启动失败：' + (e?.message || '未知错误');
+    recognizeState.voiceStatusType = 'error';
+    pushToast('语音启动失败', 'error');
+  }
+}
+
+export function stopVoiceRecognition(): void {
+  voiceSessionActive = false;
+  if (voiceRestartTimer) {
+    clearTimeout(voiceRestartTimer);
+    voiceRestartTimer = null;
+  }
+  recognizeState.voiceRunning = false;
+  recognizeState.voiceStatus = '已停止';
+  recognizeState.voiceStatusType = '';
+  try { voiceRec?.stop?.(); } catch { /* ignore */ }
+}
+
+export function clearVoiceText(): void {
+  recognizeState.voiceFinalText = '';
+  recognizeState.voiceInterimText = '';
+  recognizeState.voiceStatus = '';
+  recognizeState.voiceStatusType = '';
+}
+
+export function applyVoiceToRecognizeText(): void {
+  const t = (recognizeState.voiceFinalText + ' ' + recognizeState.voiceInterimText).trim();
+  if (!t) {
+    pushToast('没有可填入的文本', 'error');
+    return;
+  }
+  appendRecognizeText(t);
+  clearVoiceText();
+  pushToast('已填入识别文本');
+}
+
+export function applyVoiceToCandidates(): void {
+  const t = (recognizeState.voiceFinalText + ' ' + recognizeState.voiceInterimText).trim();
+  if (!t) {
+    pushToast('没有可生成的文本', 'error');
+    return;
+  }
+  setRecognizeText(t);
+  clearVoiceText();
+  requestGenerateCandidates();
+}
+
+export function initRecognizeTools(): void {
+  loadOcrApiKey();
 }

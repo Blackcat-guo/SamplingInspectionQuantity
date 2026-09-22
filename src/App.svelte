@@ -17,7 +17,8 @@
   import SpeechInput from './components/SpeechInput.svelte';
   import OcrPanel from './components/OcrPanel.svelte';
   import RecognizePanel from './components/RecognizePanel.svelte';
-
+ import OutputPanel from './components/OutputPanel.svelte';
+ 
   let cleanup: (() => void) | null = null;
 
   onMount(() => {
@@ -114,8 +115,10 @@
               语音与 OCR 均需 HTTPS 或 localhost。识别结果可一键生成候选列表。
             </div>
           {/if}
-          <SpeechInput onFillText={fillRecognizeText} />
-          <OcrPanel onFillText={fillRecognizeText} />
+          {#if app.settings.showRecognizeTools !== false}
+  <SpeechInput onFillText={fillRecognizeText} />
+  <OcrPanel onFillText={fillRecognizeText} />
+{/if}
           {#if recognizeOpen}
             <div bind:this={recognizeRef} style="display:contents">
               <RecognizePanel />
@@ -124,6 +127,11 @@
         </section>
 
         <MergePanel onOpenShare={() => (shareMenuOpen = true)} />
+        <OutputPanel />
+          {#if app.settings.showRecognizeTools !== false}
+           <SpeechInput />
+           <RecognizePanel />
+           {/if}
         <GroupList />
       </div>
     {/if}

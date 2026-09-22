@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import {
     app, currentProduct, scheduleSave, pushToast, logOperation,
     setQty, commitQtyDraft, addItem, removeItem, nameKey,
@@ -8,7 +9,11 @@
     toggleItemSelect, toggleAllItems, batchDeleteItems, cancelBatchItems, enterBatchItems,
     transferItemToGroup,
     dragState, moveGroupTo, effectiveLevel,
-    applyPresetGroupToGroup,
+    presetDerived,
+    getPresetItemState,
+    scheduleAutoRespSync,
+    removeGroup,
+    resetGroup,
   } from '../lib/stores/app.svelte';
   import type { Group } from '../lib/core/schema';
 
@@ -88,22 +93,14 @@
     const sel = groupSelection[group.id] || [];
     return group.items.length > 0 && sel.length === group.items.length;
   }
+
   function onResetGroup() {
-    if (!confirm(`重置分组「${g.name}」？`)) return;
-    g.total = 0;
-    g.totalIsAuto = undefined;
-    g.items.forEach((it) => { it.qty = 0; });
-    scheduleSave();
-    logOperation(`重置分组「${g.name}」`);
+    resetGroup(realIndex);
   }
   function onDeleteGroup() {
-    const cur = currentProduct();
-    if (!cur) return;
-    if (!confirm(`删除分组「${g.name}」？`)) return;
-    cur.groups.splice(realIndex, 1);
-    scheduleSave();
-    logOperation(`删除分组「${g.name}」`);
+    removeGroup(realIndex);
   }
+
   function onBulkAddItems() {
     const raw = prompt(`向「${g.name}」批量添加分类（每行一个）：`);
     if (!raw) return;
@@ -181,7 +178,6 @@
     }, 260);
   }
 
-  // ✅ Bug 4 修复：拖拽期间直接返回，只由 window 监听器处理
   function onHandlePointerMove(e: PointerEvent) {
     if (dragState.dragging) return;
     if (!pressing) return;
@@ -215,9 +211,7 @@
     if (!dragState.dragging) return;
     updateOverIndex(e.clientY);
   }
-  function onWindowUp() {
-    endDrag();
-  }
+  function onWindowUp() { endDrag(); }
 
   function updateOverIndex(clientY: number) {
     const p = currentProduct();
@@ -235,10 +229,14 @@
     if (idx >= 0) dragState.overIndex = idx;
   }
 
-  function endDrag() {
+  async function endDrag() {
+    if (!dragState.dragging) return;
     window.removeEventListener('pointermove', onWindowMove);
     window.removeEventListener('pointerup', onWindowUp);
     window.removeEventListener('pointercancel', onWindowUp);
+
+    await tick();
+
     const p = currentProduct();
     if (p && dragState.overIndex >= 0 && dragState.activeId) {
       const from = p.groups.findIndex((x) => x.id === dragState.activeId);
@@ -253,14 +251,92 @@
     dragState.overIndex = -1;
   }
 
-  /* ---------- 预分组下拉 ---------- */
-  let presetMenuOpen = $state(false);
-  function onApplyPreset(pgId: string, pgName: string) {
-    presetMenuOpen = false;
-    const n = applyPresetGroupToGroup(g, pgId);
-    if (n > 0) pushToast(`已从「${pgName}」添加 ${n} 个分类`);
-    else pushToast('没有新分类可添加（均已存在）', 'info', 2400);
+  /* ---------- 预分类下拉 ---------- */
+  const sharedItems = $derived(presetDerived.visibleSharedPresets);
+  const localItems = $derived(presetDerived.localOnlyPresets);
+
+  let pickerOpen = $state(false);
+  let pickerX = $state(0);
+  let pickerY = $state(0);
+  let triggerEl: HTMLElement | null = null;
+
+  function openPicker(e: MouseEvent) {
+    if (pickerOpen) {
+      closePresetPicker();
+      return;
+    }
+    triggerEl = e.currentTarget as HTMLElement;
+    computePickerPosition();
+    pickerOpen = true;
   }
+
+  function computePickerPosition() {
+    if (!triggerEl) return;
+    const rect = triggerEl.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const MENU_W = Math.min(280, vw - 24);
+    const MENU_H = 320;
+    const MARGIN = 12;
+    const GAP = 6;
+
+    let x = rect.left;
+    let y = rect.bottom + GAP;
+
+    if (x + MENU_W > vw - MARGIN) x = vw - MENU_W - MARGIN;
+    if (x < MARGIN) x = MARGIN;
+
+    if (y + MENU_H > vh - MARGIN && rect.top - MENU_H - GAP > MARGIN) {
+      y = rect.top - MENU_H - GAP;
+    }
+    if (y + MENU_H > vh - MARGIN) y = Math.max(MARGIN, vh - MENU_H - MARGIN);
+
+    pickerX = x;
+    pickerY = y;
+  }
+
+  function closePresetPicker() {
+    pickerOpen = false;
+    triggerEl = null;
+  }
+
+  function onOverlayClick(e: MouseEvent) {
+    if (e.target === e.currentTarget) closePresetPicker();
+  }
+
+  function onPickItem(name: string) {
+    const state = getPresetItemState(g, name);
+
+    if (state === 'in-current') {
+      const idx = g.items.findIndex((it) => nameKey(it.name) === nameKey(name));
+      if (idx >= 0) {
+        removeItem(g, idx);
+        scheduleAutoRespSync();
+      }
+    } else if (state === 'in-other') {
+      pushToast(`「${name}」已存在于本产品的其他分组`, 'error', 2600);
+    } else {
+      if (addItem(g, name)) scheduleAutoRespSync();
+    }
+    closePresetPicker();
+  }
+
+  $effect(() => {
+    if (!pickerOpen) return;
+    const onKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closePresetPicker();
+    };
+    const onScroll = () => closePresetPicker();
+    const onResize = () => closePresetPicker();
+    document.addEventListener('keydown', onKeydown, true);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onResize);
+    return () => {
+      document.removeEventListener('keydown', onKeydown, true);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
+    };
+  });
 </script>
 
 <div
@@ -284,6 +360,7 @@
       onpointerdown={onHandlePointerDown}
       onpointermove={onHandlePointerMove}
       onpointerup={onHandlePointerUp}
+      onpointercancel={onHandlePointerUp}
       onkeydown={onDragKeydown}
     >⠿</span>
     <input
@@ -334,28 +411,6 @@
     <div class="group-toolbar">
       <button class="mini-btn" onclick={onBulkAddItems}>＋ 批量添加</button>
 
-      {#if app.dataPresets.presetGroups.length}
-        <div class="preset-wrap">
-          <button class="preset-btn pg" onclick={() => (presetMenuOpen = !presetMenuOpen)}>
-            📦 预分组 ▾
-          </button>
-          {#if presetMenuOpen}
-            <div class="preset-menu" role="menu">
-              {#each app.dataPresets.presetGroups as pg (pg.id)}
-                <button
-                  type="button"
-                  role="menuitem"
-                  onclick={() => onApplyPreset(pg.id, pg.name)}
-                >
-                  {pg.name}
-                  <span style="color:var(--c-text-3);font-size:11px">（{pg.items.length}）</span>
-                </button>
-              {/each}
-            </div>
-          {/if}
-        </div>
-      {/if}
-
       {#if g.items.length && batchGroupId.value !== g.id}
         <button class="mini-btn" onclick={() => enterBatchItems(g.id)}>批量删除/改量</button>
       {/if}
@@ -396,6 +451,16 @@
         onkeydown={(e) => { if (e.key === 'Enter') onAddItem(); }}
       />
       <button onclick={onAddItem}>添加</button>
+
+      <div class="preset-wrap">
+        <button
+          class="preset-btn"
+          type="button"
+          onclick={openPicker}
+          aria-haspopup="menu"
+          aria-expanded={pickerOpen}
+        >📦 预分类 ▾</button>
+      </div>
     </div>
 
     <div class="items">
@@ -479,6 +544,69 @@
         <button class="cancel" onclick={closeBulkQtyDialog}>取消</button>
         <button class="primary" onclick={() => applyBulkQty()}>应用</button>
       </div>
+    </div>
+  </div>
+{/if}
+
+{#if pickerOpen}
+  <div
+    class="preset-picker-overlay"
+    role="presentation"
+    onclick={onOverlayClick}
+  >
+    <div
+      class="preset-picker-menu"
+      style="top: {pickerY}px; left: {pickerX}px;"
+      role="menu"
+      aria-label="预分类"
+    >
+      {#if sharedItems.length > 0}
+        <div class="preset-picker-group-title">🌐 共享</div>
+        {#each sharedItems as item (item.id)}
+          {@const st = getPresetItemState(g, item.name)}
+          <button
+            type="button"
+            class="preset-picker-item"
+            role="menuitem"
+            onclick={() => onPickItem(item.name)}
+          >
+            <span class="preset-picker-name">{item.name}</span>
+            {#if st === 'in-current'}
+              <span class="preset-picker-mark current">✓</span>
+            {:else if st === 'in-other'}
+              <span class="preset-picker-mark other">其他组</span>
+            {:else}
+              <span class="preset-picker-mark fresh">＋</span>
+            {/if}
+          </button>
+        {/each}
+      {/if}
+
+      {#if localItems.length > 0}
+        <div class="preset-picker-group-title">📦 本产品</div>
+        {#each localItems as name (name)}
+          {@const st = getPresetItemState(g, name)}
+          <button
+            type="button"
+            class="preset-picker-item"
+            role="menuitem"
+            onclick={() => onPickItem(name)}
+          >
+            <span class="preset-picker-name">{name}</span>
+            {#if st === 'in-current'}
+              <span class="preset-picker-mark current">✓</span>
+            {:else if st === 'in-other'}
+              <span class="preset-picker-mark other">其他组</span>
+            {:else}
+              <span class="preset-picker-mark fresh">＋</span>
+            {/if}
+          </button>
+        {/each}
+      {/if}
+
+      {#if sharedItems.length === 0 && localItems.length === 0}
+        <div class="preset-picker-empty">暂无预分类</div>
+      {/if}
     </div>
   </div>
 {/if}

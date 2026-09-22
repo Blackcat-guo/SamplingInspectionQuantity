@@ -1,127 +1,146 @@
 <script lang="ts">
-  import { pushToast, logOperation } from '../lib/stores/app.svelte';
+  import {
+    recognizeState, startVoiceRecognition, stopVoiceRecognition,
+    clearVoiceText, applyVoiceToRecognizeText, applyVoiceToCandidates,
+    isSecureContext, hasMediaDevices, hasSpeechRecognition,
+    pushToast,
+  } from '../lib/stores/app.svelte';
+  import { onMount } from 'svelte';
 
-  let { onFillText } = $props<{ onFillText: (text: string) => void }>();
+  let envSecure = $state(false);
+  let envMic = $state(false);
+  let envSR = $state(false);
+  let envMicGranted = $state(false);
 
-  type SR = any;
-  const SRClass: SR =
-    typeof window !== 'undefined'
-      ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-      : null;
+  function refreshEnv() {
+    envSecure = isSecureContext();
+    envMic = hasMediaDevices();
+    envSR = hasSpeechRecognition();
+  }
 
-  const secure = typeof window !== 'undefined' && window.isSecureContext;
-  const supported = !!SRClass && secure;
+  onMount(() => {
+    refreshEnv();
+  });
 
-  let listening = $state(false);
-  let finalText = $state('');
-  let interimText = $state('');
-  let rec: SR = null;
+  const canRender = $derived(envSecure && envSR);
 
-  function start() {
-    if (!supported) {
-      pushToast('当前浏览器不支持语音识别', 'error');
+  const badge = $derived.by(() => {
+    if (!envSecure) return { text: '非安全环境', cls: 'error' };
+    if (!envMic) return { text: 'API 不可用', cls: 'error' };
+    if (!envSR) return { text: '不支持识别', cls: 'error' };
+    if (!envMicGranted && !recognizeState.voiceRunning) return { text: '待授权', cls: 'warn' };
+    if (recognizeState.voiceRunning) return { text: '识别中', cls: 'success' };
+    return { text: '已就绪', cls: 'success' };
+  });
+
+  async function requestMic() {
+    if (!envMic) {
+      pushToast('当前浏览器不支持麦克风 API', 'error');
       return;
     }
     try {
-      rec = new SRClass();
-      rec.lang = 'zh-CN';
-      rec.continuous = true;
-      rec.interimResults = true;
-
-      rec.onresult = (e: any) => {
-        let fin = '', inter = '';
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const r = e.results[i];
-          if (r.isFinal) fin += r[0].transcript;
-          else inter += r[0].transcript;
-        }
-        if (fin) finalText += fin;
-        interimText = inter;
-      };
-      rec.onerror = (e: any) => {
-        if (e.error === 'not-allowed') pushToast('麦克风未授权', 'error');
-        else if (e.error === 'no-speech') { /* ignore */ }
-        else pushToast('语音识别出错：' + e.error, 'error');
-      };
-      rec.onend = () => {
-        // continuous 模式下浏览器可能自动结束，需要重启
-        if (listening) {
-          try { rec.start(); } catch { /* ignore */ }
-        }
-      };
-
-      rec.start();
-      listening = true;
-    } catch (e: any) {
-      pushToast('无法启动语音识别：' + (e?.message || '未知错误'), 'error');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((t) => t.stop());
+      envMicGranted = true;
+      pushToast('麦克风已授权');
+    } catch {
+      envMicGranted = false;
+      pushToast('麦克风授权被拒绝', 'error');
     }
   }
 
-  function stop() {
-    listening = false;
-    try { rec?.stop(); } catch { /* ignore */ }
-    rec = null;
-  }
-
-  function fill() {
-    const t = (finalText + interimText).trim();
-    if (!t) {
-      pushToast('没有识别到文本', 'error');
-      return;
+  async function copyUrl() {
+    try {
+      await navigator.clipboard.writeText(location.href);
+      pushToast('已复制当前地址');
+    } catch {
+      pushToast('复制失败', 'error');
     }
-    onFillText(t);
-    logOperation('语音填入识别文本');
-    pushToast('已填入识别文本');
   }
 
-  function clear() {
-    finalText = '';
-    interimText = '';
-  }
+  const hasText = $derived(
+    !!(recognizeState.voiceFinalText || recognizeState.voiceInterimText),
+  );
 </script>
 
-{#if supported}
+{#if canRender}
   <section class="box">
     <div class="box-head">
       <span class="box-title">🎤 语音输入</span>
-      <span class="box-badge">{listening ? '识别中…' : '待机'}</span>
+      <span class="box-badge recognize-badge-{badge.cls}">{badge.text}</span>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-      {#if !listening}
+
+    <div class="voice-env-card">
+      <div class="voice-env-row">
+        <span>安全上下文（HTTPS）</span>
+        <span class="voice-env-val">{envSecure ? '✓' : '✗'}</span>
+      </div>
+      <div class="voice-env-row">
+        <span>麦克风 API</span>
+        <span class="voice-env-val">{envMic ? '✓' : '✗'}</span>
+      </div>
+      <div class="voice-env-row">
+        <span>语音识别 API</span>
+        <span class="voice-env-val">{envSR ? '✓' : '✗'}</span>
+      </div>
+      <div class="voice-env-actions">
+        <button class="mini-batch-btn" onclick={refreshEnv}>🔄 重新检测</button>
+        <button class="mini-batch-btn" onclick={copyUrl}>📋 复制地址</button>
+        {#if envMic && !envMicGranted}
+          <button class="mini-batch-btn" onclick={requestMic}>🎤 申请权限</button>
+        {/if}
+      </div>
+    </div>
+
+    <div class="voice-actions">
+      {#if !recognizeState.voiceRunning}
         <button
           class="mini-batch-btn"
-          onclick={start}
-          style="flex:1;padding:10px;font-size:13px"
-        >▶ 开始语音</button>
+          style="flex:1;padding:10px"
+          onclick={startVoiceRecognition}
+        >🎤 开始语音</button>
       {:else}
         <button
           class="mini-batch-btn danger"
-          onclick={stop}
-          style="flex:1;padding:10px;font-size:13px"
-        >■ 停止语音</button>
+          style="flex:1;padding:10px"
+          onclick={stopVoiceRecognition}
+        >⏹ 停止语音</button>
       {/if}
-      <button class="mini-batch-btn" onclick={clear}>清空</button>
+      {#if hasText}
+        <button class="mini-batch-btn" onclick={clearVoiceText}>清空</button>
+      {/if}
     </div>
 
-    {#if finalText || interimText}
-      <div
-        style="padding:10px;background:var(--c-surface);border:1.5px solid var(--c-border);border-radius:9px;font-size:13.5px;line-height:1.7;min-height:40px;max-height:180px;overflow-y:auto"
-      >
-        {finalText}<span style="color:var(--c-text-3);font-style:italic">{interimText}</span>
-      </div>
-    {:else}
-      <div style="font-size:12px;color:var(--c-text-3);padding:6px 0">
-        点击「开始语音」并允许麦克风权限。
+    <div class="voice-text-area">
+      {#if hasText}
+        <span class="recognize-voice-final">{recognizeState.voiceFinalText}</span>
+        {#if recognizeState.voiceInterimText}
+          <span class="recognize-voice-interim">{recognizeState.voiceInterimText}</span>
+        {/if}
+      {:else}
+        <span style="color:var(--c-text-3);font-size:12.5px">
+          点击「开始语音」并允许麦克风权限，然后开始说话…
+        </span>
+      {/if}
+    </div>
+
+    {#if recognizeState.voiceStatus}
+      <div class="recognize-status {recognizeState.voiceStatusType}">
+        {recognizeState.voiceStatus}
       </div>
     {/if}
 
-    <div style="display:flex;gap:8px;margin-top:8px">
+    <div class="voice-apply-row">
       <button
         class="mini-batch-btn"
-        disabled={!finalText && !interimText}
-        onclick={fill}
-        style="flex:1"
+        disabled={!hasText}
+        onclick={applyVoiceToRecognizeText}
       >填入识别文本</button>
+      <button
+        class="mini-batch-btn"
+        disabled={!hasText}
+        onclick={applyVoiceToCandidates}
+      >生成候选列表</button>
     </div>
   </section>
 {/if}

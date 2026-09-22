@@ -1,5 +1,6 @@
 <script lang="ts">
   import Dialog from './Dialog.svelte';
+  import NavGridDialog from './NavGridDialog.svelte';
   import {
     app, addDataPreset, removeCustomerById, removeSupplierByName, renameSupplier, renameCustomerById,
     normalResponsibles, specialResponsibles, pushToast, scheduleSave, uid, nameKey,
@@ -9,15 +10,17 @@
     selectAllProductsForCustomer, selectAllProductsForSupplier,
     countSupplierProducts, countCustomerProducts, getFilteredProductsForPicker,
     setProductPickerFilter,
-    // 模块 G
     productMatchesSpecialGroup, productEffectiveForSpecialGroup,
     addSpecialGroup, removeSpecialGroup, renameSpecialGroup,
     toggleSpecialGroupResp, toggleSpecialGroupSample,
     setSpecialGroupItems, specialUIState,
     toggleSpecialGroupProducts, toggleSpecialRespPanel,
-    // 模块 K
     presetPages, pageSizeFor, setPresetPage,
+    // ✅ N3：共享预分类 CRUD
+    addGlobalPreset, renameGlobalPreset, removeGlobalPreset,
+    toggleGpProduct, setAllGpProducts, setNoneGpProducts,
   } from '../lib/stores/app.svelte';
+  import type { GlobalPreset, Product } from '../lib/core/schema';
 
   let { open = $bindable(false), onOpenSettings } = $props<{
     open: boolean;
@@ -25,8 +28,9 @@
   }>();
 
   let tab = $state('customer');
+  let presetNavOpen = $state(false);
 
-  const tabs = [
+  const dataTabs = [
     { key: 'customer', label: '客户' },
     { key: 'supplier', label: '供应商' },
     { key: 'incoming', label: '来料数量' },
@@ -34,6 +38,7 @@
     { key: 'responsible', label: '负责人' },
     { key: 'special', label: '特殊分组' },
     { key: 'presetGroup', label: '预分组' },
+    { key: 'globalPreset', label: '共享预分类' },   // ★ N3 新增
   ];
 
   let newCustomer = $state('');
@@ -45,7 +50,42 @@
   let newSpecialGroup = $state('');
   let newPresetGroup = $state('');
 
-  // ✅ Bug 7 修复：用 $derived 计算当前页/页数/切片，不在渲染期间改状态
+  // ✅ N3：共享预分类 Tab 局部状态
+  let newGlobalPreset = $state('');
+  let expandedGpId = $state('');
+  let gpFilter = $state('');
+
+  function pickPresetTab(key: string) {
+    tab = key;
+  }
+
+  /* ---------- N3 共享预分类辅助 ---------- */
+  function toggleGpPanel(id: string) {
+    expandedGpId = expandedGpId === id ? '' : id;
+    gpFilter = '';
+  }
+
+  function isGpChecked(gp: GlobalPreset, pid: string): boolean {
+    if (gp.productIds === null) return true;
+    return gp.productIds.includes(pid);
+  }
+
+  function gpProductLabel(gp: GlobalPreset): string {
+    const n = gp.productIds === null ? app.products.length : gp.productIds.length;
+    return `产品(${n})`;
+  }
+
+  function filteredGpProducts(): Product[] {
+    const q = gpFilter.trim().toLowerCase();
+    if (!q) return app.products;
+    return app.products.filter((p) => p.name.toLowerCase().includes(q));
+  }
+
+  function onAddGp() {
+    if (addGlobalPreset(newGlobalPreset)) newGlobalPreset = '';
+  }
+
+  /* ---------- 分页计算 ---------- */
   const pageSize = $derived(pageSizeFor());
 
   const customerPages = $derived(Math.max(1, Math.ceil(app.dataPresets.customers.length / pageSize)));
@@ -148,12 +188,15 @@
   }
 </script>
 
-<Dialog bind:open title="📚 数据预设" subtitle="预设客户、供应商、来料数量、工序、负责人、特殊分组、预分组。" wide>
+<Dialog bind:open title="📚 数据预设" subtitle="预设客户、供应商、来料数量、工序、负责人、特殊分组、预分组、共享预分类。" wide>
   <div class="dp-tabs-wrap">
-    {#each tabs as t (t.key)}
+    {#each dataTabs as t (t.key)}
       <button class="dp-tab" class:active={tab === t.key} onclick={() => (tab = t.key)}>{t.label}</button>
     {/each}
-    <button class="dp-tab" style="margin-left:auto" title="打开设置" onclick={onOpenSettings}>⚙️</button>
+    <div class="dp-tab-actions">
+      <button class="dp-expand-btn" title="Tab 导航" onclick={() => (presetNavOpen = true)}>≡</button>
+      <button class="dp-expand-btn" title="打开设置" onclick={onOpenSettings}>⚙️</button>
+    </div>
   </div>
 
   <div class="dialog-list">
@@ -433,7 +476,6 @@
           <input class="main-name-input" value={sg.name} maxlength="30"
                  onblur={(e) => renameSpecialGroup(sg.id, (e.target as HTMLInputElement).value)} />
           <div class="row-actions">
-            <!-- ✅ Bug 1 修复：改用 toggleSpecialRespPanel -->
             <button class="scope-btn" onclick={() => toggleSpecialRespPanel(sg.id)}>
               负责人({sg.responsibleIds.length})
             </button>
@@ -458,7 +500,6 @@
             <div class="panel-title">选择该特殊分组的负责人</div>
             {#each specialResponsibles() as r (r.id)}
               <label class="responsible-item">
-                <!-- ✅ 这个仍是两参数版本，正确 -->
                 <input type="checkbox" checked={sg.responsibleIds.includes(r.id)}
                        onchange={() => toggleSpecialGroupResp(sg.id, r.id)} />
                 <span>@{r.name}</span>
@@ -559,9 +600,93 @@
         <button onclick={addPresetGroup}>添加</button>
       </div>
     {/if}
+
+    {#if tab === 'globalPreset'}
+      <div class="panel-head-row">
+        <span class="panel-head-text">共享预分类（{app.globalPresets.length}）</span>
+      </div>
+
+      {#each app.globalPresets as gp (gp.id)}
+        <div class="preset-edit-row">
+          <input
+            class="main-name-input"
+            value={gp.name}
+            maxlength="30"
+            onblur={(e) => {
+              const el = e.target as HTMLInputElement;
+              const ok = renameGlobalPreset(gp.id, el.value);
+              if (!ok) el.value = gp.name;   // 失败回滚
+            }}
+          />
+          <div class="row-actions">
+            <button class="scope-btn" onclick={() => toggleGpPanel(gp.id)}>
+              {gpProductLabel(gp)}
+            </button>
+            <button class="del" onclick={() => removeGlobalPreset(gp.id)}>✕</button>
+          </div>
+        </div>
+
+        {#if expandedGpId === gp.id}
+          <div class="resp-panel">
+            <div class="panel-title">
+              「{gp.name}」生效的产品（默认全部生效）
+            </div>
+            <div class="panel-toolbar">
+              <input
+                value={gpFilter}
+                oninput={(e) => (gpFilter = (e.target as HTMLInputElement).value)}
+                placeholder="🔍 过滤产品…"
+              />
+              <button onclick={() => setAllGpProducts(gp)}>全选</button>
+              <button onclick={() => setNoneGpProducts(gp)}>全不生效</button>
+            </div>
+            {#if app.products.length === 0}
+              <div class="empty-tip">还没有产品，请先添加产品。</div>
+            {:else}
+              {#each filteredGpProducts() as p (p.id)}
+                <label class="responsible-item">
+                  <input
+                    type="checkbox"
+                    checked={isGpChecked(gp, p.id)}
+                    onchange={() => toggleGpProduct(gp, p.id)}
+                  />
+                  <span>{p.name}</span>
+                </label>
+              {/each}
+              {#if filteredGpProducts().length === 0}
+                <div class="empty-tip">没有匹配的产品</div>
+              {/if}
+            {/if}
+          </div>
+        {/if}
+      {/each}
+
+      {#if !app.globalPresets.length}
+        <div class="transfer-empty">还没有共享预分类</div>
+      {/if}
+
+      <div class="preset-add-row">
+        <input
+          bind:value={newGlobalPreset}
+          placeholder="输入共享预分类名称…"
+          maxlength="30"
+          onkeydown={(e) => { if (e.key === 'Enter') onAddGp(); }}
+        />
+        <button onclick={onAddGp}>添加</button>
+      </div>
+    {/if}
   </div>
 
   <div class="dialog-actions">
     <button class="cancel" onclick={() => (open = false)}>关闭</button>
   </div>
 </Dialog>
+
+<NavGridDialog
+  bind:open={presetNavOpen}
+  title="📚 数据预设导航"
+  subtitle="点击分类直接切换，无需在页面内平铺展开。"
+  items={dataTabs}
+  activeKey={tab}
+  onSelect={pickPresetTab}
+/>

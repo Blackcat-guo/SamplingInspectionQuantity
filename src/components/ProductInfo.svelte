@@ -47,11 +47,11 @@
     </div>
     <div class="info-grid">
       <div class="info-field">
-        <label>料号（= 产品名称）</label>
+        <div class="field-label">料号（= 产品名称）</div>
         <input value={p.name} readonly tabindex="-1" />
       </div>
       <div class="info-field">
-        <label>供应商 <span class="req">*</span></label>
+        <div class="field-label">供应商 <span class="req">*</span></div>
         <input
           value={p.supplier}
           list="supplierList"
@@ -64,7 +64,7 @@
         </datalist>
       </div>
       <div class="info-field">
-        <label>客户（可选）</label>
+        <div class="field-label">客户（可选）</div>
         <input
           value={p.customer}
           list="customerList"
@@ -77,7 +77,7 @@
         </datalist>
       </div>
       <div class="info-field">
-        <label>来料数量</label>
+        <div class="field-label">来料数量</div>
         <input
           value={incomingText}
           type="text"
@@ -92,7 +92,7 @@
         </datalist>
       </div>
       <div class="info-field">
-        <label>发生工序</label>
+        <div class="field-label">发生工序</div>
         <input
           value={p.process}
           list="processList"
@@ -105,7 +105,7 @@
         </datalist>
       </div>
       <div class="info-field">
-        <label>类型</label>
+        <div class="field-label">类型</div>
         <label class="sample-toggle">
           <input
             type="checkbox"
