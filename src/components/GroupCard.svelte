@@ -4,7 +4,7 @@
   import {
     app, currentProduct, scheduleSave, pushToast, logOperation,
     setQty, commitQtyDraft, addItem, removeItem, nameKey,
-    groupSum, groupRate, setGroupTotal,
+    groupSum, groupRate,
     bulkQtyDialog, openBulkQtyDialog, closeBulkQtyDialog, applyBulkQty,
     groupSelection, batchGroupId,
     toggleItemSelect, toggleAllItems, batchDeleteItems, cancelBatchItems, enterBatchItems,
@@ -24,6 +24,7 @@
   const collapsed = $derived(
     Array.isArray(app.settings.collapsedGroups) && app.settings.collapsedGroups.includes(g.id),
   );
+  const product = $derived(currentProduct());
 
   function toggleCollapse() {
     const arr = Array.isArray(app.settings.collapsedGroups) ? app.settings.collapsedGroups.slice() : [];
@@ -45,12 +46,6 @@
     return key in qtyDrafts ? qtyDrafts[key] : String(qty);
   }
   function onAddItem() { if (!itemInput.trim()) return; if (addItem(g, itemInput)) itemInput = ''; }
-  function onTotalInput(e: Event) {
-    const raw = (e.target as HTMLInputElement).value.replace(/\D/g, '');
-    (e.target as HTMLInputElement).value = raw;
-    const n = raw === '' ? 0 : parseInt(raw, 10);
-    setGroupTotal(g, Number.isFinite(n) ? Math.max(0, n) : 0);
-  }
   function renameGroup(e: Event) {
     const v = (e.target as HTMLInputElement).value;
     if (g.name === v) return;
@@ -89,9 +84,15 @@
     if (added) { pushToast(`已添加 ${added} 个分类`); logOperation(`向「${g.name}」添加 ${added} 个分类`); }
   }
 
-  /* ============================================================
-     ★ H1：转移分类改为 ChoiceDialog
-     ============================================================ */
+  /* ★ v3.7：不良率显示为「分子/分母 = 百分比」 */
+  function rateDisplay(group: Group): string {
+    const denom = product?.inspectionQty || 0;
+    const sum = groupSum(group);
+    if (!denom) return sum > 0 ? '--' : '0%';
+    return `${sum}/${denom} = ${Math.round((sum / denom) * 100)}%`;
+  }
+
+  /* H1：转移分类 ChoiceDialog */
   let transferOpen = $state(false);
   let transferItemName = $state('');
   let transferFromGroupId = $state('');
@@ -105,11 +106,7 @@
         x.id !== transferFromGroupId &&
         !x.items.some((it) => nameKey(it.name) === key),
       )
-      .map((x) => ({
-        value: x.id,
-        label: x.name,
-        meta: `${x.items.length} 项`,
-      }));
+      .map((x) => ({ value: x.id, label: x.name, meta: `${x.items.length} 项` }));
   });
 
   function onTransferItem(itemName: string) {
@@ -286,13 +283,6 @@
   </div>
 
   <div class="group-body">
-    <div class="group-total-row">
-      <span>总数量</span>
-      <input class="group-total" type="text" inputmode="numeric" value={String(g.total)} oninput={onTotalInput} aria-label="分组总数量" />
-      <span>PCS</span>
-      {#if g.totalIsAuto === false}<span class="manual-tag">· 已手改</span>{/if}
-    </div>
-
     <div class="group-toolbar">
       <button class="mini-btn" onclick={onBulkAddItems}>＋ 批量添加</button>
       {#if g.items.length && batchGroupId.value !== g.id}
@@ -352,10 +342,11 @@
       {/each}
     </div>
 
+    <!-- ★ v3.7：不良率使用产品级抽检数量为分母，显示「分子/分母 = 百分比」 -->
     <div class="group-summary">
       <span>分类数：<b class="count-val">{g.items.length}</b></span>
       <span>数量总和：<b>{groupSum(g)}</b></span>
-      <span>不良率：<b class="rate-val">{groupRate(g)}</b></span>
+      <span>不良率：<b class="rate-val">{rateDisplay(g)}</b></span>
     </div>
   </div>
 </div>
@@ -418,7 +409,6 @@
   </div>
 {/if}
 
-<!-- ★ H1：转移分类弹窗 -->
 <ChoiceDialog
   bind:open={transferOpen}
   title="↔ 转移分类"
