@@ -38,36 +38,31 @@
   });
 
   /* ============================================================
-     ★ G2：弹窗互斥管理（方案 A）
-     settings / dataPresets 互斥；其余三个独立
+     ★ G2：弹窗互斥（queueMicrotask 方案）
+     - settings / dataPresets 二选一
+     - 其余三个弹窗独立
      ============================================================ */
   let settingsOpen = $state(false);
   let dataPresetsOpen = $state(false);
   let addProductOpen = $state(false);
   let workTimeOpen = $state(false);
   let shareMenuOpen = $state(false);
-  let switching = false;
 
   function openSettings() {
-    if (switching) return;
     dataPresetsOpen = false;
     settingsOpen = true;
   }
   function openDataPresets() {
-    if (switching) return;
     settingsOpen = false;
     dataPresetsOpen = true;
   }
   function switchDialog(target: 'settings' | 'dataPresets') {
-    if (switching) return;
-    switching = true;
     settingsOpen = false;
     dataPresetsOpen = false;
-    setTimeout(() => {
+    queueMicrotask(() => {
       if (target === 'settings') settingsOpen = true;
       else dataPresetsOpen = true;
-      setTimeout(() => { switching = false; }, 100);
-    }, 200);
+    });
   }
 </script>
 
