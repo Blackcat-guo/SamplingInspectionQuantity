@@ -23,8 +23,9 @@
   let exportOpen = $state(false);
   let importOpen = $state(false);
   let settingsNavOpen = $state(false);
+  let manualNavOpen = $state(false);
 
-  const settingsTabs = [
+  const tabs = [
     { key: 'general', label: '通用' },
     { key: 'display', label: '显示' },
     { key: 'backup', label: '备份与恢复' },
@@ -38,9 +39,12 @@
     () => MANUAL_SECTIONS.find((s) => s.id === manualActive)?.content || '',
   );
 
-  function pickSettingsTab(key: string) {
-    tab = key;
-  }
+  const manualNavItems = $derived(
+    MANUAL_SECTIONS.map((s) => ({ key: s.id, label: s.title })),
+  );
+
+  function pickSettingsTab(key: string) { tab = key; }
+  function pickManualSection(key: string) { manualActive = key; }
 
   function factoryReset() {
     if (!confirm('⚠️ 恢复出厂设置会清空所有数据，确定继续？')) return;
@@ -60,10 +64,13 @@
 </script>
 
 <Dialog bind:open title="⚙️ 设置" subtitle="通用 · 显示 · 备份与恢复 · 操作日志 · 说明书 · 关于" wide>
-  <div class="dp-tabs-wrap">
-    {#each settingsTabs as t (t.key)}
-      <button class="dp-tab" class:active={tab === t.key} onclick={() => (tab = t.key)}>{t.label}</button>
-    {/each}
+  <!-- 主 Tab 行：左侧滚动 + 右侧固定 ≡ -->
+  <div class="dp-tabs-outer">
+    <div class="dp-tabs-scroll">
+      {#each tabs as t (t.key)}
+        <button class="dp-tab" class:active={tab === t.key} onclick={() => (tab = t.key)}>{t.label}</button>
+      {/each}
+    </div>
     <div class="dp-tab-actions">
       <button class="dp-expand-btn" title="Tab 导航" onclick={() => (settingsNavOpen = true)}>≡</button>
     </div>
@@ -218,6 +225,7 @@
 
     {#if tab === 'manual'}
       <div class="manual-layout-vertical">
+        <!-- 说明书章节导航：左侧滚动 + 右侧固定 ≡ -->
         <div class="manual-tabs-wrap">
           <div class="manual-tabs-scroll">
             {#each MANUAL_SECTIONS as sec (sec.id)}
@@ -228,13 +236,16 @@
               >{sec.title}</button>
             {/each}
           </div>
+          <div class="manual-tabs-actions">
+            <button class="dp-expand-btn" title="章节导航" onclick={() => (manualNavOpen = true)}>≡</button>
+          </div>
         </div>
         <article class="manual-content">{@html currentManualHtml}</article>
       </div>
     {/if}
 
     {#if tab === 'about'}
-      <p class="backup-note"><b>版本：</b>v3.4（Svelte 5 重构版）</p>
+      <p class="backup-note"><b>版本：</b>v3.5（Svelte 5 重构版）</p>
       <p class="backup-note">本版本使用 Svelte 5 编译时框架，运行时开销极低，产物体积缩小 60%+。</p>
     {/if}
   </div>
@@ -244,14 +255,23 @@
   </div>
 </Dialog>
 
+<ExportDialog bind:open={exportOpen} />
+<ImportDialog bind:open={importOpen} />
+
 <NavGridDialog
   bind:open={settingsNavOpen}
   title="⚙️ 设置导航"
   subtitle="点击分类直接切换，无需在页面内平铺展开。"
-  items={settingsTabs}
+  items={tabs}
   activeKey={tab}
   onSelect={pickSettingsTab}
 />
 
-<ExportDialog bind:open={exportOpen} />
-<ImportDialog bind:open={importOpen} />
+<NavGridDialog
+  bind:open={manualNavOpen}
+  title="📖 说明书导航"
+  subtitle="点击章节直接跳转。"
+  items={manualNavItems}
+  activeKey={manualActive}
+  onSelect={pickManualSection}
+/>
