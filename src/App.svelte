@@ -19,7 +19,6 @@
   import ConfirmDialog from './components/ConfirmDialog.svelte';
 
   let cleanup: (() => void) | null = null;
-
   onMount(() => {
     cleanup = initApp();
     return () => { if (cleanup) cleanup(); };
@@ -38,41 +37,61 @@
     el.classList.toggle('anim-reduced', app.settings.animationLevel === 'reduced');
   });
 
+  /* ============================================================
+     ★ G2：弹窗互斥管理（方案 A）
+     settings / dataPresets 互斥；其余三个独立
+     ============================================================ */
   let settingsOpen = $state(false);
   let dataPresetsOpen = $state(false);
   let addProductOpen = $state(false);
   let workTimeOpen = $state(false);
   let shareMenuOpen = $state(false);
+  let switching = false;
+
+  function openSettings() {
+    if (switching) return;
+    dataPresetsOpen = false;
+    settingsOpen = true;
+  }
+  function openDataPresets() {
+    if (switching) return;
+    settingsOpen = false;
+    dataPresetsOpen = true;
+  }
+  function switchDialog(target: 'settings' | 'dataPresets') {
+    if (switching) return;
+    switching = true;
+    settingsOpen = false;
+    dataPresetsOpen = false;
+    setTimeout(() => {
+      if (target === 'settings') settingsOpen = true;
+      else dataPresetsOpen = true;
+      setTimeout(() => { switching = false; }, 100);
+    }, 200);
+  }
 </script>
 
-<div
-  class="layout"
-  class:exp-elegant={effectiveLevel() === 'elegant'}
-  class:exp-standard={effectiveLevel() === 'standard'}
-  class:exp-compat={effectiveLevel() === 'compat'}
-  class:compat-mode={effectiveLevel() === 'compat'}
-  class:compact-mode={app.settings.compactMode}
-  class:no-animation={app.settings.animationLevel === 'none'}
-  class:anim-reduced={app.settings.animationLevel === 'reduced'}
->
+<div class="layout" class:exp-elegant={effectiveLevel() === 'elegant'}
+     class:exp-standard={effectiveLevel() === 'standard'}
+     class:exp-compat={effectiveLevel() === 'compat'}
+     class:compat-mode={effectiveLevel() === 'compat'}
+     class:compact-mode={app.settings.compactMode}
+     class:no-animation={app.settings.animationLevel === 'none'}
+     class:anim-reduced={app.settings.animationLevel === 'reduced'}>
   <Sidebar
     onOpenAddProduct={() => (addProductOpen = true)}
-    onOpenSettings={() => (settingsOpen = true)}
+    onOpenSettings={openSettings}
   />
 
   {#if app.sidebarOpen}
-    <div
-      class="overlay show"
-      onclick={() => (app.sidebarOpen = false)}
-      role="presentation"
-    ></div>
+    <div class="overlay show" onclick={() => (app.sidebarOpen = false)} role="presentation"></div>
   {/if}
 
   <main class="main">
     <TopNav
       onOpenSidebar={() => (app.sidebarOpen = true)}
-      onOpenDataPresets={() => (dataPresetsOpen = true)}
-      onOpenSettings={() => (settingsOpen = true)}
+      onOpenDataPresets={openDataPresets}
+      onOpenSettings={openSettings}
       onOpenWorkTime={() => (workTimeOpen = true)}
     />
 
@@ -87,12 +106,10 @@
         <PresetPanel />
         <MergePanel onOpenShare={() => (shareMenuOpen = true)} />
         <OutputPanel />
-
         {#if app.settings.showRecognizeTools !== false}
           <SpeechInput />
           <RecognizePanel />
         {/if}
-
         <GroupList />
       </div>
     {/if}
@@ -102,11 +119,11 @@
 <WorkTimeDialog bind:open={workTimeOpen} />
 <SettingsDialog
   bind:open={settingsOpen}
-  onOpenDataPresets={() => (dataPresetsOpen = true)}
+  onOpenDataPresets={() => switchDialog('dataPresets')}
 />
 <DataPresetsDialog
   bind:open={dataPresetsOpen}
-  onOpenSettings={() => (settingsOpen = true)}
+  onOpenSettings={() => switchDialog('settings')}
 />
 <AddProductDialog bind:open={addProductOpen} />
 <ShareMenu bind:open={shareMenuOpen} />
