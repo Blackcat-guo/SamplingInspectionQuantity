@@ -17,47 +17,30 @@ import { createHistory, CMD } from '../core/history.svelte';
 import * as storage from '../core/storage';
 import { renderTemplate } from '../core/template';
 
-/* ---------------- 状态 ---------------- */
+/* ============================================================
+   状态
+   ============================================================ */
 export interface ToastItem {
-  id: number;
-  msg: string;
-  type: 'success' | 'error' | 'info';
+  id: number; msg: string; type: 'success' | 'error' | 'info';
   action?: { label: string; fn: () => void } | null;
   timer?: ReturnType<typeof setTimeout>;
 }
 
 const defaultSettings = (): Settings => ({
   summaryTemplate: DEFAULT_TPL,
-  showVoice: true,
-  showImageOcr: true,
-  showRecognizeTools: true,
-  experienceLevel: 'auto',
-  animationLevel: 'normal',
-  showZeroQtyItems: true,
-  mergeMultiProductSummary: true,
-  confirmBeforeDelete: true,
-  compactMode: false,
-  fontSize: 'standard',
-  autoBackup: true,
-  showShortcutHints: true,
-  showMainTips: true,
-  showTopNavText: true,
-  bulkAddConfirmThreshold: 5,
-  tempHandling: '',
-  responsiblePersons: [],
-  collapsedGroups: [],
+  showVoice: true, showImageOcr: true, showRecognizeTools: true,
+  experienceLevel: 'auto', animationLevel: 'normal',
+  showZeroQtyItems: true, mergeMultiProductSummary: true,
+  confirmBeforeDelete: true, compactMode: false, fontSize: 'standard',
+  autoBackup: true, showShortcutHints: true, showMainTips: true, showTopNavText: true,
+  bulkAddConfirmThreshold: 5, tempHandling: '',
+  responsiblePersons: [], collapsedGroups: [],
 });
 
 const defaultDataPresets = (): DataPresets => ({
-  suppliers: [],
-  customers: [],
-  incomingQtyPresets: [],
-  processes: [],
-  tempHandlings: [],
-  tempHandlingShortcuts: [],
-  responsiblePersons: [],
-  specialGroups: [],
-  presetGroups: [],
+  suppliers: [], customers: [], incomingQtyPresets: [], processes: [],
+  tempHandlings: [], tempHandlingShortcuts: [], responsiblePersons: [],
+  specialGroups: [], presetGroups: [],
 });
 
 export const app = $state({
@@ -75,14 +58,13 @@ export const app = $state({
 
 const history = createHistory();
 
-/* ---------------- 自定义确认弹窗 ---------------- */
+/* ============================================================
+   自定义确认弹窗
+   ============================================================ */
 export interface ConfirmOptions {
-  title: string;
-  message: string;
-  confirmText?: string;
-  cancelText?: string;
-  danger?: boolean;
-  showDontAsk?: boolean;
+  title: string; message: string;
+  confirmText?: string; cancelText?: string;
+  danger?: boolean; showDontAsk?: boolean;
   dontAskKey?: 'confirmBeforeDelete';
 }
 
@@ -90,11 +72,7 @@ export const confirmState = $state<{
   show: boolean;
   options: ConfirmOptions;
   _resolve: ((v: boolean) => void) | null;
-}>({
-  show: false,
-  options: { title: '', message: '' },
-  _resolve: null,
-});
+}>({ show: false, options: { title: '', message: '' }, _resolve: null });
 
 export function askConfirm(options: ConfirmOptions): Promise<boolean> {
   if (options.showDontAsk && options.dontAskKey) {
@@ -119,7 +97,9 @@ export function resolveConfirm(v: boolean, dontAskAgain = false): void {
   if (r) r(v);
 }
 
-/* ---------------- 保存节流 ---------------- */
+/* ============================================================
+   保存节流
+   ============================================================ */
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let draftTimer: ReturnType<typeof setInterval> | null = null;
 let autoBackupTimer: ReturnType<typeof setTimeout> | null = null;
@@ -129,32 +109,23 @@ const AUTO_BACKUP_MIN_INTERVAL_MS = 30_000;
 
 function buildPayload() {
   return {
-    products: app.products,
-    globalPresets: app.globalPresets,
-    mergeSelectedIds: app.mergeSelectedIds,
-    currentProductId: app.currentProductId,
-    dataPresets: app.dataPresets,
-    settings: app.settings,
-    savedAt: Date.now(),
+    products: app.products, globalPresets: app.globalPresets,
+    mergeSelectedIds: app.mergeSelectedIds, currentProductId: app.currentProductId,
+    dataPresets: app.dataPresets, settings: app.settings, savedAt: Date.now(),
   };
 }
 
 export function scheduleSave(): void {
   draftDirty = true;
   if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    saveTimer = null;
-    flushSave();
-  }, 500);
+  saveTimer = setTimeout(() => { saveTimer = null; flushSave(); }, 500);
 }
 
 export function flushSave(): void {
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
   const payload = buildPayload();
   const res = storage.savePayload(payload as any);
-  if (!res.ok && res.quota) {
-    pushToast('存储空间紧张，已清理滚动备份', 'error', 3200);
-  }
+  if (!res.ok && res.quota) pushToast('存储空间紧张，已清理滚动备份', 'error', 3200);
   if (app.settings.autoBackup) {
     const now = Date.now();
     if (now - lastAutoBackupAt >= AUTO_BACKUP_MIN_INTERVAL_MS) {
@@ -164,13 +135,13 @@ export function flushSave(): void {
   }
 }
 
-/* ---------------- Toast ---------------- */
+/* ============================================================
+   Toast / Log
+   ============================================================ */
 let toastSeq = 0;
 export function pushToast(
-  msg: string,
-  type: 'success' | 'error' | 'info' = 'success',
-  duration = 2200,
-  action: ToastItem['action'] = null,
+  msg: string, type: 'success' | 'error' | 'info' = 'success',
+  duration = 2200, action: ToastItem['action'] = null,
 ): number {
   const id = ++toastSeq;
   const item: ToastItem = { id, msg, type, action, timer: undefined };
@@ -193,9 +164,7 @@ export function dismissToast(id: number): void {
 }
 
 export function runToastAction(t: ToastItem): void {
-  if (t.action?.fn) {
-    try { t.action.fn(); } catch { /* ignore */ }
-  }
+  if (t.action?.fn) { try { t.action.fn(); } catch { /* ignore */ } }
   dismissToast(t.id);
 }
 
@@ -212,16 +181,14 @@ export function clearOperationLogs(): void {
   scheduleSave();
 }
 
-/* ---------------- 计算属性 ---------------- */
+/* ============================================================
+   计算属性
+   ============================================================ */
 export function currentProduct(): Product | null {
   return app.products.find((p) => p.id === app.currentProductId) || app.products[0] || null;
 }
-export function currentGroups(): Group[] {
-  return currentProduct()?.groups ?? [];
-}
-export function currentPresets(): string[] {
-  return currentProduct()?.presets ?? [];
-}
+export function currentGroups(): Group[] { return currentProduct()?.groups ?? []; }
+export function currentPresets(): string[] { return currentProduct()?.presets ?? []; }
 export function normalResponsibles(): Responsible[] {
   return app.dataPresets.responsiblePersons.filter((r) => r.kind !== 'special');
 }
@@ -229,15 +196,15 @@ export function specialResponsibles(): Responsible[] {
   return app.dataPresets.responsiblePersons.filter((r) => r.kind === 'special');
 }
 
-/* ---------------- 体验等级 ---------------- */
+/* ============================================================
+   体验等级
+   ============================================================ */
 export function autoLevel(): 'standard' | 'compat' {
   try {
     const cores = (navigator as any).hardwareConcurrency ?? 4;
     const mem = (navigator as any).deviceMemory ?? 4;
     return cores < 4 || mem < 4 ? 'compat' : 'standard';
-  } catch {
-    return 'standard';
-  }
+  } catch { return 'standard'; }
 }
 export function effectiveLevel(): 'auto' | 'elegant' | 'standard' | 'compat' {
   const lv = app.settings.experienceLevel;
@@ -245,10 +212,10 @@ export function effectiveLevel(): 'auto' | 'elegant' | 'standard' | 'compat' {
   return lv;
 }
 
-/* ---------------- 分组/分类核心操作 ---------------- */
-export function realGroupIndex(g: Group): number {
-  return currentGroups().indexOf(g);
-}
+/* ============================================================
+   分组/分类核心
+   ============================================================ */
+export function realGroupIndex(g: Group): number { return currentGroups().indexOf(g); }
 
 export function syncSamplingToGroups(product: Product): void {
   if (!product) return;
@@ -307,9 +274,7 @@ export function toggleItemByName(g: Group, name: string): void {
     history.pushSnapshot(app.products, p.id);
     g.items.splice(idx, 1);
     scheduleSave();
-  } else {
-    addItem(g, name);
-  }
+  } else addItem(g, name);
 }
 
 export function removeItem(g: Group, index: number): void {
@@ -331,10 +296,7 @@ export function setGroupTotal(g: Group, total: number): void {
   if (from === n && !fromAuto) return;
   g.total = n;
   g.totalIsAuto = false;
-  history.push({
-    t: CMD.TOTAL, pid: p.id, gid: g.id,
-    from, to: n, fromAuto, toAuto: false, label: '修改分组总数量',
-  });
+  history.push({ t: CMD.TOTAL, pid: p.id, gid: g.id, from, to: n, fromAuto, toAuto: false, label: '修改分组总数量' });
   scheduleSave();
 }
 
@@ -363,16 +325,14 @@ export function setProductField(field: string, value: string): void {
 
 export function setProductSupplier(pid: string, value: string): void {
   const p = app.products.find((x) => x.id === pid);
-  if (!p) return;
-  if (p.supplier === value) return;
+  if (!p || p.supplier === value) return;
   p.supplier = value;
   scheduleSave();
   sanitizeMergeSelection();
 }
 export function setProductCustomer(pid: string, value: string): void {
   const p = app.products.find((x) => x.id === pid);
-  if (!p) return;
-  if (p.customer === value) return;
+  if (!p || p.customer === value) return;
   p.customer = value;
   scheduleSave();
   sanitizeMergeSelection();
@@ -388,7 +348,9 @@ export function toggleSample(on: boolean): void {
   scheduleSave();
 }
 
-/* ---------------- 分组 ---------------- */
+/* ============================================================
+   分组操作
+   ============================================================ */
 export function addGroup(raw: string): void {
   const p = currentProduct();
   if (!p || !raw.trim()) return;
@@ -438,10 +400,7 @@ export function addStandardGroups(): void {
   if (!p) return;
   const standards = ['严重', '主要', '次要'];
   const missing = standards.filter((n) => !p.groups.some((g) => g.name === n));
-  if (!missing.length) {
-    pushToast('标准分组已全部存在', 'error');
-    return;
-  }
+  if (!missing.length) { pushToast('标准分组已全部存在', 'error'); return; }
   history.pushSnapshot(app.products, p.id);
   const initTotal = calcSampling(p.incomingQty || 0);
   missing.forEach((name) => {
@@ -485,16 +444,16 @@ export function resetGroup(index: number): void {
   scheduleSave();
 }
 
-export function groupSum(g: Group): number {
-  return g.items.reduce((s, it) => s + it.qty, 0);
-}
+export function groupSum(g: Group): number { return g.items.reduce((s, it) => s + it.qty, 0); }
 export function groupRate(g: Group): string {
   const sum = groupSum(g);
   if (!(g.total > 0)) return '--';
   return Math.round((sum / g.total) * 100) + '%';
 }
 
-/* ---------------- 撤回/恢复 ---------------- */
+/* ============================================================
+   撤回/恢复
+   ============================================================ */
 let applying = false;
 export function undo(): void {
   if (applying) return;
@@ -506,9 +465,7 @@ export function undo(): void {
     history.commitToFuture(e);
     reconcile();
     pushToast('已撤回：' + (e.cmd.label || '上一步操作'));
-  } finally {
-    queueMicrotask(() => { applying = false; });
-  }
+  } finally { queueMicrotask(() => { applying = false; }); }
 }
 export function redo(): void {
   if (applying) return;
@@ -520,9 +477,7 @@ export function redo(): void {
     history.commitToPast(e);
     reconcile();
     pushToast('已恢复：' + (e.cmd.label || '下一步操作'));
-  } finally {
-    queueMicrotask(() => { applying = false; });
-  }
+  } finally { queueMicrotask(() => { applying = false; }); }
 }
 export const canUndo = () => history.canUndo;
 export const canRedo = () => history.canRedo;
@@ -576,11 +531,9 @@ function applyCmd(cmd: any, dir: 'do' | 'undo'): void {
       g.total = dir === 'do' ? cmd.to : cmd.from;
       g.totalIsAuto = auto === false ? false : undefined;
     }
-  } else if (cmd.t === CMD.INC) {
-    p.incomingQty = dir === 'do' ? cmd.to : cmd.from;
-  } else if (cmd.t === CMD.FIELD) {
-    (p as any)[cmd.field!] = dir === 'do' ? cmd.to : cmd.from;
-  } else if (cmd.t === CMD.NAME) {
+  } else if (cmd.t === CMD.INC) p.incomingQty = dir === 'do' ? cmd.to : cmd.from;
+  else if (cmd.t === CMD.FIELD) (p as any)[cmd.field!] = dir === 'do' ? cmd.to : cmd.from;
+  else if (cmd.t === CMD.NAME) {
     const v = dir === 'do' ? cmd.to : cmd.from;
     if (cmd.kind === 'product') p.name = v;
     else if (cmd.kind === 'group' && cmd.gid) {
@@ -599,14 +552,15 @@ function applyCmd(cmd: any, dir: 'do' | 'undo'): void {
 }
 
 function reconcile(): void {
-  if (!app.products.some((p) => p.id === app.currentProductId)) {
+  if (!app.products.some((p) => p.id === app.currentProductId))
     app.currentProductId = app.products[0]?.id ?? '';
-  }
   sanitizeMergeSelection();
   sanitizeGlobalPresetProducts();
 }
 
-/* ---------------- 产品 ---------------- */
+/* ============================================================
+   产品
+   ============================================================ */
 export function switchProduct(id: string): void {
   if (app.currentProductId === id) { app.sidebarOpen = false; return; }
   app.currentProductId = id;
@@ -630,9 +584,7 @@ export function duplicateProduct(id: string): void {
   let name = base, n = 2;
   while (app.products.some((x) => x.name === name)) { name = base + n; n++; }
   copy.name = name;
-  copy.groups = copy.groups.map((g) => ({
-    ...g, id: uid(), items: g.items.map((it) => ({ ...it })),
-  }));
+  copy.groups = copy.groups.map((g) => ({ ...g, id: uid(), items: g.items.map((it) => ({ ...it })) }));
   app.products.push(copy);
   app.currentProductId = copy.id;
   scheduleSave();
@@ -666,7 +618,9 @@ export function removeProduct(id: string): void {
   });
 }
 
-/* ---------------- 汇总选择 ---------------- */
+/* ============================================================
+   汇总选择
+   ============================================================ */
 export function sanitizeMergeSelection(): void {
   const out: string[] = [];
   for (const id of app.mergeSelectedIds) {
@@ -675,11 +629,8 @@ export function sanitizeMergeSelection(): void {
     if (!out.length) { out.push(id); continue; }
     const f = app.products.find((x) => x.id === out[0]);
     if (!f) { out.push(id); continue; }
-    if (
-      (p.supplier || '').trim() === (f.supplier || '').trim() &&
-      (p.customer || '').trim() === (f.customer || '').trim()
-    )
-      out.push(id);
+    if ((p.supplier || '').trim() === (f.supplier || '').trim() &&
+        (p.customer || '').trim() === (f.customer || '').trim()) out.push(id);
   }
   if (out.length !== app.mergeSelectedIds.length) app.mergeSelectedIds = out;
 }
@@ -724,14 +675,9 @@ export function canSelectProduct(p: Product): boolean {
   const list = app.products.filter((x) => app.mergeSelectedIds.includes(x.id));
   if (!list.length) return true;
   const first = list[0];
-  return (
-    (p.supplier || '') === (first.supplier || '') &&
-    (p.customer || '') === (first.customer || '')
-  );
+  return (p.supplier || '') === (first.supplier || '') && (p.customer || '') === (first.customer || '');
 }
-export function isMergeSelected(id: string): boolean {
-  return app.mergeSelectedIds.includes(id);
-}
+export function isMergeSelected(id: string): boolean { return app.mergeSelectedIds.includes(id); }
 export function mergedProducts(): Product[] {
   return app.products.filter((p) => app.mergeSelectedIds.includes(p.id));
 }
@@ -756,7 +702,9 @@ export function groupedProducts(): { supplier: string; customer: string; list: P
   return out;
 }
 
-/* ---------------- 输出文本 ---------------- */
+/* ============================================================
+   输出文本
+   ============================================================ */
 export function buildOutputText(withLabels: boolean): string {
   const p = currentProduct();
   if (!p) return '';
@@ -766,9 +714,7 @@ export function buildOutputText(withLabels: boolean): string {
     const items = g.items.filter((it) => showZero || it.qty > 0).map((it) => `${it.name}${it.qty}PCS`);
     if (!items.length) return;
     const sum = g.items.reduce((s, it) => s + it.qty, 0);
-    const rate = g.total > 0
-      ? `不良率${Math.round((sum / g.total) * 100)}%`
-      : sum > 0 ? '不良率--' : '不良率0%';
+    const rate = g.total > 0 ? `不良率${Math.round((sum / g.total) * 100)}%` : sum > 0 ? '不良率--' : '不良率0%';
     parts.push(withLabels ? `${g.name}：${items.join('，')}，${rate}` : `${items.join('，')}，${rate}`);
   });
   const body = parts.join('，');
@@ -776,9 +722,8 @@ export function buildOutputText(withLabels: boolean): string {
   const suf = (p.suffix || '').trim();
   const totals = p.groups.map((g) => g.total);
   const samplingText = buildSamplingLineFromTotals(totals, withLabels, p.incomingQty || 0);
-  if (!body && !pre && !suf && !samplingText) {
+  if (!body && !pre && !suf && !samplingText)
     return withLabels ? '暂无分类或数量，请先添加分组分类' : '';
-  }
   if (withLabels) {
     const lines: string[] = [];
     if (pre) lines.push(pre);
@@ -795,11 +740,7 @@ export function buildOutputText(withLabels: boolean): string {
   return segs.join('，');
 }
 
-export function buildSamplingLineFromTotals(
-  totals: number[],
-  withLabels: boolean,
-  incomingQty = 0,
-): string {
+export function buildSamplingLineFromTotals(totals: number[], withLabels: boolean, incomingQty = 0): string {
   const valid = totals.filter((t) => t > 0);
   if (!valid.length) return '';
   const unique = [...new Set(valid)];
@@ -811,15 +752,8 @@ export function buildSamplingLineFromTotals(
     if (isFull) text = withLabels ? `全检数量：${qty}PCS` : `全检${qty}PCS`;
     else text = withLabels ? `抽检数量：${qty}PCS` : `抽检${qty}PCS`;
   } else {
-    if (isFull) {
-      text = withLabels
-        ? `全检数量合计：${sum}PCS（各组分别为 ${valid.join('、')}）`
-        : `全检合计${sum}PCS`;
-    } else {
-      text = withLabels
-        ? `抽检数量合计：${sum}PCS（各组分别为 ${valid.join('、')}）`
-        : `抽检合计${sum}PCS`;
-    }
+    if (isFull) text = withLabels ? `全检数量合计：${sum}PCS（各组分别为 ${valid.join('、')}）` : `全检合计${sum}PCS`;
+    else text = withLabels ? `抽检数量合计：${sum}PCS（各组分别为 ${valid.join('、')}）` : `抽检合计${sum}PCS`;
   }
   return text + (text ? ',' : '');
 }
@@ -843,7 +777,6 @@ function computeMergedSummary(list: Product[], shouldMerge: boolean, withLabels:
   const totalSampling = allTotals.reduce((a, b) => a + b, 0);
   const isFull = totalIncoming > 0 && totalSampling === totalIncoming;
   let samplingLine = '', summaryText = '';
-
   if (shouldMerge) {
     if (sameSampling) {
       const samp = uniqueTotals.length ? uniqueTotals[0] : 0;
@@ -855,31 +788,23 @@ function computeMergedSummary(list: Product[], shouldMerge: boolean, withLabels:
       const sum = allTotals.reduce((a, b) => a + b, 0);
       if (sum > 0) samplingLine = isFull ? `全检合计${sum}PCS,` : `抽检合计${sum}PCS,`;
     }
-    const groupMap = new Map<
-      string,
-      { totalSampling: number; items: Map<string, { name: string; qty: number }>; orderedKeys: string[] }
-    >();
+    const groupMap = new Map<string, { totalSampling: number; items: Map<string, { name: string; qty: number }>; orderedKeys: string[] }>();
     const orderedNames: string[] = [];
-    list.forEach((p) =>
-      p.groups.forEach((g) => {
-        const gname = g.name || '未命名分组';
-        if (!groupMap.has(gname)) {
-          groupMap.set(gname, { totalSampling: 0, items: new Map(), orderedKeys: [] });
-          orderedNames.push(gname);
-        }
-        const ge = groupMap.get(gname)!;
-        ge.totalSampling += g.total || 0;
-        g.items.forEach((it) => {
-          if (!showZero && it.qty <= 0) return;
-          const k = nameKey(it.name);
-          if (!ge.items.has(k)) {
-            ge.items.set(k, { name: it.name, qty: 0 });
-            ge.orderedKeys.push(k);
-          }
-          ge.items.get(k)!.qty += it.qty;
-        });
-      }),
-    );
+    list.forEach((p) => p.groups.forEach((g) => {
+      const gname = g.name || '未命名分组';
+      if (!groupMap.has(gname)) {
+        groupMap.set(gname, { totalSampling: 0, items: new Map(), orderedKeys: [] });
+        orderedNames.push(gname);
+      }
+      const ge = groupMap.get(gname)!;
+      ge.totalSampling += g.total || 0;
+      g.items.forEach((it) => {
+        if (!showZero && it.qty <= 0) return;
+        const k = nameKey(it.name);
+        if (!ge.items.has(k)) { ge.items.set(k, { name: it.name, qty: 0 }); ge.orderedKeys.push(k); }
+        ge.items.get(k)!.qty += it.qty;
+      });
+    }));
     const lines: string[] = [];
     orderedNames.forEach((gname) => {
       const ge = groupMap.get(gname)!;
@@ -887,20 +812,13 @@ function computeMergedSummary(list: Product[], shouldMerge: boolean, withLabels:
       let totalBad = 0;
       ge.orderedKeys.forEach((k) => {
         const e = ge.items.get(k)!;
-        if (showZero || e.qty > 0) {
-          parts.push(`${e.name}${e.qty}PCS`);
-          totalBad += e.qty;
-        }
+        if (showZero || e.qty > 0) { parts.push(`${e.name}${e.qty}PCS`); totalBad += e.qty; }
       });
       if (!parts.length) return;
-      const rate = ge.totalSampling > 0
-        ? `不良率${Math.round((totalBad / ge.totalSampling) * 100)}%`
-        : totalBad > 0 ? '不良率--' : '不良率0%';
+      const rate = ge.totalSampling > 0 ? `不良率${Math.round((totalBad / ge.totalSampling) * 100)}%` : totalBad > 0 ? '不良率--' : '不良率0%';
       lines.push(withLabels ? `${gname}：${parts.join('，')}，${rate}` : `${parts.join('，')}，${rate}`);
     });
-    summaryText = lines.length
-      ? lines.join(withLabels ? '\n' : '，')
-      : (showZero ? '暂无分类数据' : '');
+    summaryText = lines.length ? lines.join(withLabels ? '\n' : '，') : (showZero ? '暂无分类数据' : '');
   } else {
     samplingLine = '';
     const lines: string[] = [];
@@ -915,14 +833,10 @@ function computeMergedSummary(list: Product[], shouldMerge: boolean, withLabels:
       else inspectText = pFull ? `全检合计${pSum}PCS` : `抽检合计${pSum}PCS`;
       const gp: string[] = [];
       p.groups.forEach((g) => {
-        const items = g.items
-          .filter((it) => showZero || it.qty > 0)
-          .map((it) => `${it.name}${it.qty}PCS`);
+        const items = g.items.filter((it) => showZero || it.qty > 0).map((it) => `${it.name}${it.qty}PCS`);
         if (!items.length) return;
         const sum = g.items.reduce((s, it) => s + it.qty, 0);
-        const rate = g.total > 0
-          ? `不良率${Math.round((sum / g.total) * 100)}%`
-          : sum > 0 ? '不良率--' : '不良率0%';
+        const rate = g.total > 0 ? `不良率${Math.round((sum / g.total) * 100)}%` : sum > 0 ? '不良率--' : '不良率0%';
         gp.push(withLabels ? `${g.name}：${items.join('，')}，${rate}` : `${items.join('，')}，${rate}`);
       });
       lines.push(`${p.name}，${inspectText}，${gp.length ? gp.join('，') : '暂无分类数据'}`);
@@ -948,14 +862,12 @@ export function buildMergedText(withLabels: boolean): string {
   const responsible = app.settings.responsiblePersons.map((n) => '@' + n).join(' ');
   const tpl = app.settings.summaryTemplate || DEFAULT_TPL;
   let out = renderTemplate(tpl, {
-    customer, supplier, process, lotLines, samplingLine,
-    summary: summaryText,
+    customer, supplier, process, lotLines, samplingLine, summary: summaryText,
     totalIncoming: String(totalIncoming), totalSampling: String(totalSampling),
     tempHandling, responsible,
   });
   if (!samplingLine) out = out.replace(/\n[ \t]*\n/g, '\n');
-  const dropIfEmpty = (text: string, re: RegExp) =>
-    text.split('\n').filter((l) => !re.test(l)).join('\n');
+  const dropIfEmpty = (text: string, re: RegExp) => text.split('\n').filter((l) => !re.test(l)).join('\n');
   if (!tempHandling) out = dropIfEmpty(out, /^\s*临时处理方式\s*[:：]?\s*$/);
   if (!responsible) out = dropIfEmpty(out, /^\s*负责人\s*[:：]?\s*$/);
   if (!customer) out = dropIfEmpty(out, /^\s*客户\s*[:：]?\s*$/);
@@ -973,20 +885,16 @@ export function templatePreviewHtml(): string {
   const process = [...new Set(target.map((p) => p.process || ''))].filter(Boolean).join('、');
   const tempHandling = (app.settings.tempHandling || '').trim();
   const responsible = app.settings.responsiblePersons.map((n) => '@' + n).join(' ');
-  const lotLines = target.length
-    ? target.map((p) => `${p.name}，来料${p.incomingQty || 0}PCS`).join('\n')
-    : '';
+  const lotLines = target.length ? target.map((p) => `${p.name}，来料${p.incomingQty || 0}PCS`).join('\n') : '';
   const shouldMerge = app.settings.mergeMultiProductSummary !== false;
   const { samplingLine, summaryText } = computeMergedSummary(target, shouldMerge, false);
   const totalIncoming = target.reduce((s, p) => s + (p.incomingQty || 0), 0);
   const totalSampling = target.flatMap((p) => p.groups.map((g) => g.total)).reduce((a, b) => a + b, 0);
   const vals: Record<string, string> = {
-    customer, supplier, process,
-    tempHandling, responsible, lotLines,
+    customer, supplier, process, tempHandling, responsible, lotLines,
     samplingLine: samplingLine || '（无抽检数据）',
     summary: summaryText || '（暂无分组/分类数据，请先录入）',
-    totalIncoming: String(totalIncoming),
-    totalSampling: String(totalSampling),
+    totalIncoming: String(totalIncoming), totalSampling: String(totalSampling),
   };
   const out: string[] = [];
   let i = 0;
@@ -1001,71 +909,41 @@ export function templatePreviewHtml(): string {
       const v = vals[key];
       const cls = !v ? 'ph-empty' : 'ph-filled';
       out.push(`<span class="${cls}">${escapeHtml(v || '（空）')}</span>`);
-    } else {
-      out.push(escapeHtml(tpl.slice(open, close + 1)));
-    }
+    } else out.push(escapeHtml(tpl.slice(open, close + 1)));
     i = close + 1;
   }
   return out.join('');
 }
 
-/* ---------------- 数据预设 ---------------- */
+/* ============================================================
+   数据预设 CRUD
+   ============================================================ */
 export function addDataPreset(kind: string, value: any): boolean {
   const dp = app.dataPresets;
   if (kind === 'supplier') {
     const v = String(value).trim();
-    if (!v) return false;
-    if (dp.suppliers.some((x) => nameKey(x) === nameKey(v))) {
-      pushToast('已存在同名供应商', 'error');
-      return false;
-    }
-    dp.suppliers.push(v);
-    scheduleSave();
-    return true;
+    if (!v || dp.suppliers.some((x) => nameKey(x) === nameKey(v))) { if (v) pushToast('已存在同名供应商', 'error'); return false; }
+    dp.suppliers.push(v); scheduleSave(); return true;
   }
   if (kind === 'customer') {
     const v = String(value).trim();
-    if (!v) return false;
-    if (dp.customers.some((x) => nameKey(x.name) === nameKey(v))) {
-      pushToast('已存在同名客户', 'error');
-      return false;
-    }
-    dp.customers.push({ id: uid(), name: v, responsibleIds: [] });
-    scheduleSave();
-    return true;
+    if (!v || dp.customers.some((x) => nameKey(x.name) === nameKey(v))) { if (v) pushToast('已存在同名客户', 'error'); return false; }
+    dp.customers.push({ id: uid(), name: v, responsibleIds: [] }); scheduleSave(); return true;
   }
   if (kind === 'incoming') {
     const n = clampInt(value, 0);
-    if (n <= 0) return false;
-    if (dp.incomingQtyPresets.includes(n)) {
-      pushToast('已存在相同数量', 'error');
-      return false;
-    }
-    dp.incomingQtyPresets.push(n);
-    scheduleSave();
-    return true;
+    if (n <= 0 || dp.incomingQtyPresets.includes(n)) { if (n > 0) pushToast('已存在相同数量', 'error'); return false; }
+    dp.incomingQtyPresets.push(n); scheduleSave(); return true;
   }
   if (kind === 'process') {
     const v = String(value).trim();
-    if (!v) return false;
-    if (dp.processes.some((x) => nameKey(x) === nameKey(v))) {
-      pushToast('已存在同名工序', 'error');
-      return false;
-    }
-    dp.processes.push(v);
-    scheduleSave();
-    return true;
+    if (!v || dp.processes.some((x) => nameKey(x) === nameKey(v))) { if (v) pushToast('已存在同名工序', 'error'); return false; }
+    dp.processes.push(v); scheduleSave(); return true;
   }
   if (kind === 'tempHandling') {
     const v = String(value).trim();
-    if (!v) return false;
-    if (dp.tempHandlings.some((x) => nameKey(x) === nameKey(v))) {
-      pushToast('已存在同名', 'error');
-      return false;
-    }
-    dp.tempHandlings.push(v);
-    scheduleSave();
-    return true;
+    if (!v || dp.tempHandlings.some((x) => nameKey(x) === nameKey(v))) { if (v) pushToast('已存在同名', 'error'); return false; }
+    dp.tempHandlings.push(v); scheduleSave(); return true;
   }
   return false;
 }
@@ -1078,7 +956,6 @@ export function removeCustomerById(id: string): void {
   app.dataPresets.customers.splice(idx, 1);
   scheduleSave();
 }
-
 export function removeSupplierByName(name: string): void {
   const idx = app.dataPresets.suppliers.findIndex((x) => x === name);
   if (idx < 0) return;
@@ -1086,44 +963,35 @@ export function removeSupplierByName(name: string): void {
   app.dataPresets.suppliers.splice(idx, 1);
   scheduleSave();
 }
-
 export function renameSupplier(idx: number, value: string): void {
   const old = app.dataPresets.suppliers[idx];
   if (old === undefined) return;
   const v = value.trim();
   if (!v) return;
-  if (app.dataPresets.suppliers.some((x, i) => i !== idx && nameKey(x) === nameKey(v))) {
-    pushToast('已存在同名供应商', 'error');
-    return;
-  }
+  if (app.dataPresets.suppliers.some((x, i) => i !== idx && nameKey(x) === nameKey(v))) { pushToast('已存在同名供应商', 'error'); return; }
   if (old === v) return;
   app.products.forEach((p) => { if (p.supplier === old) p.supplier = v; });
   app.dataPresets.suppliers[idx] = v;
   scheduleSave();
   sanitizeMergeSelection();
 }
-
 export function renameCustomerById(id: string, value: string): void {
   const c = app.dataPresets.customers.find((x) => x.id === id);
   if (!c) return;
   const v = value.trim();
   if (!v) return;
-  if (app.dataPresets.customers.some((x) => x.id !== id && nameKey(x.name) === nameKey(v))) {
-    pushToast('已存在同名客户', 'error');
-    return;
-  }
+  if (app.dataPresets.customers.some((x) => x.id !== id && nameKey(x.name) === nameKey(v))) { pushToast('已存在同名客户', 'error'); return; }
   if (c.name === v) return;
   app.products.forEach((p) => { if (p.customer === c.name) p.customer = v; });
   c.name = v;
   scheduleSave();
   sanitizeMergeSelection();
 }
+export function renameCustomer(id: string, value: string): void { renameCustomerById(id, value); }
 
-export function renameCustomer(id: string, value: string): void {
-  renameCustomerById(id, value);
-}
-
-/* ---------------- 清理 ---------------- */
+/* ============================================================
+   清理
+   ============================================================ */
 export function cleanupOrphanData(): void {
   cleanupOrphanProductBindings();
   const usedCust = new Set(app.products.map((p) => p.customer).filter(Boolean));
@@ -1134,8 +1002,7 @@ export function cleanupOrphanData(): void {
   const usedSup = new Set(app.products.map((p) => p.supplier).filter(Boolean));
   const beforeSup = app.dataPresets.suppliers.length;
   app.dataPresets.suppliers = app.dataPresets.suppliers.filter((s) => usedSup.has(s));
-  const removed =
-    beforeCust - app.dataPresets.customers.length + (beforeSup - app.dataPresets.suppliers.length);
+  const removed = beforeCust - app.dataPresets.customers.length + (beforeSup - app.dataPresets.suppliers.length);
   scheduleSave();
   pushToast(removed > 0 ? `已清理 ${removed} 项孤儿数据` : '没有可清理的孤儿数据');
 }
@@ -1157,12 +1024,12 @@ export function clearLocalCache(): void {
     stale.forEach((k) => { try { localStorage.removeItem(k); } catch { /* ignore */ } });
     scheduleSave();
     pushToast('已清理本地缓存');
-  } catch {
-    pushToast('清理失败', 'error');
-  }
+  } catch { pushToast('清理失败', 'error'); }
 }
 
-/* ---------------- 转移 ---------------- */
+/* ============================================================
+   转移
+   ============================================================ */
 export function transferItemToGroup(fromG: Group, itemName: string, toG: Group): boolean {
   const p = currentProduct();
   if (!p) return false;
@@ -1181,28 +1048,27 @@ export function transferItemToGroup(fromG: Group, itemName: string, toG: Group):
   return true;
 }
 
-/* ---------------- 全局设置 ---------------- */
+/* ============================================================
+   全局设置
+   ============================================================ */
 export function setSetting<K extends keyof Settings>(key: K, value: Settings[K]): void {
   app.settings[key] = value;
   scheduleSave();
 }
-
 export function setExperience(level: Settings['experienceLevel']): void {
   if (app.settings.experienceLevel === level) return;
   app.settings.experienceLevel = level;
   scheduleSave();
-  pushToast(
-    '体验等级：' +
-      (level === 'auto' ? '自动' : level === 'elegant' ? '优雅' : level === 'standard' ? '标准' : '兼容'),
-  );
+  pushToast('体验等级：' + (level === 'auto' ? '自动' : level === 'elegant' ? '优雅' : level === 'standard' ? '标准' : '兼容'));
 }
 
-/* ---------------- 主题 ---------------- */
+/* ============================================================
+   主题
+   ============================================================ */
 export function applyThemeEffective(): void {
-  const effective: 'light' | 'dark' =
-    app.themeMode === 'auto'
-      ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-      : app.themeMode;
+  const effective: 'light' | 'dark' = app.themeMode === 'auto'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : app.themeMode;
   document.documentElement.dataset.theme = effective;
 }
 export function setThemeMode(m: 'auto' | 'light' | 'dark'): void {
@@ -1215,7 +1081,9 @@ export function applyFontSize(): void {
   document.documentElement.style.setProperty('--font-size-base', map[app.settings.fontSize] || '14px');
 }
 
-/* ---------------- 加载/初始化 ---------------- */
+/* ============================================================
+   加载/初始化
+   ============================================================ */
 export function loadFromStorage(): void {
   const payload = storage.loadPayload();
   if (payload) { applyPayload(payload); return; }
@@ -1229,8 +1097,7 @@ export function applyPayload(payload: any): void {
   app.products = (Array.isArray(payload?.products) ? payload.products : []).map(normalizeProduct);
   app.globalPresets = cleanGlobalPresets(payload?.globalPresets || []);
   app.mergeSelectedIds = Array.isArray(payload?.mergeSelectedIds)
-    ? payload.mergeSelectedIds.filter((x: unknown) => typeof x === 'string')
-    : [];
+    ? payload.mergeSelectedIds.filter((x: unknown) => typeof x === 'string') : [];
   const dp = (payload && typeof payload === 'object' && payload.dataPresets) ? payload.dataPresets : {};
   app.dataPresets = {
     suppliers: cleanStringList(dp.suppliers),
@@ -1245,15 +1112,11 @@ export function applyPayload(payload: any): void {
   };
   const s = (payload && typeof payload === 'object' && payload.settings) ? payload.settings : {};
   const tpl = (typeof s.summaryTemplate === 'string' && s.summaryTemplate.trim())
-    ? (LEGACY_TPLS.includes(s.summaryTemplate) ? DEFAULT_TPL : s.summaryTemplate)
-    : DEFAULT_TPL;
-  const migratedShowRecognizeTools: boolean =
-    typeof s.showRecognizeTools === 'boolean'
-      ? s.showRecognizeTools
-      : (s.showVoice !== false || s.showImageOcr !== false);
+    ? (LEGACY_TPLS.includes(s.summaryTemplate) ? DEFAULT_TPL : s.summaryTemplate) : DEFAULT_TPL;
+  const migratedShowRecognizeTools: boolean = typeof s.showRecognizeTools === 'boolean'
+    ? s.showRecognizeTools : (s.showVoice !== false || s.showImageOcr !== false);
   Object.assign(app.settings, {
-    ...defaultSettings(),
-    summaryTemplate: tpl,
+    ...defaultSettings(), summaryTemplate: tpl,
     showVoice: s.showVoice !== false,
     showImageOcr: s.showImageOcr !== false,
     showRecognizeTools: migratedShowRecognizeTools,
@@ -1261,8 +1124,7 @@ export function applyPayload(payload: any): void {
     mergeMultiProductSummary: s.mergeMultiProductSummary !== false,
     animationLevel: ['normal', 'reduced', 'none'].includes(s.animationLevel) ? s.animationLevel : 'normal',
     experienceLevel: ['auto', 'elegant', 'standard', 'compat'].includes(s.experienceLevel)
-      ? s.experienceLevel
-      : (s.compatMode === 'on' ? 'compat' : 'auto'),
+      ? s.experienceLevel : (s.compatMode === 'on' ? 'compat' : 'auto'),
     confirmBeforeDelete: s.confirmBeforeDelete !== false,
     compactMode: s.compactMode === true,
     fontSize: ['small', 'standard', 'large'].includes(s.fontSize) ? s.fontSize : 'standard',
@@ -1270,20 +1132,13 @@ export function applyPayload(payload: any): void {
     showShortcutHints: s.showShortcutHints !== false,
     showMainTips: s.showMainTips !== false,
     showTopNavText: s.showTopNavText !== false,
-    bulkAddConfirmThreshold: Number.isFinite(Number(s.bulkAddConfirmThreshold))
-      ? clampInt(s.bulkAddConfirmThreshold, 0, 9999)
-      : 5,
+    bulkAddConfirmThreshold: Number.isFinite(Number(s.bulkAddConfirmThreshold)) ? clampInt(s.bulkAddConfirmThreshold, 0, 9999) : 5,
     tempHandling: typeof s.tempHandling === 'string' ? s.tempHandling : '',
-    responsiblePersons: Array.isArray(s.responsiblePersons)
-      ? s.responsiblePersons.filter((x: unknown) => typeof x === 'string')
-      : [],
-    collapsedGroups: Array.isArray(s.collapsedGroups)
-      ? s.collapsedGroups.filter((x: unknown) => typeof x === 'string')
-      : [],
+    responsiblePersons: Array.isArray(s.responsiblePersons) ? s.responsiblePersons.filter((x: unknown) => typeof x === 'string') : [],
+    collapsedGroups: Array.isArray(s.collapsedGroups) ? s.collapsedGroups.filter((x: unknown) => typeof x === 'string') : [],
   });
   const wantId = payload?.currentProductId;
-  app.currentProductId =
-    wantId && app.products.some((p) => p.id === wantId) ? wantId : app.products[0]?.id ?? '';
+  app.currentProductId = wantId && app.products.some((p) => p.id === wantId) ? wantId : app.products[0]?.id ?? '';
   sanitizeGlobalPresetProducts();
   cleanupOrphanProductBindings();
   sanitizeMergeSelection();
@@ -1298,32 +1153,21 @@ export function initApp(): () => void {
   const mq = window.matchMedia('(prefers-color-scheme: dark)');
   const onChange = () => { if (app.themeMode === 'auto') applyThemeEffective(); };
   mq.addEventListener('change', onChange);
-
   loadFromStorage();
   applyFontSize();
-
   const draft = storage.readDraft();
   if (draft && draft.at > Date.now() - 1000 * 60 * 60 * 24 * 7) {
-    if (confirm(`检测到上次未保存的草稿（共 ${(draft.products || []).length} 个产品），是否恢复？`)) {
-      applyPayload(draft);
-    }
+    if (confirm(`检测到上次未保存的草稿（共 ${(draft.products || []).length} 个产品），是否恢复？`)) applyPayload(draft);
     storage.clearDraft();
   }
-
   draftTimer = setInterval(() => {
-    if (draftDirty) {
-      draftDirty = false;
-      storage.saveDraft({ ...buildPayload(), at: Date.now() } as any);
-    }
+    if (draftDirty) { draftDirty = false; storage.saveDraft({ ...buildPayload(), at: Date.now() } as any); }
   }, 30_000);
-
   history.reset(app.products);
-
   const onVis = () => { if (document.visibilityState === 'hidden') flushSave(); };
   window.addEventListener('visibilitychange', onVis);
   window.addEventListener('pagehide', flushSave);
   window.addEventListener('beforeunload', flushSave);
-
   return () => {
     mq.removeEventListener('change', onChange);
     window.removeEventListener('visibilitychange', onVis);
@@ -1345,37 +1189,30 @@ export type {
   SpecialGroup, PresetGroup, GlobalPreset, Shortcut,
 };
 
-/* ---------------- UI 状态 ---------------- */
+/* ============================================================
+   UI 状态
+   ============================================================ */
 export const uiState = $state({
-  expandedCustomerProductsId: '',
-  expandedSupplierProductsName: '',
-  productPickerFilter: '',
-  expandedCustomerId: '',
+  expandedCustomerProductsId: '', expandedSupplierProductsName: '',
+  productPickerFilter: '', expandedCustomerId: '',
 });
-
-export function setProductPickerFilter(v: string): void {
-  uiState.productPickerFilter = v;
-}
-
+export function setProductPickerFilter(v: string): void { uiState.productPickerFilter = v; }
 export function toggleCustomerProducts(id: string): void {
   uiState.expandedCustomerProductsId = uiState.expandedCustomerProductsId === id ? '' : id;
   uiState.expandedSupplierProductsName = '';
   uiState.productPickerFilter = '';
 }
-
 export function toggleSupplierProducts(name: string): void {
   uiState.expandedSupplierProductsName = uiState.expandedSupplierProductsName === name ? '' : name;
   uiState.expandedCustomerProductsId = '';
   uiState.productPickerFilter = '';
 }
-
 export function getFilteredProductsForPicker() {
   const q = uiState.productPickerFilter.trim().toLowerCase();
   let list = app.products;
   if (q) list = list.filter((p) => String(p.name).toLowerCase().includes(q));
   return sortNatural(list, (p) => p.name);
 }
-
 export function toggleCustomerProduct(c: any, pid: string, checked: boolean): void {
   const p = app.products.find((x) => x.id === pid);
   if (!p) return;
@@ -1383,7 +1220,6 @@ export function toggleCustomerProduct(c: any, pid: string, checked: boolean): vo
   else if ((p.customer || '') === c.name) setProductCustomer(pid, '');
   scheduleSave();
 }
-
 export function toggleSupplierProduct(name: string, pid: string, checked: boolean): void {
   const p = app.products.find((x) => x.id === pid);
   if (!p) return;
@@ -1391,67 +1227,56 @@ export function toggleSupplierProduct(name: string, pid: string, checked: boolea
   else if ((p.supplier || '') === name) setProductSupplier(pid, '');
   scheduleSave();
 }
-
 export function selectAllProductsForCustomer(c: any, on: boolean): void {
   if (on) app.products.forEach((p) => setProductCustomer(p.id, c.name));
   else app.products.forEach((p) => { if ((p.customer || '') === c.name) setProductCustomer(p.id, ''); });
   scheduleSave();
 }
-
 export function selectAllProductsForSupplier(name: string, on: boolean): void {
   if (on) app.products.forEach((p) => setProductSupplier(p.id, name));
   else app.products.forEach((p) => { if ((p.supplier || '') === name) setProductSupplier(p.id, ''); });
   scheduleSave();
 }
-
 export function countSupplierProducts(name: string): number {
   return app.products.filter((p) => (p.supplier || '') === name).length;
 }
-
 export function countCustomerProducts(name: string): number {
   return app.products.filter((p) => (p.customer || '') === name).length;
 }
-
 export function toggleCustomerResp(id: string): void {
   uiState.expandedCustomerId = uiState.expandedCustomerId === id ? '' : id;
   uiState.expandedCustomerProductsId = '';
 }
-
 export function toggleCustomerRespFor(c: any, respId: string): void {
   const ids = c.responsibleIds.slice();
   const idx = ids.indexOf(respId);
-  if (idx >= 0) ids.splice(idx, 1);
-  else ids.push(respId);
+  if (idx >= 0) ids.splice(idx, 1); else ids.push(respId);
   c.responsibleIds = ids;
   scheduleSave();
 }
 
-/* ---------------- 分组批量管理 ---------------- */
+/* ============================================================
+   分组批量管理
+   ============================================================ */
 export const groupSelection = $state<Record<string, string[]>>({});
 export const batchGroupId = $state<{ value: string }>({ value: '' });
-
 export function enterBatchItems(gid: string): void {
   batchGroupId.value = gid;
   groupSelection[gid] = [];
 }
-
 export function cancelBatchItems(): void {
   if (batchGroupId.value) groupSelection[batchGroupId.value] = [];
   batchGroupId.value = '';
 }
-
 export function toggleItemSelect(gid: string, itemName: string): void {
   if (!groupSelection[gid]) groupSelection[gid] = [];
   const arr = groupSelection[gid];
   const i = arr.indexOf(itemName);
-  if (i >= 0) arr.splice(i, 1);
-  else arr.push(itemName);
+  if (i >= 0) arr.splice(i, 1); else arr.push(itemName);
 }
-
 export function toggleAllItems(gid: string, checked: boolean, items: any[]): void {
   groupSelection[gid] = checked ? items.map((it) => it.name) : [];
 }
-
 export function batchDeleteItems(g: any): void {
   const sel = groupSelection[g.id] || [];
   if (!sel.length) return;
@@ -1468,42 +1293,30 @@ export function batchDeleteItems(g: any): void {
 }
 
 export const bulkQtyDialog = $state({
-  show: false,
-  gid: '',
-  mode: 'multiply' as 'multiply' | 'set',
-  value: '2',
+  show: false, gid: '', mode: 'multiply' as 'multiply' | 'set', value: '2',
 });
-
 export function openBulkQtyDialog(gid: string): void {
   const sel = groupSelection[gid] || [];
-  if (!sel.length) {
-    pushToast('请先勾选要修改的分类', 'error');
-    return;
-  }
+  if (!sel.length) { pushToast('请先勾选要修改的分类', 'error'); return; }
   bulkQtyDialog.gid = gid;
   bulkQtyDialog.mode = 'multiply';
   bulkQtyDialog.value = '2';
   bulkQtyDialog.show = true;
 }
-
 export function closeBulkQtyDialog(): void {
   bulkQtyDialog.show = false;
   bulkQtyDialog.gid = '';
 }
-
 export function applyBulkQty(): void {
   const p = currentProduct();
   const g = p?.groups.find((x) => x.id === bulkQtyDialog.gid);
   if (!p || !g) { closeBulkQtyDialog(); return; }
   const sel = groupSelection[bulkQtyDialog.gid] || [];
   if (!sel.length) { closeBulkQtyDialog(); return; }
-
   const n = Number(bulkQtyDialog.value);
   if (!bulkQtyDialog.value.trim() || !Number.isFinite(n) || n < 0) {
-    pushToast('请输入有效的数值', 'error');
-    return;
+    pushToast('请输入有效的数值', 'error'); return;
   }
-
   const set = new Set(sel);
   const changes: { item: any; from: number; to: number }[] = [];
   g.items.forEach((it) => {
@@ -1512,12 +1325,7 @@ export function applyBulkQty(): void {
     const nv = clampInt(bulkQtyDialog.mode === 'multiply' ? Math.round(oldV * n) : Math.round(n), 0);
     if (nv !== oldV) changes.push({ item: it, from: oldV, to: nv });
   });
-
-  if (!changes.length) {
-    closeBulkQtyDialog();
-    pushToast('数量没有变化');
-    return;
-  }
+  if (!changes.length) { closeBulkQtyDialog(); pushToast('数量没有变化'); return; }
   history.pushSnapshot(app.products, p.id);
   changes.forEach((c) => { c.item.qty = c.to; });
   scheduleSave();
@@ -1526,14 +1334,9 @@ export function applyBulkQty(): void {
 }
 
 /* ============================================================
-   模块 R：分组拖拽排序
+   模块 R：拖拽
    ============================================================ */
-export const dragState = $state({
-  activeId: '',
-  dragging: false,
-  overIndex: -1,
-});
-
+export const dragState = $state({ activeId: '', dragging: false, overIndex: -1 });
 export function moveGroupTo(fromIndex: number, toIndex: number): boolean {
   const p = currentProduct();
   if (!p) return false;
@@ -1557,27 +1360,18 @@ export async function createGroupFromPreset(presetGroupId: string): Promise<bool
   if (!pg) return false;
   const p = currentProduct();
   if (!p) return false;
-
   if (p.groups.some((g) => nameKey(g.name) === nameKey(pg.name))) {
-    pushToast(`已存在同名分组：${pg.name}`, 'error', 2600);
-    return false;
+    pushToast(`已存在同名分组：${pg.name}`, 'error', 2600); return false;
   }
-
   const existing = new Set<string>();
-  p.groups.forEach((g) =>
-    g.items.forEach((it) => existing.add(nameKey(it.name))),
-  );
+  p.groups.forEach((g) => g.items.forEach((it) => existing.add(nameKey(it.name))));
   const seen = new Set<string>();
   const finalItems: string[] = [];
   for (const raw of pg.items) {
     const k = nameKey(raw);
-    if (!k) continue;
-    if (seen.has(k)) continue;
-    if (existing.has(k)) continue;
-    seen.add(k);
-    finalItems.push(raw);
+    if (!k || seen.has(k) || existing.has(k)) continue;
+    seen.add(k); finalItems.push(raw);
   }
-
   const threshold = app.settings.bulkAddConfirmThreshold || 5;
   if (finalItems.length > threshold) {
     const ok = await askConfirm({
@@ -1587,29 +1381,21 @@ export async function createGroupFromPreset(presetGroupId: string): Promise<bool
     });
     if (!ok) return false;
   }
-
   history.pushSnapshot(app.products, p.id);
   const initTotal = calcSampling(p.incomingQty || 0);
   p.groups.push({
-    id: uid(),
-    name: pg.name,
-    total: initTotal,
-    totalIsAuto: true,
+    id: uid(), name: pg.name, total: initTotal, totalIsAuto: true,
     items: finalItems.map((name) => ({ name, qty: 0 })),
   });
   scheduleSave();
   logOperation(`从预分组「${pg.name}」创建新分组（${finalItems.length} 个分类）`);
-
-  if (finalItems.length === 0) {
-    pushToast(`已创建空分组「${pg.name}」`);
-  } else {
-    pushToast(`已创建「${pg.name}」（+${finalItems.length}）`);
-  }
+  if (finalItems.length === 0) pushToast(`已创建空分组「${pg.name}」`);
+  else pushToast(`已创建「${pg.name}」（+${finalItems.length}）`);
   return true;
 }
 
 /* ============================================================
-   模块 S-2：预分组追加到现有分组
+   模块 S-2：追加到现有分组
    ============================================================ */
 export function applyPresetGroupToGroup(g: Group, presetGroupId: string): number {
   const pg = app.dataPresets.presetGroups.find((x) => x.id === presetGroupId);
@@ -1621,15 +1407,11 @@ export function applyPresetGroupToGroup(g: Group, presetGroupId: string): number
   pg.items.forEach((name) => {
     const k = nameKey(name);
     if (seen.has(k)) return;
-    const usedElsewhere = p.groups.some(
-      (x) => x.id !== g.id && x.items.some((it) => nameKey(it.name) === k),
-    );
+    const usedElsewhere = p.groups.some((x) => x.id !== g.id && x.items.some((it) => nameKey(it.name) === k));
     if (usedElsewhere) return;
-    seen.add(k);
-    added.push(name);
+    seen.add(k); added.push(name);
   });
   if (!added.length) return 0;
-
   history.pushSnapshot(app.products, p.id);
   added.forEach((name) => g.items.push({ name, qty: 0 }));
   scheduleSave();
@@ -1641,39 +1423,21 @@ export function applyPresetGroupToGroup(g: Group, presetGroupId: string): number
    模块 K：数据预设分页
    ============================================================ */
 export function pageSizeFor(): number {
-  try {
-    const h = window.innerHeight;
-    return Math.max(4, Math.floor((h - 380) / 54));
-  } catch {
-    return 6;
-  }
+  try { const h = window.innerHeight; return Math.max(4, Math.floor((h - 380) / 54)); }
+  catch { return 6; }
 }
-
 export const presetPages = $state<Record<string, number>>({
-  customer: 1,
-  supplier: 1,
-  incoming: 1,
-  process: 1,
-  responsible: 1,
-  special: 1,
-  presetGroup: 1,
+  customer: 1, supplier: 1, incoming: 1, process: 1,
+  responsible: 1, special: 1, presetGroup: 1,
 });
-
-export function resetPresetPage(key: string): void {
-  presetPages[key] = 1;
-}
-
-export function setPresetPage(key: string, page: number): void {
-  presetPages[key] = Math.max(1, page);
-}
-
+export function resetPresetPage(key: string): void { presetPages[key] = 1; }
+export function setPresetPage(key: string, page: number): void { presetPages[key] = Math.max(1, page); }
 export function getPresetPage(key: string, total: number): number {
   const size = pageSizeFor();
   const pages = Math.max(1, Math.ceil(total / size));
   const cur = presetPages[key] || 1;
   return Math.min(cur, pages);
 }
-
 export function getPresetPages(key: string, total: number): number {
   const size = pageSizeFor();
   return Math.max(1, Math.ceil(total / size));
@@ -1683,17 +1447,13 @@ export function getPresetPages(key: string, total: number): number {
    模块 E：负责人自动联动
    ============================================================ */
 export const autoRespState = $state({
-  rejected: [] as string[],
-  manuallyAdded: [] as string[],
-  lastSignature: '',
+  rejected: [] as string[], manuallyAdded: [] as string[], lastSignature: '',
 });
-
 export function computeAutoResponsibles(): string[] {
   const list = mergedProducts();
   if (!list.length) return [];
   const rejected = new Set(autoRespState.rejected.map(nameKey));
   const out = new Set<string>();
-
   const custNames = new Set(list.map((p) => (p.customer || '').trim()).filter(Boolean));
   app.dataPresets.customers.forEach((c) => {
     if (!custNames.has(c.name)) return;
@@ -1702,7 +1462,6 @@ export function computeAutoResponsibles(): string[] {
       if (r && !rejected.has(nameKey(r.name))) out.add(r.name);
     });
   });
-
   app.dataPresets.specialGroups.forEach((sg) => {
     let hit = false;
     list.forEach((p) => {
@@ -1716,46 +1475,31 @@ export function computeAutoResponsibles(): string[] {
         });
       });
     });
-    if (hit) {
-      sg.responsibleIds.forEach((rid) => {
-        const r = app.dataPresets.responsiblePersons.find((x) => x.id === rid);
-        if (r && !rejected.has(nameKey(r.name))) out.add(r.name);
-      });
-    }
+    if (hit) sg.responsibleIds.forEach((rid) => {
+      const r = app.dataPresets.responsiblePersons.find((x) => x.id === rid);
+      if (r && !rejected.has(nameKey(r.name))) out.add(r.name);
+    });
   });
-
   return Array.from(out);
 }
-
 export function rejectAutoResponsible(name: string): void {
   const k = nameKey(name);
-  if (!autoRespState.rejected.some((x) => nameKey(x) === k)) {
-    autoRespState.rejected.push(name);
-  }
-  autoRespState.manuallyAdded = autoRespState.manuallyAdded.filter(
-    (n) => nameKey(n) !== k,
-  );
-  app.settings.responsiblePersons = app.settings.responsiblePersons.filter(
-    (n) => nameKey(n) !== k,
-  );
+  if (!autoRespState.rejected.some((x) => nameKey(x) === k)) autoRespState.rejected.push(name);
+  autoRespState.manuallyAdded = autoRespState.manuallyAdded.filter((n) => nameKey(n) !== k);
+  app.settings.responsiblePersons = app.settings.responsiblePersons.filter((n) => nameKey(n) !== k);
   scheduleSave();
 }
-
 export function addManualResponsible(name: string): void {
   const v = String(name || '').trim().replace(/^@+/, '');
   if (!v) return;
   const k = nameKey(v);
   autoRespState.rejected = autoRespState.rejected.filter((x) => nameKey(x) !== k);
-  if (!autoRespState.manuallyAdded.some((x) => nameKey(x) === k)) {
-    autoRespState.manuallyAdded.push(v);
-  }
-  if (!app.settings.responsiblePersons.some((n) => nameKey(n) === k)) {
+  if (!autoRespState.manuallyAdded.some((x) => nameKey(x) === k)) autoRespState.manuallyAdded.push(v);
+  if (!app.settings.responsiblePersons.some((n) => nameKey(n) === k))
     app.settings.responsiblePersons = [...app.settings.responsiblePersons, v];
-  }
   scheduleSave();
   scheduleAutoRespSync();
 }
-
 let autoRespTimer: ReturnType<typeof setTimeout> | null = null;
 export function scheduleAutoRespSync(): void {
   if (autoRespTimer) clearTimeout(autoRespTimer);
@@ -1774,8 +1518,7 @@ export function scheduleAutoRespSync(): void {
     merged.forEach((n) => {
       const k = nameKey(n);
       if (seen.has(k)) return;
-      seen.add(k);
-      final.push(n);
+      seen.add(k); final.push(n);
     });
     app.settings.responsiblePersons = final;
     scheduleSave();
@@ -1790,49 +1533,37 @@ export function productMatchesSpecialGroup(p: Product, sg: SpecialGroup): boolea
     g.items.some((it) => sg.items.some((si) => nameKey(si) === nameKey(it.name))),
   );
 }
-
 export function productEffectiveForSpecialGroup(p: Product, sg: SpecialGroup): boolean {
   if (!productMatchesSpecialGroup(p, sg)) return false;
   if (sg.requireSample && !p.isSample) return false;
   return true;
 }
-
 export function getSpecialGroupResponsibleNames(sg: SpecialGroup): string[] {
-  return sg.responsibleIds
-    .map((id) => app.dataPresets.responsiblePersons.find((r) => r.id === id)?.name || '')
-    .filter(Boolean);
+  return sg.responsibleIds.map((id) => app.dataPresets.responsiblePersons.find((r) => r.id === id)?.name || '').filter(Boolean);
 }
-
 export function addSpecialGroup(name: string): boolean {
   const v = String(name || '').trim();
   if (!v) return false;
   if (app.dataPresets.specialGroups.some((sg) => nameKey(sg.name) === nameKey(v))) {
-    pushToast('已存在同名特殊分组', 'error');
-    return false;
+    pushToast('已存在同名特殊分组', 'error'); return false;
   }
-  app.dataPresets.specialGroups.push({
-    id: uid(), name: v, items: [v], responsibleIds: [], requireSample: false,
-  });
+  app.dataPresets.specialGroups.push({ id: uid(), name: v, items: [v], responsibleIds: [], requireSample: false });
   scheduleSave();
   return true;
 }
-
 export function removeSpecialGroup(id: string): void {
   const idx = app.dataPresets.specialGroups.findIndex((sg) => sg.id === id);
   if (idx < 0) return;
   app.dataPresets.specialGroups.splice(idx, 1);
   scheduleSave();
 }
-
 export function renameSpecialGroup(id: string, name: string): void {
   const sg = app.dataPresets.specialGroups.find((x) => x.id === id);
   if (!sg) return;
   const v = String(name || '').trim();
   if (!v) return;
-  sg.name = v;
-  scheduleSave();
+  sg.name = v; scheduleSave();
 }
-
 export function toggleSpecialGroupResp(sgId: string, respId: string): void {
   const sg = app.dataPresets.specialGroups.find((x) => x.id === sgId);
   if (!sg) return;
@@ -1841,64 +1572,42 @@ export function toggleSpecialGroupResp(sgId: string, respId: string): void {
   else sg.responsibleIds.push(respId);
   scheduleSave();
 }
-
 export function toggleSpecialGroupSample(sgId: string): void {
   const sg = app.dataPresets.specialGroups.find((x) => x.id === sgId);
   if (!sg) return;
-  sg.requireSample = !sg.requireSample;
-  scheduleSave();
+  sg.requireSample = !sg.requireSample; scheduleSave();
 }
-
 export function setSpecialGroupItems(sgId: string, text: string): void {
   const sg = app.dataPresets.specialGroups.find((x) => x.id === sgId);
   if (!sg) return;
-  sg.items = text
-    .split(/[\n,，、;；]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  sg.items = text.split(/[\n,，、;；]+/).map((s) => s.trim()).filter(Boolean);
   scheduleSave();
 }
-
 export const specialUIState = $state({
-  expandedProductsId: '',
-  filter: '',
-  mode: 'all' as 'all' | 'hit' | 'effective',
-  expandedRespId: '',
+  expandedProductsId: '', filter: '',
+  mode: 'all' as 'all' | 'hit' | 'effective', expandedRespId: '',
 });
-
 export function toggleSpecialGroupProducts(id: string): void {
   specialUIState.expandedProductsId = specialUIState.expandedProductsId === id ? '' : id;
   specialUIState.expandedRespId = '';
   specialUIState.filter = '';
 }
-
 export function toggleSpecialRespPanel(id: string): void {
   specialUIState.expandedRespId = specialUIState.expandedRespId === id ? '' : id;
   specialUIState.expandedProductsId = '';
 }
 
 /* ============================================================
-   模块 L：部分导出 / 部分导入
+   模块 L：部分导出/导入
    ============================================================ */
-export interface ExportOptions {
-  products: boolean;
-  dataPresets: boolean;
-  settings: boolean;
-}
-
+export interface ExportOptions { products: boolean; dataPresets: boolean; settings: boolean; }
 export interface ImportOptions {
-  products: boolean;
-  dataPresets: boolean;
-  settings: boolean;
-  mode: 'merge' | 'overwrite';
+  products: boolean; dataPresets: boolean; settings: boolean; mode: 'merge' | 'overwrite';
 }
-
 export function buildPartialExport(opts: ExportOptions): string {
   const payload: any = {
-    app: 'category-counts',
-    version: 5,
-    exportedAt: new Date().toISOString(),
-    partial: true,
+    app: 'category-counts', version: 5,
+    exportedAt: new Date().toISOString(), partial: true,
   };
   if (opts.products) {
     payload.products = app.products;
@@ -1910,7 +1619,6 @@ export function buildPartialExport(opts: ExportOptions): string {
   if (opts.settings) payload.settings = app.settings;
   return JSON.stringify(payload, null, 2);
 }
-
 export function summarizeImport(raw: any): string {
   const parts: string[] = [];
   if (Array.isArray(raw?.products)) parts.push(`${raw.products.length} 产品`);
@@ -1923,19 +1631,9 @@ export function summarizeImport(raw: any): string {
   if (raw?.settings) parts.push('全局设置');
   return parts.join(' · ') || '空文件';
 }
-
-export function detectImportModules(raw: any): {
-  products: boolean;
-  dataPresets: boolean;
-  settings: boolean;
-} {
-  return {
-    products: Array.isArray(raw?.products),
-    dataPresets: !!raw?.dataPresets,
-    settings: !!raw?.settings,
-  };
+export function detectImportModules(raw: any): { products: boolean; dataPresets: boolean; settings: boolean } {
+  return { products: Array.isArray(raw?.products), dataPresets: !!raw?.dataPresets, settings: !!raw?.settings };
 }
-
 function cleanupResponsibleIds(): void {
   const valid = new Set(app.dataPresets.responsiblePersons.map((r) => r.id));
   app.dataPresets.customers.forEach((c) => {
@@ -1947,49 +1645,34 @@ function cleanupResponsibleIds(): void {
     if (f.length !== sg.responsibleIds.length) sg.responsibleIds = f;
   });
 }
-
-export function importPartialPayload(
-  raw: any,
-  opts: ImportOptions,
-): { added: number; replaced: number } {
+export function importPartialPayload(raw: any, opts: ImportOptions): { added: number; replaced: number } {
   let added = 0;
   let replaced = 0;
-
   if (opts.products && Array.isArray(raw?.products)) {
     const newProducts = raw.products.map(normalizeProduct);
     if (opts.mode === 'overwrite') {
       app.products = newProducts;
       app.globalPresets = cleanGlobalPresets(raw.globalPresets || []);
       app.mergeSelectedIds = Array.isArray(raw.mergeSelectedIds)
-        ? raw.mergeSelectedIds.filter((x: unknown) => typeof x === 'string')
-        : [];
-      app.currentProductId =
-        raw.currentProductId && newProducts.some((p: Product) => p.id === raw.currentProductId)
-          ? raw.currentProductId
-          : newProducts[0]?.id || '';
+        ? raw.mergeSelectedIds.filter((x: unknown) => typeof x === 'string') : [];
+      app.currentProductId = raw.currentProductId && newProducts.some((p: Product) => p.id === raw.currentProductId)
+        ? raw.currentProductId : newProducts[0]?.id || '';
       replaced += newProducts.length;
     } else {
       const byName = new Map(app.products.map((p) => [nameKey(p.name), p]));
       newProducts.forEach((np: Product) => {
         const k = nameKey(np.name);
         if (byName.has(k)) replaced++;
-        else {
-          app.products.push(np);
-          added++;
-        }
+        else { app.products.push(np); added++; }
       });
       if (Array.isArray(raw.globalPresets)) {
         const seen = new Set(app.globalPresets.map((g) => nameKey(g.name)));
         cleanGlobalPresets(raw.globalPresets).forEach((g) => {
-          if (!seen.has(nameKey(g.name))) {
-            app.globalPresets.push(g);
-            added++;
-          }
+          if (!seen.has(nameKey(g.name))) { app.globalPresets.push(g); added++; }
         });
       }
     }
   }
-
   if (opts.dataPresets && raw?.dataPresets) {
     const dp = raw.dataPresets;
     if (opts.mode === 'overwrite') {
@@ -2009,26 +1692,16 @@ export function importPartialPayload(
       cleanupOrphanProductBindings();
     } else {
       const sup = new Set(app.dataPresets.suppliers.map(nameKey));
-      (dp.suppliers || []).forEach((s: string) => {
-        if (!sup.has(nameKey(s))) { app.dataPresets.suppliers.push(s); added++; }
-      });
+      (dp.suppliers || []).forEach((s: string) => { if (!sup.has(nameKey(s))) { app.dataPresets.suppliers.push(s); added++; } });
       const cust = new Set(app.dataPresets.customers.map((c) => nameKey(c.name)));
-      cleanCustomers(dp.customers).forEach((c) => {
-        if (!cust.has(nameKey(c.name))) { app.dataPresets.customers.push(c); added++; }
-      });
+      cleanCustomers(dp.customers).forEach((c) => { if (!cust.has(nameKey(c.name))) { app.dataPresets.customers.push(c); added++; } });
       const inq = new Set(app.dataPresets.incomingQtyPresets);
-      cleanNumberList(dp.incomingQtyPresets).forEach((n) => {
-        if (!inq.has(n)) { app.dataPresets.incomingQtyPresets.push(n); added++; }
-      });
+      cleanNumberList(dp.incomingQtyPresets).forEach((n) => { if (!inq.has(n)) { app.dataPresets.incomingQtyPresets.push(n); added++; } });
       const proc = new Set(app.dataPresets.processes.map(nameKey));
-      (dp.processes || []).forEach((s: string) => {
-        if (!proc.has(nameKey(s))) { app.dataPresets.processes.push(s); added++; }
-      });
+      (dp.processes || []).forEach((s: string) => { if (!proc.has(nameKey(s))) { app.dataPresets.processes.push(s); added++; } });
       const resp = new Set(app.dataPresets.responsiblePersons.map((r) => nameKey(r.name)));
       cleanResponsiblePersons(dp.responsiblePersons).forEach((r) => {
-        if (!resp.has(nameKey(r.name))) {
-          app.dataPresets.responsiblePersons.push(r); added++;
-        }
+        if (!resp.has(nameKey(r.name))) { app.dataPresets.responsiblePersons.push(r); added++; }
       });
       const sg = new Set(app.dataPresets.specialGroups.map((s) => nameKey(s.name)));
       cleanSpecialGroups(dp.specialGroups).forEach((s) => {
@@ -2041,44 +1714,30 @@ export function importPartialPayload(
       cleanupResponsibleIds();
     }
   }
-
   if (opts.settings && raw?.settings) {
-    if (opts.mode === 'overwrite') {
-      Object.assign(app.settings, { ...defaultSettings(), ...raw.settings });
-    } else {
-      Object.keys(raw.settings).forEach((k) => {
-        if ((app.settings as any)[k] === undefined) {
-          (app.settings as any)[k] = raw.settings[k];
-        }
-      });
-    }
+    if (opts.mode === 'overwrite') Object.assign(app.settings, { ...defaultSettings(), ...raw.settings });
+    else Object.keys(raw.settings).forEach((k) => {
+      if ((app.settings as any)[k] === undefined) (app.settings as any)[k] = raw.settings[k];
+    });
   }
-
   scheduleSave();
   return { added, replaced };
 }
-
 export function parseJsData(text: string): any {
   const trimmed = String(text || '').trim();
   if (!trimmed) throw new Error('空文件');
-
   const stripped = trimmed
     .replace(/'(?:[^'\\]|\\.)*'/g, "''")
     .replace(/"(?:[^"\\]|\\.)*"/g, '""')
     .replace(/`(?:[^`\\]|\\.)*`/g, '``');
-
-  if (/\b(import|require|eval|Function|fetch|XMLHttpRequest|WebSocket)\b/.test(stripped)) {
+  if (/\b(import|require|eval|Function|fetch|XMLHttpRequest|WebSocket)\b/.test(stripped))
     throw new Error('文件包含不安全的关键字，已拒绝');
-  }
-
   let jsonText = trimmed;
   jsonText = jsonText.replace(/^\s*export\s+default\s+/, '');
   jsonText = jsonText.replace(/^\s*(const|let|var)\s+\w+\s*=\s*/, '');
   jsonText = jsonText.replace(/^\s*window\.\w+\s*=\s*/, '');
   jsonText = jsonText.replace(/;?\s*$/, '');
-  try {
-    return JSON.parse(jsonText);
-  } catch {
+  try { return JSON.parse(jsonText); } catch {
     const converted = jsonText
       .replace(/'/g, '"')
       .replace(/([{,]\s*)([a-zA-Z_$][\w$]*)\s*:/g, '$1"$2":')
@@ -2088,42 +1747,20 @@ export function parseJsData(text: string): any {
 }
 
 /* ============================================================
-   任务 A：本产品汇总模块
+   任务 A：本产品汇总
    ============================================================ */
-export function outputText(): string {
-  return buildOutputText(true);
-}
-export function outputCopyText(): string {
-  return buildOutputText(false);
-}
+export function outputText(): string { return buildOutputText(true); }
+export function outputCopyText(): string { return buildOutputText(false); }
 
 /* ============================================================
    任务 D：显示 Tab setter
    ============================================================ */
-export function setShowTopNavText(v: boolean): void {
-  app.settings.showTopNavText = v;
-  scheduleSave();
-}
-export function setShowMainTips(v: boolean): void {
-  app.settings.showMainTips = v;
-  scheduleSave();
-}
-export function setShowZeroQty(v: boolean): void {
-  app.settings.showZeroQtyItems = v;
-  scheduleSave();
-}
-export function setMergeMultiProductSummary(v: boolean): void {
-  app.settings.mergeMultiProductSummary = v;
-  scheduleSave();
-}
-export function setShowVoice(v: boolean): void {
-  app.settings.showVoice = v;
-  scheduleSave();
-}
-export function setShowOcr(v: boolean): void {
-  app.settings.showImageOcr = v;
-  scheduleSave();
-}
+export function setShowTopNavText(v: boolean): void { app.settings.showTopNavText = v; scheduleSave(); }
+export function setShowMainTips(v: boolean): void { app.settings.showMainTips = v; scheduleSave(); }
+export function setShowZeroQty(v: boolean): void { app.settings.showZeroQtyItems = v; scheduleSave(); }
+export function setMergeMultiProductSummary(v: boolean): void { app.settings.mergeMultiProductSummary = v; scheduleSave(); }
+export function setShowVoice(v: boolean): void { app.settings.showVoice = v; scheduleSave(); }
+export function setShowOcr(v: boolean): void { app.settings.showImageOcr = v; scheduleSave(); }
 export function setShowRecognizeTools(v: boolean): void {
   app.settings.showRecognizeTools = v;
   app.settings.showVoice = v;
@@ -2136,8 +1773,7 @@ export function setFontSize(key: 'small' | 'standard' | 'large'): void {
   scheduleSave();
 }
 export function setAnimationLevel(key: 'normal' | 'reduced' | 'none'): void {
-  app.settings.animationLevel = key;
-  scheduleSave();
+  app.settings.animationLevel = key; scheduleSave();
 }
 export function fontSizeLabel(): string {
   const m: Record<string, string> = { small: '小', standard: '标准', large: '大' };
@@ -2488,13 +2124,8 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
    任务 E：数据预设导航弹窗状态
    ============================================================ */
 export const presetNavDialog = $state<{ show: boolean }>({ show: false });
-
-export function openPresetNavDialog(): void {
-  presetNavDialog.show = true;
-}
-export function closePresetNavDialog(): void {
-  presetNavDialog.show = false;
-}
+export function openPresetNavDialog(): void { presetNavDialog.show = true; }
+export function closePresetNavDialog(): void { presetNavDialog.show = false; }
 
 /* ============================================================
    N2 · 预分类派生
@@ -2508,11 +2139,9 @@ class PresetDerivedStore {
       return gp.productIds.includes(pid);
     });
   });
-
   globalPresetNameKeys: Set<string> = $derived(
     new Set(this.visibleSharedPresets.map((gp) => nameKey(gp.name))),
   );
-
   localOnlyPresets: string[] = $derived.by(() => {
     const p = currentProduct();
     if (!p) return [];
@@ -2526,18 +2155,12 @@ export const presetDerived = new PresetDerivedStore();
    N2 · 三态判定
    ============================================================ */
 export type PresetItemState = 'in-current' | 'in-other' | 'fresh';
-
 export function getPresetItemState(group: Group, itemName: string): PresetItemState {
   const p = currentProduct();
   if (!p) return 'fresh';
   const k = nameKey(itemName);
   if (group.items.some((it) => nameKey(it.name) === k)) return 'in-current';
-  if (
-    p.groups.some(
-      (g) => g.id !== group.id && g.items.some((it) => nameKey(it.name) === k),
-    )
-  )
-    return 'in-other';
+  if (p.groups.some((g) => g.id !== group.id && g.items.some((it) => nameKey(it.name) === k))) return 'in-other';
   return 'fresh';
 }
 
@@ -2548,19 +2171,14 @@ export function addGlobalPreset(name: string): boolean {
   const v = String(name || '').trim();
   if (!v) return false;
   if (app.globalPresets.some((gp) => nameKey(gp.name) === nameKey(v))) {
-    pushToast('已存在同名共享预分类', 'error');
-    return false;
+    pushToast('已存在同名共享预分类', 'error'); return false;
   }
-  history.pushGlobalSnapshot(
-    app.products, app.dataPresets, app.globalPresets, app.settings,
-    '新增共享预分类',
-  );
+  history.pushGlobalSnapshot(app.products, app.dataPresets, app.globalPresets, app.settings, '新增共享预分类');
   app.globalPresets.push({ id: uid(), name: v, productIds: null });
   scheduleSave();
   logOperation(`新增共享预分类「${v}」`);
   return true;
 }
-
 export function renameGlobalPreset(id: string, newName: string): boolean {
   const gp = app.globalPresets.find((x) => x.id === id);
   if (!gp) return false;
@@ -2568,130 +2186,81 @@ export function renameGlobalPreset(id: string, newName: string): boolean {
   if (!v) return false;
   if (gp.name === v) return true;
   if (app.globalPresets.some((x) => x.id !== id && nameKey(x.name) === nameKey(v))) {
-    pushToast('已存在同名共享预分类', 'error');
-    return false;
+    pushToast('已存在同名共享预分类', 'error'); return false;
   }
-  history.pushGlobalSnapshot(
-    app.products, app.dataPresets, app.globalPresets, app.settings,
-    '重命名共享预分类',
-  );
+  history.pushGlobalSnapshot(app.products, app.dataPresets, app.globalPresets, app.settings, '重命名共享预分类');
   gp.name = v;
   scheduleSave();
   return true;
 }
-
 export function removeGlobalPreset(id: string): void {
   const idx = app.globalPresets.findIndex((x) => x.id === id);
   if (idx < 0) return;
-  history.pushGlobalSnapshot(
-    app.products, app.dataPresets, app.globalPresets, app.settings,
-    '删除共享预分类',
-  );
+  history.pushGlobalSnapshot(app.products, app.dataPresets, app.globalPresets, app.settings, '删除共享预分类');
   app.globalPresets.splice(idx, 1);
   scheduleSave();
   logOperation('删除共享预分类');
 }
-
 export function toggleGpProduct(gp: GlobalPreset, pid: string): void {
   if (gp.productIds === null) {
     gp.productIds = app.products.map((p) => p.id).filter((x) => x !== pid);
   } else {
     const arr = gp.productIds.slice();
     const i = arr.indexOf(pid);
-    if (i >= 0) arr.splice(i, 1);
-    else arr.push(pid);
+    if (i >= 0) arr.splice(i, 1); else arr.push(pid);
     gp.productIds = arr;
   }
   scheduleSave();
 }
-
 export function setAllGpProducts(gp: GlobalPreset): void {
   if (gp.productIds === null) return;
-  history.pushGlobalSnapshot(
-    app.products, app.dataPresets, app.globalPresets, app.settings,
-    '共享预分类全部生效',
-  );
+  history.pushGlobalSnapshot(app.products, app.dataPresets, app.globalPresets, app.settings, '共享预分类全部生效');
   gp.productIds = null;
   scheduleSave();
 }
-
 export function setNoneGpProducts(gp: GlobalPreset): void {
   if (Array.isArray(gp.productIds) && gp.productIds.length === 0) return;
-  history.pushGlobalSnapshot(
-    app.products, app.dataPresets, app.globalPresets, app.settings,
-    '共享预分类全部不生效',
-  );
+  history.pushGlobalSnapshot(app.products, app.dataPresets, app.globalPresets, app.settings, '共享预分类全部不生效');
   gp.productIds = [];
   scheduleSave();
 }
 
 /* ============================================================
-   阶段 5B-1 · 识别工具
+   5B-1 · 识别工具
    ============================================================ */
 export interface Candidate {
-  id: string;
-  text: string;
-  matched: boolean;
-  groupId: string;
-  checked: boolean;
+  id: string; text: string; matched: boolean; groupId: string; checked: boolean;
 }
-
 export const recognizeState = $state({
-  text: '',
-  candidates: [] as Candidate[],
-  candidatesSourcePid: '',                   // ★ F1
+  text: '', candidates: [] as Candidate[],
+  candidatesSourcePid: '',
   generateSignal: 0,
   splitMode: 'smart' as 'smart' | 'comma' | 'line',
-
-  ocrApiKey: '',
-  ocrRunning: false,
-  ocrProgress: 0,
-  ocrStatus: '',
-  ocrStatusType: '' as '' | 'success' | 'error' | 'warn',
-  ocrFiles: [] as File[],
-  ocrPreviews: [] as string[],
-
-  voiceRunning: false,
-  voiceFinalText: '',
-  voiceInterimText: '',
-  voiceStatus: '',
-  voiceStatusType: '' as '' | 'success' | 'error',
+  ocrApiKey: '', ocrRunning: false, ocrProgress: 0,
+  ocrStatus: '', ocrStatusType: '' as '' | 'success' | 'error' | 'warn',
+  ocrFiles: [] as File[], ocrPreviews: [] as string[],
+  voiceRunning: false, voiceFinalText: '', voiceInterimText: '',
+  voiceStatus: '', voiceStatusType: '' as '' | 'success' | 'error',
 });
-
-export function setRecognizeText(text: string): void {
-  recognizeState.text = String(text ?? '');
-}
-
+export function setRecognizeText(text: string): void { recognizeState.text = String(text ?? ''); }
 export function appendRecognizeText(text: string): void {
   const t = String(text ?? '').trim();
   if (!t) return;
-  recognizeState.text = recognizeState.text
-    ? recognizeState.text + '\n' + t
-    : t;
+  recognizeState.text = recognizeState.text ? recognizeState.text + '\n' + t : t;
 }
-
 export function clearRecognizeText(): void {
   recognizeState.text = '';
   recognizeState.candidates = [];
 }
-
-export function requestGenerateCandidates(): void {
-  recognizeState.generateSignal++;
-}
+export function requestGenerateCandidates(): void { recognizeState.generateSignal++; }
 
 export function splitRecognizeText(mode: 'smart' | 'comma' | 'line' = 'smart'): string[] {
   const raw = recognizeState.text || '';
   if (!raw.trim()) return [];
   let parts: string[];
-  if (mode === 'line') {
-    parts = raw.split(/[\n\r]+/);
-  } else if (mode === 'comma') {
-    parts = raw.split(/[,，、;；]+|\s{2,}/);
-  } else {
-    parts = raw
-      .split(/[\n\r]+/)
-      .flatMap((line) => line.split(/[,，、;；]+|\s{2,}/));
-  }
+  if (mode === 'line') parts = raw.split(/[\n\r]+/);
+  else if (mode === 'comma') parts = raw.split(/[,，、;；]+|\s{2,}/);
+  else parts = raw.split(/[\n\r]+/).flatMap((line) => line.split(/[,，、;；]+|\s{2,}/));
   const seen = new Set<string>();
   const out: string[] = [];
   for (const p of parts) {
@@ -2699,24 +2268,16 @@ export function splitRecognizeText(mode: 'smart' | 'comma' | 'line' = 'smart'): 
     if (!v) continue;
     const k = nameKey(v);
     if (!k || seen.has(k)) continue;
-    seen.add(k);
-    out.push(v);
+    seen.add(k); out.push(v);
   }
   return out;
 }
 
 export function doGenerateCandidates(): void {
   const p = currentProduct();
-  if (!p) {
-    pushToast('请先选择产品', 'error');
-    return;
-  }
+  if (!p) { pushToast('请先选择产品', 'error'); return; }
   const parts = splitRecognizeText(recognizeState.splitMode);
-  if (!parts.length) {
-    pushToast('识别文本为空', 'error');
-    return;
-  }
-
+  if (!parts.length) { pushToast('识别文本为空', 'error'); return; }
   const index = new Map<string, string>();
   p.groups.forEach((g) => {
     g.items.forEach((it) => {
@@ -2724,138 +2285,83 @@ export function doGenerateCandidates(): void {
       if (!index.has(k)) index.set(k, g.id);
     });
   });
-
   const candidates: Candidate[] = parts.map((text) => {
     const k = nameKey(text);
     const gid = index.get(k);
-    return {
-      id: k,
-      text,
-      matched: !!gid,
-      groupId: gid || '__auto__',
-      checked: true,
-    };
+    return { id: k, text, matched: !!gid, groupId: gid || '__auto__', checked: true };
   });
-
   recognizeState.candidates = candidates;
-  recognizeState.candidatesSourcePid = p.id;   // ★ F1
+  recognizeState.candidatesSourcePid = p.id;
   pushToast(`已生成 ${candidates.length} 个候选`);
 }
-
 export function toggleCandidate(id: string): void {
   recognizeState.candidates = recognizeState.candidates.map((c) =>
     c.id === id ? { ...c, checked: !c.checked } : c,
   );
 }
-
 export function setCandidateGroup(id: string, groupId: string): void {
   recognizeState.candidates = recognizeState.candidates.map((c) =>
     c.id === id ? { ...c, groupId } : c,
   );
 }
-
 export function toggleAllCandidates(checked: boolean): void {
   recognizeState.candidates = recognizeState.candidates.map((c) => ({ ...c, checked }));
 }
-
 function findOrCreateAutoGroup(): Group | null {
   const p = currentProduct();
   if (!p) return null;
   let g = p.groups.find((x) => x.name === AUTO_GROUP_NAME);
   if (!g) {
-    g = {
-      id: uid(),
-      name: AUTO_GROUP_NAME,
-      total: 0,
-      totalIsAuto: false,
-      items: [],
-    };
+    g = { id: uid(), name: AUTO_GROUP_NAME, total: 0, totalIsAuto: false, items: [] };
     p.groups.push(g);
   }
   return g;
 }
-
 function applyCandidatesImpl(list: Candidate[]): void {
   const p = currentProduct();
-  if (!p) return;
-  if (!list.length) return;
-
-  // ★ F1：来源一致性防护
-  if (
-    recognizeState.candidatesSourcePid &&
-    recognizeState.candidatesSourcePid !== p.id
-  ) {
+  if (!p || !list.length) return;
+  if (recognizeState.candidatesSourcePid && recognizeState.candidatesSourcePid !== p.id) {
     pushToast('候选来自其他产品，请重新生成', 'error', 3000);
     return;
   }
-
   history.pushSnapshot(app.products, p.id);
-
   let hitCount = 0;
   let addCount = 0;
-
   for (const c of list) {
     const k = nameKey(c.text);
-
     if (c.matched) {
       const g = p.groups.find((x) => x.id === c.groupId);
       const it = g?.items.find((x) => nameKey(x.name) === k);
-      if (it) {
-        it.qty = (it.qty || 0) + 1;
-        hitCount++;
-        continue;
-      }
+      if (it) { it.qty = (it.qty || 0) + 1; hitCount++; continue; }
     }
-
     let target: Group | null = null;
-    if (c.groupId === '__auto__') {
-      target = findOrCreateAutoGroup();
-    } else {
+    if (c.groupId === '__auto__') target = findOrCreateAutoGroup();
+    else {
       target = p.groups.find((x) => x.id === c.groupId) || null;
       if (!target) target = findOrCreateAutoGroup();
     }
     if (!target) continue;
-
     const exist = target.items.find((x) => nameKey(x.name) === k);
-    if (exist) {
-      exist.qty = (exist.qty || 0) + 1;
-      hitCount++;
-    } else {
-      target.items.push({ name: c.text, qty: 1 });
-      addCount++;
-    }
-    if (!p.presets.some((x) => nameKey(x) === k)) {
-      p.presets.push(c.text);
-    }
+    if (exist) { exist.qty = (exist.qty || 0) + 1; hitCount++; }
+    else { target.items.push({ name: c.text, qty: 1 }); addCount++; }
+    if (!p.presets.some((x) => nameKey(x) === k)) p.presets.push(c.text);
   }
-
   scheduleSave();
   logOperation(`识别应用：命中 ${hitCount}，新增 ${addCount}`);
   pushToast(`应用完成：命中 ${hitCount}，新增 ${addCount}`);
 }
-
 export function applySelectedCandidates(): void {
   const list = recognizeState.candidates.filter((c) => c.checked);
-  if (!list.length) {
-    pushToast('未勾选任何候选', 'error');
-    return;
-  }
+  if (!list.length) { pushToast('未勾选任何候选', 'error'); return; }
   applyCandidatesImpl(list);
   const appliedIds = new Set(list.map((c) => c.id));
-  recognizeState.candidates = recognizeState.candidates.filter(
-    (c) => !appliedIds.has(c.id),
-  );
+  recognizeState.candidates = recognizeState.candidates.filter((c) => !appliedIds.has(c.id));
 }
-
 export function applyAllRecognizedText(): void {
   const parts = splitRecognizeText(recognizeState.splitMode);
-  if (!parts.length) {
-    pushToast('识别文本为空', 'error');
-    return;
-  }
+  if (!parts.length) { pushToast('识别文本为空', 'error'); return; }
   const p = currentProduct();
   if (!p) return;
-
   const index = new Map<string, string>();
   p.groups.forEach((g) => {
     g.items.forEach((it) => {
@@ -2863,81 +2369,49 @@ export function applyAllRecognizedText(): void {
       if (!index.has(k)) index.set(k, g.id);
     });
   });
-
   const list: Candidate[] = parts.map((text) => {
     const k = nameKey(text);
     const gid = index.get(k);
-    return {
-      id: k,
-      text,
-      matched: !!gid,
-      groupId: gid || '__auto__',
-      checked: true,
-    };
+    return { id: k, text, matched: !!gid, groupId: gid || '__auto__', checked: true };
   });
-
-  recognizeState.candidatesSourcePid = p.id;   // ★ F1
+  recognizeState.candidatesSourcePid = p.id;
   applyCandidatesImpl(list);
   recognizeState.candidates = [];
 }
 
-/* ---------------- OCR ---------------- */
+/* ---- OCR ---- */
 const OCR_KEY_STORE = 'ocr_api_key_v1';
-
 export function saveOcrApiKey(key: string): void {
   recognizeState.ocrApiKey = String(key ?? '').trim();
   try {
-    if (recognizeState.ocrApiKey) {
-      sessionStorage.setItem(OCR_KEY_STORE, recognizeState.ocrApiKey);
-    } else {
-      sessionStorage.removeItem(OCR_KEY_STORE);
-    }
+    if (recognizeState.ocrApiKey) sessionStorage.setItem(OCR_KEY_STORE, recognizeState.ocrApiKey);
+    else sessionStorage.removeItem(OCR_KEY_STORE);
   } catch { /* ignore */ }
   pushToast(recognizeState.ocrApiKey ? 'OCR Key 已保存' : 'OCR Key 已清除');
 }
-
 export function loadOcrApiKey(): void {
-  try {
-    const v = sessionStorage.getItem(OCR_KEY_STORE) || '';
-    recognizeState.ocrApiKey = v;
-  } catch {
-    recognizeState.ocrApiKey = '';
-  }
+  try { recognizeState.ocrApiKey = sessionStorage.getItem(OCR_KEY_STORE) || ''; }
+  catch { recognizeState.ocrApiKey = ''; }
 }
-
 const MAX_OCR_FILE_BYTES = 2_000_000;
-
 export function addOcrFiles(files: File[]): void {
   const accepted: File[] = [];
   for (const f of files) {
-    if (!f.type.startsWith('image/')) {
-      pushToast(`${f.name} 不是图片`, 'error', 2400);
-      continue;
-    }
-    if (f.size > MAX_OCR_FILE_BYTES) {
-      pushToast(`${f.name} 超过 2MB，请压缩后再上传`, 'error', 2600);
-      continue;
-    }
+    if (!f.type.startsWith('image/')) { pushToast(`${f.name} 不是图片`, 'error', 2400); continue; }
+    if (f.size > MAX_OCR_FILE_BYTES) { pushToast(`${f.name} 超过 2MB，请压缩后再上传`, 'error', 2600); continue; }
     accepted.push(f);
   }
   if (!accepted.length) return;
   recognizeState.ocrFiles = [...recognizeState.ocrFiles, ...accepted];
-  recognizeState.ocrPreviews = [
-    ...recognizeState.ocrPreviews,
-    ...accepted.map((f) => URL.createObjectURL(f)),
-  ];
+  recognizeState.ocrPreviews = [...recognizeState.ocrPreviews, ...accepted.map((f) => URL.createObjectURL(f))];
 }
-
 export function removeOcrFile(index: number): void {
   if (index < 0 || index >= recognizeState.ocrFiles.length) return;
   const url = recognizeState.ocrPreviews[index];
-  if (url) {
-    try { URL.revokeObjectURL(url); } catch { /* ignore */ }
-  }
+  if (url) { try { URL.revokeObjectURL(url); } catch { /* ignore */ } }
   recognizeState.ocrFiles = recognizeState.ocrFiles.filter((_, i) => i !== index);
   recognizeState.ocrPreviews = recognizeState.ocrPreviews.filter((_, i) => i !== index);
 }
-
 export function clearOcrFiles(): void {
   recognizeState.ocrPreviews.forEach((url) => {
     try { URL.revokeObjectURL(url); } catch { /* ignore */ }
@@ -2948,7 +2422,6 @@ export function clearOcrFiles(): void {
   recognizeState.ocrStatus = '';
   recognizeState.ocrStatusType = '';
 }
-
 async function recognizeOneImage(file: File): Promise<string> {
   const fd = new FormData();
   fd.append('file', file);
@@ -2956,72 +2429,45 @@ async function recognizeOneImage(file: File): Promise<string> {
   fd.append('isOverlayRequired', 'false');
   fd.append('OCREngine', '2');
   fd.append('scale', 'true');
-
   const key = recognizeState.ocrApiKey || 'helloworld';
   const res = await fetch('https://api.ocr.space/parse/image', {
-    method: 'POST',
-    headers: { apikey: key },
-    body: fd,
+    method: 'POST', headers: { apikey: key }, body: fd,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data: any = await res.json();
   if (data?.IsErroredOnProcessing) {
-    const msg = Array.isArray(data.ErrorMessage)
-      ? data.ErrorMessage.join(' ')
-      : (data.ErrorMessage || 'OCR 失败');
+    const msg = Array.isArray(data.ErrorMessage) ? data.ErrorMessage.join(' ') : (data.ErrorMessage || 'OCR 失败');
     throw new Error(msg);
   }
   const parsed = data?.ParsedResults || [];
   return parsed.map((p: any) => p.ParsedText || '').join('\n').trim();
 }
-
 export async function startOcrRecognition(): Promise<void> {
   if (recognizeState.ocrRunning) return;
-  if (!recognizeState.ocrFiles.length) {
-    pushToast('请先选择图片', 'error');
-    return;
-  }
-
+  if (!recognizeState.ocrFiles.length) { pushToast('请先选择图片', 'error'); return; }
   recognizeState.ocrRunning = true;
   recognizeState.ocrProgress = 0;
   recognizeState.ocrStatus = `识别中… 0/${recognizeState.ocrFiles.length}`;
   recognizeState.ocrStatusType = '';
-
   const files = recognizeState.ocrFiles.slice();
-  let done = 0;
-  let ok = 0;
-  let fail = 0;
+  let done = 0, ok = 0, fail = 0;
   const texts: string[] = [];
-
-  await Promise.allSettled(
-    files.map(async (f) => {
-      try {
-        const t = await recognizeOneImage(f);
-        if (t) {
-          texts.push(t);
-          ok++;
-        } else {
-          fail++;
-        }
-      } catch (e: any) {
-        fail++;
-        console.warn('OCR error:', e?.message || e);
-      } finally {
-        done++;
-        recognizeState.ocrProgress = Math.round((done / files.length) * 100);
-        recognizeState.ocrStatus = `识别中… ${done}/${files.length}`;
-      }
-    }),
-  );
-
+  await Promise.allSettled(files.map(async (f) => {
+    try {
+      const t = await recognizeOneImage(f);
+      if (t) { texts.push(t); ok++; } else fail++;
+    } catch (e: any) { fail++; console.warn('OCR error:', e?.message || e); }
+    finally {
+      done++;
+      recognizeState.ocrProgress = Math.round((done / files.length) * 100);
+      recognizeState.ocrStatus = `识别中… ${done}/${files.length}`;
+    }
+  }));
   recognizeState.ocrRunning = false;
-
   if (texts.length) {
     appendRecognizeText(texts.join('\n'));
     const both = fail > 0;
-    recognizeState.ocrStatus = both
-      ? `完成：成功 ${ok} / 失败 ${fail}`
-      : `完成：成功 ${ok} 张`;
+    recognizeState.ocrStatus = both ? `完成：成功 ${ok} / 失败 ${fail}` : `完成：成功 ${ok} 张`;
     recognizeState.ocrStatusType = both ? 'warn' : 'success';
     logOperation(`OCR 识别完成，成功 ${ok} 张，失败 ${fail} 张`);
     pushToast(both ? `部分成功：成功 ${ok} / 失败 ${fail}` : `已识别 ${ok} 张`, both ? 'info' : 'success');
@@ -3032,26 +2478,18 @@ export async function startOcrRecognition(): Promise<void> {
   }
 }
 
-/* ---------------- 语音 ---------------- */
-export function isSecureContext(): boolean {
-  try { return !!window.isSecureContext; } catch { return false; }
-}
-export function hasMediaDevices(): boolean {
-  try { return !!(navigator.mediaDevices?.getUserMedia); } catch { return false; }
-}
+/* ---- 语音 ---- */
+export function isSecureContext(): boolean { try { return !!window.isSecureContext; } catch { return false; } }
+export function hasMediaDevices(): boolean { try { return !!(navigator.mediaDevices?.getUserMedia); } catch { return false; } }
 export function hasSpeechRecognition(): boolean {
-  try {
-    return !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
-  } catch { return false; }
+  try { return !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition); }
+  catch { return false; }
 }
-
 let voiceRec: any = null;
 let voiceSessionActive = false;
 let voiceRestartTimer: ReturnType<typeof setTimeout> | null = null;
-
 export function startVoiceRecognition(): void {
   if (recognizeState.voiceRunning) return;
-
   if (!isSecureContext()) {
     recognizeState.voiceStatus = '非 HTTPS 环境，无法录音';
     recognizeState.voiceStatusType = 'error';
@@ -3064,16 +2502,13 @@ export function startVoiceRecognition(): void {
     pushToast('当前浏览器不支持语音识别', 'error', 2600);
     return;
   }
-
   const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
   try {
     if (!voiceRec) {
       voiceRec = new SR();
       voiceRec.lang = 'zh-CN';
       voiceRec.continuous = true;
       voiceRec.interimResults = true;
-
       voiceRec.onresult = (event: any) => {
         let finalText = '';
         let interimText = '';
@@ -3085,14 +2520,10 @@ export function startVoiceRecognition(): void {
         }
         if (finalText.trim()) {
           const clean = finalText.trim().replace(/[,，]+$/, '');
-          if (clean) {
-            recognizeState.voiceFinalText +=
-              (recognizeState.voiceFinalText ? ' ' : '') + clean;
-          }
+          if (clean) recognizeState.voiceFinalText += (recognizeState.voiceFinalText ? ' ' : '') + clean;
         }
         recognizeState.voiceInterimText = interimText.trim();
       };
-
       voiceRec.onerror = (e: any) => {
         const err = e?.error || '';
         if (err === 'not-allowed' || err === 'service-not-allowed') {
@@ -3113,7 +2544,6 @@ export function startVoiceRecognition(): void {
           recognizeState.voiceRunning = false;
         }
       };
-
       voiceRec.onend = () => {
         recognizeState.voiceInterimText = '';
         if (!voiceSessionActive || !voiceRec) return;
@@ -3121,9 +2551,8 @@ export function startVoiceRecognition(): void {
         voiceRestartTimer = setTimeout(() => {
           voiceRestartTimer = null;
           if (!voiceSessionActive || !voiceRec) return;
-          try {
-            voiceRec.start();
-          } catch {
+          try { voiceRec.start(); }
+          catch {
             voiceSessionActive = false;
             recognizeState.voiceRunning = false;
             recognizeState.voiceStatus = '语音已停止';
@@ -3132,14 +2561,11 @@ export function startVoiceRecognition(): void {
         }, 250);
       };
     }
-
     voiceSessionActive = true;
     recognizeState.voiceRunning = true;
     recognizeState.voiceStatus = '正在聆听…';
     recognizeState.voiceStatusType = '';
-    try {
-      voiceRec.start();
-    } catch { /* already started */ }
+    try { voiceRec.start(); } catch { /* already started */ }
   } catch (e: any) {
     recognizeState.voiceRunning = false;
     recognizeState.voiceStatus = '启动失败：' + (e?.message || '未知错误');
@@ -3147,48 +2573,32 @@ export function startVoiceRecognition(): void {
     pushToast('语音启动失败', 'error');
   }
 }
-
 export function stopVoiceRecognition(): void {
   voiceSessionActive = false;
-  if (voiceRestartTimer) {
-    clearTimeout(voiceRestartTimer);
-    voiceRestartTimer = null;
-  }
+  if (voiceRestartTimer) { clearTimeout(voiceRestartTimer); voiceRestartTimer = null; }
   recognizeState.voiceRunning = false;
   recognizeState.voiceStatus = '已停止';
   recognizeState.voiceStatusType = '';
   try { voiceRec?.stop?.(); } catch { /* ignore */ }
 }
-
 export function clearVoiceText(): void {
   recognizeState.voiceFinalText = '';
   recognizeState.voiceInterimText = '';
   recognizeState.voiceStatus = '';
   recognizeState.voiceStatusType = '';
 }
-
 export function applyVoiceToRecognizeText(): void {
   const t = (recognizeState.voiceFinalText + ' ' + recognizeState.voiceInterimText).trim();
-  if (!t) {
-    pushToast('没有可填入的文本', 'error');
-    return;
-  }
+  if (!t) { pushToast('没有可填入的文本', 'error'); return; }
   appendRecognizeText(t);
   clearVoiceText();
   pushToast('已填入识别文本');
 }
-
 export function applyVoiceToCandidates(): void {
   const t = (recognizeState.voiceFinalText + ' ' + recognizeState.voiceInterimText).trim();
-  if (!t) {
-    pushToast('没有可生成的文本', 'error');
-    return;
-  }
+  if (!t) { pushToast('没有可生成的文本', 'error'); return; }
   setRecognizeText(t);
   clearVoiceText();
   requestGenerateCandidates();
 }
-
-export function initRecognizeTools(): void {
-  loadOcrApiKey();
-}
+export function initRecognizeTools(): void { loadOcrApiKey(); }

@@ -36,9 +36,9 @@ export interface DataPresets {
 
 export interface Settings {
   summaryTemplate: string;
-  showVoice: boolean; 
+  showVoice: boolean;
   showImageOcr: boolean;
-  showRecognizeTools: boolean;
+  showRecognizeTools: boolean;        // ★ v3.4 新增
   experienceLevel: 'auto' | 'elegant' | 'standard' | 'compat';
   animationLevel: 'normal' | 'reduced' | 'none';
   showZeroQtyItems: boolean;
@@ -104,10 +104,9 @@ export const LEGACY_TPLS: string[] = [
   '供应商来料：{supplier}\n发生工序：{process}\n料号及来料批量：\n{lotLines}\n问题描述：\n{samplingLine}\n{summary}',
 ];
 
-/* ---------- 清洗 ---------- */
 export function cleanStringList(arr: unknown): string[] {
   const seen = new Set<string>(), out: string[] = [];
-  (Array.isArray(arr) ? arr : []).forEach(x => {
+  (Array.isArray(arr) ? arr : []).forEach((x) => {
     if (typeof x !== 'string') return;
     const t = x.trim();
     if (!t) return;
@@ -120,7 +119,7 @@ export function cleanStringList(arr: unknown): string[] {
 
 export function cleanNumberList(arr: unknown): number[] {
   const seen = new Set<number>(), out: number[] = [];
-  (Array.isArray(arr) ? arr : []).forEach(x => {
+  (Array.isArray(arr) ? arr : []).forEach((x) => {
     const n = clampInt(x, 0);
     if (n <= 0 || seen.has(n)) return;
     seen.add(n); out.push(n);
@@ -238,9 +237,7 @@ export function cleanSpecialGroups(arr: unknown): SpecialGroup[] {
     seen.add(k);
     const items = Array.isArray(s.items) ? cleanStringList(s.items) : [name];
     out.push({
-      id: s.id || uid(),
-      name,
-      items,
+      id: s.id || uid(), name, items,
       responsibleIds: Array.isArray(s.responsibleIds)
         ? s.responsibleIds.filter((x: unknown) => typeof x === 'string') : [],
       requireSample: !!s.requireSample,
@@ -297,7 +294,7 @@ export function parseGroupBulk(raw: unknown): string[] {
     return Array.from({ length: b - a + 1 }, (_, i) => `分组${a + i}`);
   }
   if (/^\d+(?:\s*[,，]\s*\d+)*$/.test(s)) {
-    return s.split(/[,，]/).map(x => `分组${parseInt(x.trim(), 10)}`).slice(0, 100);
+    return s.split(/[,，]/).map((x) => `分组${parseInt(x.trim(), 10)}`).slice(0, 100);
   }
   return [s];
 }

@@ -7,6 +7,9 @@
   import PresetPanel from './components/PresetPanel.svelte';
   import GroupList from './components/GroupList.svelte';
   import MergePanel from './components/MergePanel.svelte';
+  import OutputPanel from './components/OutputPanel.svelte';
+  import SpeechInput from './components/SpeechInput.svelte';
+  import RecognizePanel from './components/RecognizePanel.svelte';
   import WorkTimeDialog from './components/WorkTimeDialog.svelte';
   import SettingsDialog from './components/SettingsDialog.svelte';
   import DataPresetsDialog from './components/DataPresetsDialog.svelte';
@@ -14,11 +17,7 @@
   import ShareMenu from './components/ShareMenu.svelte';
   import Toast from './components/Toast.svelte';
   import ConfirmDialog from './components/ConfirmDialog.svelte';
-  import SpeechInput from './components/SpeechInput.svelte';
-  import OcrPanel from './components/OcrPanel.svelte';
-  import RecognizePanel from './components/RecognizePanel.svelte';
- import OutputPanel from './components/OutputPanel.svelte';
- 
+
   let cleanup: (() => void) | null = null;
 
   onMount(() => {
@@ -44,20 +43,6 @@
   let addProductOpen = $state(false);
   let workTimeOpen = $state(false);
   let shareMenuOpen = $state(false);
-  let recognizeOpen = $state(false);
-
-  // 识别文本面板的桥接：语音 / OCR 填入文本
-  let recognizeRef = $state<{ appendText: (t: string) => void } | null>(null);
-  let pendingText = $state('');
-
-  function fillRecognizeText(t: string) {
-    if (recognizeRef) {
-      recognizeRef.appendText(t);
-    } else {
-      pendingText = pendingText ? pendingText + '\n' + t : t;
-    }
-    recognizeOpen = true;
-  }
 </script>
 
 <div
@@ -100,38 +85,14 @@
       <div class="app">
         <ProductInfo />
         <PresetPanel />
-
-        <!-- 识别工具入口 -->
-        <section class="box">
-          <div class="box-head">
-            <span class="box-title">🎯 识别工具（语音 / OCR）</span>
-            <button
-              class="mini-batch-btn"
-              onclick={() => (recognizeOpen = !recognizeOpen)}
-            >{recognizeOpen ? '收起' : '展开'}</button>
-          </div>
-          {#if app.settings.showMainTips !== false}
-            <div class="merge-supplier-tip">
-              语音与 OCR 均需 HTTPS 或 localhost。识别结果可一键生成候选列表。
-            </div>
-          {/if}
-          {#if app.settings.showRecognizeTools !== false}
-  <SpeechInput onFillText={fillRecognizeText} />
-  <OcrPanel onFillText={fillRecognizeText} />
-{/if}
-          {#if recognizeOpen}
-            <div bind:this={recognizeRef} style="display:contents">
-              <RecognizePanel />
-            </div>
-          {/if}
-        </section>
-
         <MergePanel onOpenShare={() => (shareMenuOpen = true)} />
         <OutputPanel />
-          {#if app.settings.showRecognizeTools !== false}
-           <SpeechInput />
-           <RecognizePanel />
-           {/if}
+
+        {#if app.settings.showRecognizeTools !== false}
+          <SpeechInput />
+          <RecognizePanel />
+        {/if}
+
         <GroupList />
       </div>
     {/if}

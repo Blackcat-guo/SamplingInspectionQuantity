@@ -28,15 +28,10 @@
 
   function confirm() {
     if (!parsed.valid.length) return;
-    parsed.valid.forEach((n) =>
-      addProduct(n, {
-        supplier,
-        customer,
-        process,
-        incomingQty: parseInt(incoming, 10) || 0,
-        isSample,
-      }),
-    );
+    parsed.valid.forEach((n) => addProduct(n, {
+      supplier, customer, process,
+      incomingQty: parseInt(incoming, 10) || 0, isSample,
+    }));
     logOperation(`添加 ${parsed.valid.length} 个产品`);
     pushToast(`已添加 ${parsed.valid.length} 个产品`);
     open = false;
@@ -46,11 +41,8 @@
 
 <Dialog bind:open title="➕ 添加产品" subtitle="产品名称即为料号；每行一个，也可用逗号、顿号、分号分隔。" wide>
   <div class="dialog-list">
-    <textarea
-      bind:value={text}
-      placeholder="0011&#10;0012&#10;0013"
-      style="width:100%;min-height:110px;padding:11px;font-size:13.5px;border:1.5px solid var(--c-border);border-radius:11px;background:var(--c-surface);color:var(--c-text);outline:none;resize:vertical;font-family:inherit"
-    ></textarea>
+    <textarea bind:value={text} placeholder="0011&#10;0012&#10;0013"
+              style="width:100%;min-height:110px;padding:11px;font-size:13.5px;border:1.5px solid var(--c-border);border-radius:11px;background:var(--c-surface);color:var(--c-text);outline:none;resize:vertical;font-family:inherit"></textarea>
 
     <div class="sub-section">
       <div class="panel-head-row"><span class="panel-head-text">统一设置（可选）</span></div>
@@ -94,9 +86,7 @@
       <div class="template-hint">
         已解析：将添加 <b>{parsed.valid.length}</b> 个产品
         {#if parsed.valid.length}：{parsed.valid.slice(0, 8).join('、')}{parsed.valid.length > 8 ? ' 等' : ''}{/if}
-        {#if parsed.skipped}
-          <span style="color:var(--c-danger)">（已跳过 {parsed.skipped} 个重复/无效项）</span>
-        {/if}
+        {#if parsed.skipped}<span style="color:var(--c-danger)">（已跳过 {parsed.skipped} 个重复/无效项）</span>{/if}
       </div>
     {/if}
   </div>

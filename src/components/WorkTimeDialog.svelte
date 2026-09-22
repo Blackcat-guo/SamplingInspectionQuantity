@@ -28,9 +28,8 @@
   });
 
   function persist() {
-    try {
-      localStorage.setItem(storage.WORK_TIME_KEY, JSON.stringify({ start, end, breaks }));
-    } catch { /* ignore */ }
+    try { localStorage.setItem(storage.WORK_TIME_KEY, JSON.stringify({ start, end, breaks })); }
+    catch { /* ignore */ }
   }
 
   const result = $derived.by(() => {
@@ -47,7 +46,6 @@
     if (e < s) { e += 1440; crossDay = true; }
     const total = e - s;
     if (total <= 0) return empty;
-
     const rawIntervals: { start: number; end: number }[] = [];
     breaks.forEach((b) => {
       let bs = parseTimeToMinutes(b.start);
@@ -76,8 +74,7 @@
     const otStart = Math.max(s, OVERTIME_START);
     const hasOt = overtime > 0 && e > otStart;
     return {
-      valid: true,
-      crossDay,
+      valid: true, crossDay,
       workRange: formatTimeRange(s, e),
       overtimeRange: hasOt ? formatTimeRange(otStart, e) : '—',
       totalDuration: formatDuration(total),
@@ -89,28 +86,17 @@
   });
 
   function addBreak() {
-    if (breaks.length >= MAX_BREAKS) {
-      pushToast(`最多 ${MAX_BREAKS} 段`, 'error');
-      return;
-    }
+    if (breaks.length >= MAX_BREAKS) { pushToast(`最多 ${MAX_BREAKS} 段`, 'error'); return; }
     const last = breaks[breaks.length - 1];
     let s = '12:00', e = '13:00';
     if (last) {
       const le = parseTimeToMinutes(last.end);
-      if (le !== null) {
-        s = minutesToTime(le);
-        e = minutesToTime(le + 60);
-      }
+      if (le !== null) { s = minutesToTime(le); e = minutesToTime(le + 60); }
     }
     breaks = [...breaks, { start: s, end: e }];
     persist();
   }
-
-  function removeBreak(i: number) {
-    breaks = breaks.filter((_, k) => k !== i);
-    persist();
-  }
-
+  function removeBreak(i: number) { breaks = breaks.filter((_, k) => k !== i); persist(); }
   async function copyOne(text: string, label: string) {
     const ok = await copyText(text, false);
     pushToast(ok ? `已复制${label}` : '复制失败', ok ? 'success' : 'error');
@@ -133,9 +119,7 @@
     <div class="break-section">
       <div class="break-title">
         <span>🍽️ 休息时间段</span>
-        {#if breaks.length}
-          <span style="font-size:11px;color:var(--c-text-3)">共 {breaks.length} 段</span>
-        {/if}
+        {#if breaks.length}<span style="font-size:11px;color:var(--c-text-3)">共 {breaks.length} 段</span>{/if}
       </div>
       {#each breaks as b, i (i)}
         <div class="break-row">
@@ -154,30 +138,12 @@
     </div>
 
     <div class="work-result">
-      <div class="work-result-row">
-        <span class="wr-label">工作时间段</span>
-        <span class="wr-value">{result.valid ? result.workRange : '—'}</span>
-      </div>
-      <div class="work-result-row">
-        <span class="wr-label">总上班时间</span>
-        <span class="wr-value">{result.valid ? result.totalDuration : '—'}</span>
-      </div>
-      <div class="work-result-row">
-        <span class="wr-label">休息扣除</span>
-        <span class="wr-value">{result.valid ? result.breakDuration : '—'}</span>
-      </div>
-      <div class="work-result-row">
-        <span class="wr-label">实际工作时长</span>
-        <span class="wr-value">{result.valid ? result.actualDuration : '—'}</span>
-      </div>
-      <div class="work-result-row">
-        <span class="wr-label">加班时间段</span>
-        <span class="wr-value">{result.valid ? result.overtimeRange : '—'}</span>
-      </div>
-      <div class="work-result-row highlight">
-        <span class="wr-label">加班时长</span>
-        <span class="wr-value">{result.valid ? result.overtimeDuration : '—'}</span>
-      </div>
+      <div class="work-result-row"><span class="wr-label">工作时间段</span><span class="wr-value">{result.valid ? result.workRange : '—'}</span></div>
+      <div class="work-result-row"><span class="wr-label">总上班时间</span><span class="wr-value">{result.valid ? result.totalDuration : '—'}</span></div>
+      <div class="work-result-row"><span class="wr-label">休息扣除</span><span class="wr-value">{result.valid ? result.breakDuration : '—'}</span></div>
+      <div class="work-result-row"><span class="wr-label">实际工作时长</span><span class="wr-value">{result.valid ? result.actualDuration : '—'}</span></div>
+      <div class="work-result-row"><span class="wr-label">加班时间段</span><span class="wr-value">{result.valid ? result.overtimeRange : '—'}</span></div>
+      <div class="work-result-row highlight"><span class="wr-label">加班时长</span><span class="wr-value">{result.valid ? result.overtimeDuration : '—'}</span></div>
     </div>
 
     <div class="work-copy-row">

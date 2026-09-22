@@ -52,54 +52,32 @@
       </div>
       <div class="info-field">
         <div class="field-label">供应商 <span class="req">*</span></div>
-        <input
-          value={p.supplier}
-          list="supplierList"
-          maxlength="40"
-          placeholder="选择或输入"
-          oninput={(e) => setProductSupplier(p.id, (e.target as HTMLInputElement).value)}
-        />
+        <input value={p.supplier} list="supplierList" maxlength="40" placeholder="选择或输入"
+               oninput={(e) => setProductSupplier(p.id, (e.target as HTMLInputElement).value)} />
         <datalist id="supplierList">
           {#each suppliers as s}<option value={s}></option>{/each}
         </datalist>
       </div>
       <div class="info-field">
         <div class="field-label">客户（可选）</div>
-        <input
-          value={p.customer}
-          list="customerList"
-          maxlength="40"
-          placeholder="选择或输入"
-          oninput={(e) => setProductCustomer(p.id, (e.target as HTMLInputElement).value)}
-        />
+        <input value={p.customer} list="customerList" maxlength="40" placeholder="选择或输入"
+               oninput={(e) => setProductCustomer(p.id, (e.target as HTMLInputElement).value)} />
         <datalist id="customerList">
           {#each customers as c}<option value={c.name}></option>{/each}
         </datalist>
       </div>
       <div class="info-field">
         <div class="field-label">来料数量</div>
-        <input
-          value={incomingText}
-          type="text"
-          inputmode="numeric"
-          placeholder="0"
-          maxlength="9"
-          list="incomingList"
-          oninput={onIncomingInput}
-        />
+        <input value={incomingText} type="text" inputmode="numeric" placeholder="0" maxlength="9"
+               list="incomingList" oninput={onIncomingInput} />
         <datalist id="incomingList">
           {#each incomingPresets as v}<option value={String(v)}></option>{/each}
         </datalist>
       </div>
       <div class="info-field">
         <div class="field-label">发生工序</div>
-        <input
-          value={p.process}
-          list="processList"
-          maxlength="40"
-          placeholder="选择或输入"
-          oninput={(e) => setProductField('process', (e.target as HTMLInputElement).value)}
-        />
+        <input value={p.process} list="processList" maxlength="40" placeholder="选择或输入"
+               oninput={(e) => setProductField('process', (e.target as HTMLInputElement).value)} />
         <datalist id="processList">
           {#each processes as x}<option value={x}></option>{/each}
         </datalist>
@@ -107,11 +85,8 @@
       <div class="info-field">
         <div class="field-label">类型</div>
         <label class="sample-toggle">
-          <input
-            type="checkbox"
-            checked={p.isSample}
-            onchange={(e) => toggleSample((e.target as HTMLInputElement).checked)}
-          />
+          <input type="checkbox" checked={p.isSample}
+                 onchange={(e) => toggleSample((e.target as HTMLInputElement).checked)} />
           <span>样品</span>
         </label>
       </div>

@@ -9,11 +9,8 @@
     toggleItemSelect, toggleAllItems, batchDeleteItems, cancelBatchItems, enterBatchItems,
     transferItemToGroup,
     dragState, moveGroupTo, effectiveLevel,
-    presetDerived,
-    getPresetItemState,
-    scheduleAutoRespSync,
-    removeGroup,
-    resetGroup,
+    presetDerived, getPresetItemState, scheduleAutoRespSync,
+    removeGroup, resetGroup,
   } from '../lib/stores/app.svelte';
   import type { Group } from '../lib/core/schema';
 
@@ -28,35 +25,25 @@
   );
 
   function toggleCollapse() {
-    const arr = Array.isArray(app.settings.collapsedGroups)
-      ? app.settings.collapsedGroups.slice()
-      : [];
+    const arr = Array.isArray(app.settings.collapsedGroups) ? app.settings.collapsedGroups.slice() : [];
     const k = arr.indexOf(g.id);
-    if (k >= 0) arr.splice(k, 1);
-    else arr.push(g.id);
+    if (k >= 0) arr.splice(k, 1); else arr.push(g.id);
     app.settings.collapsedGroups = arr;
     scheduleSave();
   }
-
   function onQtyInput(itemName: string, e: Event) {
     const key = g.id + '|' + nameKey(itemName);
     const raw = (e.target as HTMLInputElement).value.replace(/\D/g, '');
     (e.target as HTMLInputElement).value = raw;
     qtyDrafts[key] = raw;
     if (qtyTimers[key]) clearTimeout(qtyTimers[key]);
-    qtyTimers[key] = setTimeout(() => {
-      delete qtyDrafts[key];
-      commitQtyDraft(g, itemName, raw);
-    }, 300);
+    qtyTimers[key] = setTimeout(() => { delete qtyDrafts[key]; commitQtyDraft(g, itemName, raw); }, 300);
   }
   function displayQty(itemName: string, qty: number): string {
     const key = g.id + '|' + nameKey(itemName);
     return key in qtyDrafts ? qtyDrafts[key] : String(qty);
   }
-  function onAddItem() {
-    if (!itemInput.trim()) return;
-    if (addItem(g, itemInput)) itemInput = '';
-  }
+  function onAddItem() { if (!itemInput.trim()) return; if (addItem(g, itemInput)) itemInput = ''; }
   function onTotalInput(e: Event) {
     const raw = (e.target as HTMLInputElement).value.replace(/\D/g, '');
     (e.target as HTMLInputElement).value = raw;
@@ -82,10 +69,7 @@
     const cur = currentProduct();
     if (!cur) return;
     const at = realIndex;
-    if (!Number.isFinite(v) || v < 1 || v > cur.groups.length) {
-      input.value = String(at + 1);
-      return;
-    }
+    if (!Number.isFinite(v) || v < 1 || v > cur.groups.length) { input.value = String(at + 1); return; }
     if (v - 1 === at) return;
     moveGroupTo(at, v - 1);
   }
@@ -93,33 +77,21 @@
     const sel = groupSelection[group.id] || [];
     return group.items.length > 0 && sel.length === group.items.length;
   }
-
-  function onResetGroup() {
-    resetGroup(realIndex);
-  }
-  function onDeleteGroup() {
-    removeGroup(realIndex);
-  }
-
+  function onResetGroup() { resetGroup(realIndex); }
+  function onDeleteGroup() { removeGroup(realIndex); }
   function onBulkAddItems() {
     const raw = prompt(`向「${g.name}」批量添加分类（每行一个）：`);
     if (!raw) return;
     const arr = raw.split(/[\n,，、;；]+/).map((s) => s.trim()).filter(Boolean);
     let added = 0;
     arr.forEach((n) => { if (addItem(g, n)) added++; });
-    if (added) {
-      pushToast(`已添加 ${added} 个分类`);
-      logOperation(`向「${g.name}」添加 ${added} 个分类`);
-    }
+    if (added) { pushToast(`已添加 ${added} 个分类`); logOperation(`向「${g.name}」添加 ${added} 个分类`); }
   }
   function onTransferItem(itemName: string) {
     const p = currentProduct();
     if (!p) return;
     const others = p.groups.filter((x) => x.id !== g.id);
-    if (!others.length) {
-      pushToast('没有其他分组可转移', 'error');
-      return;
-    }
+    if (!others.length) { pushToast('没有其他分组可转移', 'error'); return; }
     const names = others.map((g2, idx) => `${idx + 1}. ${g2.name}`).join('\n');
     const choice = prompt(`转移到哪个分组？\n${names}\n\n请输入序号：`);
     if (choice == null) return;
@@ -132,72 +104,43 @@
     }
   }
 
-  /* ---------- 拖拽排序 ---------- */
+  /* 拖拽 */
   let longPressTimer: ReturnType<typeof setTimeout> | null = null;
   let pressing = false;
-  let startY = 0;
-  let startX = 0;
+  let startY = 0, startX = 0;
   let kbMode = $state(false);
 
   function onDragKeydown(e: KeyboardEvent) {
     if (effectiveLevel() === 'compat') return;
-    if (e.key === 'Enter') {
-      kbMode = !kbMode;
-      e.preventDefault();
-      return;
-    }
+    if (e.key === 'Enter') { kbMode = !kbMode; e.preventDefault(); return; }
     if (!kbMode) return;
     const p = currentProduct();
     if (!p) return;
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      moveGroupTo(realIndex, Math.max(0, realIndex - 1));
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      moveGroupTo(realIndex, Math.min(p.groups.length - 1, realIndex + 1));
-    } else if (e.key === 'Escape') {
-      kbMode = false;
-      e.preventDefault();
-    }
+    if (e.key === 'ArrowUp') { e.preventDefault(); moveGroupTo(realIndex, Math.max(0, realIndex - 1)); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); moveGroupTo(realIndex, Math.min(p.groups.length - 1, realIndex + 1)); }
+    else if (e.key === 'Escape') { kbMode = false; e.preventDefault(); }
   }
-
   function onHandlePointerDown(e: PointerEvent) {
-    if (effectiveLevel() === 'compat') {
-      pushToast('兼容模式已禁用拖拽，请使用序号框', 'error', 2400);
-      return;
-    }
+    if (effectiveLevel() === 'compat') { pushToast('兼容模式已禁用拖拽，请使用序号框', 'error', 2400); return; }
     if (e.button !== undefined && e.button !== 0) return;
     pressing = true;
-    startY = e.clientY;
-    startX = e.clientX;
+    startY = e.clientY; startX = e.clientX;
     try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
-    longPressTimer = setTimeout(() => {
-      longPressTimer = null;
-      if (!pressing) return;
-      startDrag();
-    }, 260);
+    longPressTimer = setTimeout(() => { longPressTimer = null; if (!pressing) return; startDrag(); }, 260);
   }
-
   function onHandlePointerMove(e: PointerEvent) {
     if (dragState.dragging) return;
     if (!pressing) return;
     if (longPressTimer) {
-      const dx = Math.abs(e.clientX - startX);
-      const dy = Math.abs(e.clientY - startY);
-      if (dx > 8 || dy > 8) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-        pressing = false;
-      }
+      const dx = Math.abs(e.clientX - startX), dy = Math.abs(e.clientY - startY);
+      if (dx > 8 || dy > 8) { clearTimeout(longPressTimer); longPressTimer = null; pressing = false; }
     }
   }
-
   function onHandlePointerUp() {
     if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
     pressing = false;
     if (dragState.dragging) endDrag();
   }
-
   function startDrag() {
     dragState.dragging = true;
     dragState.activeId = g.id;
@@ -206,13 +149,8 @@
     window.addEventListener('pointerup', onWindowUp);
     window.addEventListener('pointercancel', onWindowUp);
   }
-
-  function onWindowMove(e: PointerEvent) {
-    if (!dragState.dragging) return;
-    updateOverIndex(e.clientY);
-  }
+  function onWindowMove(e: PointerEvent) { if (!dragState.dragging) return; updateOverIndex(e.clientY); }
   function onWindowUp() { endDrag(); }
-
   function updateOverIndex(clientY: number) {
     const p = currentProduct();
     if (!p) return;
@@ -220,112 +158,69 @@
     let targetId = '';
     cards.forEach((card) => {
       const rect = card.getBoundingClientRect();
-      if (clientY >= rect.top && clientY <= rect.bottom) {
-        targetId = card.dataset.groupId || '';
-      }
+      if (clientY >= rect.top && clientY <= rect.bottom) targetId = card.dataset.groupId || '';
     });
     if (!targetId) return;
     const idx = p.groups.findIndex((x) => x.id === targetId);
     if (idx >= 0) dragState.overIndex = idx;
   }
-
   async function endDrag() {
     if (!dragState.dragging) return;
     window.removeEventListener('pointermove', onWindowMove);
     window.removeEventListener('pointerup', onWindowUp);
     window.removeEventListener('pointercancel', onWindowUp);
-
     await tick();
-
     const p = currentProduct();
     if (p && dragState.overIndex >= 0 && dragState.activeId) {
       const from = p.groups.findIndex((x) => x.id === dragState.activeId);
       const to = dragState.overIndex;
-      if (from >= 0 && from !== to) {
-        moveGroupTo(from, to);
-        pushToast(`已移动到第 ${to + 1} 位`);
-      }
+      if (from >= 0 && from !== to) { moveGroupTo(from, to); pushToast(`已移动到第 ${to + 1} 位`); }
     }
     dragState.dragging = false;
     dragState.activeId = '';
     dragState.overIndex = -1;
   }
 
-  /* ---------- 预分类下拉 ---------- */
+  /* 预分类下拉 */
   const sharedItems = $derived(presetDerived.visibleSharedPresets);
   const localItems = $derived(presetDerived.localOnlyPresets);
-
   let pickerOpen = $state(false);
   let pickerX = $state(0);
   let pickerY = $state(0);
   let triggerEl: HTMLElement | null = null;
 
   function openPicker(e: MouseEvent) {
-    if (pickerOpen) {
-      closePresetPicker();
-      return;
-    }
+    if (pickerOpen) { closePresetPicker(); return; }
     triggerEl = e.currentTarget as HTMLElement;
     computePickerPosition();
     pickerOpen = true;
   }
-
   function computePickerPosition() {
     if (!triggerEl) return;
     const rect = triggerEl.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const MENU_W = Math.min(280, vw - 24);
-    const MENU_H = 320;
-    const MARGIN = 12;
-    const GAP = 6;
-
-    let x = rect.left;
-    let y = rect.bottom + GAP;
-
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const MENU_W = Math.min(280, vw - 24), MENU_H = 320, MARGIN = 12, GAP = 6;
+    let x = rect.left, y = rect.bottom + GAP;
     if (x + MENU_W > vw - MARGIN) x = vw - MENU_W - MARGIN;
     if (x < MARGIN) x = MARGIN;
-
-    if (y + MENU_H > vh - MARGIN && rect.top - MENU_H - GAP > MARGIN) {
-      y = rect.top - MENU_H - GAP;
-    }
+    if (y + MENU_H > vh - MARGIN && rect.top - MENU_H - GAP > MARGIN) y = rect.top - MENU_H - GAP;
     if (y + MENU_H > vh - MARGIN) y = Math.max(MARGIN, vh - MENU_H - MARGIN);
-
-    pickerX = x;
-    pickerY = y;
+    pickerX = x; pickerY = y;
   }
-
-  function closePresetPicker() {
-    pickerOpen = false;
-    triggerEl = null;
-  }
-
-  function onOverlayClick(e: MouseEvent) {
-    if (e.target === e.currentTarget) closePresetPicker();
-  }
-
+  function closePresetPicker() { pickerOpen = false; triggerEl = null; }
+  function onOverlayClick(e: MouseEvent) { if (e.target === e.currentTarget) closePresetPicker(); }
   function onPickItem(name: string) {
     const state = getPresetItemState(g, name);
-
     if (state === 'in-current') {
       const idx = g.items.findIndex((it) => nameKey(it.name) === nameKey(name));
-      if (idx >= 0) {
-        removeItem(g, idx);
-        scheduleAutoRespSync();
-      }
-    } else if (state === 'in-other') {
-      pushToast(`「${name}」已存在于本产品的其他分组`, 'error', 2600);
-    } else {
-      if (addItem(g, name)) scheduleAutoRespSync();
-    }
+      if (idx >= 0) { removeItem(g, idx); scheduleAutoRespSync(); }
+    } else if (state === 'in-other') pushToast(`「${name}」已存在于本产品的其他分组`, 'error', 2600);
+    else { if (addItem(g, name)) scheduleAutoRespSync(); }
     closePresetPicker();
   }
-
   $effect(() => {
     if (!pickerOpen) return;
-    const onKeydown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closePresetPicker();
-    };
+    const onKeydown = (e: KeyboardEvent) => { if (e.key === 'Escape') closePresetPicker(); };
     const onScroll = () => closePresetPicker();
     const onResize = () => closePresetPicker();
     document.addEventListener('keydown', onKeydown, true);
@@ -339,54 +234,24 @@
   });
 </script>
 
-<div
-  class="group"
-  class:collapsed={collapsed}
-  class:dragging={dragState.activeId === g.id}
-  class:drag-over={dragState.dragging && dragState.overIndex === realIndex && dragState.activeId !== g.id}
-  data-group-id={g.id}
->
+<div class="group" class:collapsed={collapsed} class:dragging={dragState.activeId === g.id}
+     class:drag-over={dragState.dragging && dragState.overIndex === realIndex && dragState.activeId !== g.id}
+     data-group-id={g.id}>
   <div class="group-head">
-    <button class="group-collapse" onclick={toggleCollapse} aria-label={collapsed ? '展开' : '折叠'}>
-      {collapsed ? '▸' : '▾'}
-    </button>
-    <span
-      class="drag-handle"
-      class:kb-active={kbMode}
-      title="长按拖动排序（Enter 键进入键盘排序）"
-      tabindex="0"
-      role="button"
-      aria-label="拖动或键盘排序"
-      onpointerdown={onHandlePointerDown}
-      onpointermove={onHandlePointerMove}
-      onpointerup={onHandlePointerUp}
-      onpointercancel={onHandlePointerUp}
-      onkeydown={onDragKeydown}
-    >⠿</span>
-    <input
-      class="seq-input"
-      type="text"
-      inputmode="numeric"
-      value={realIndex + 1}
-      onblur={applySeq}
-      aria-label="分组序号"
-    />
-    <input
-      class="group-name"
-      value={g.name}
-      maxlength="30"
-      onblur={renameGroup}
-      aria-label="分组名称"
-    />
+    <button class="group-collapse" onclick={toggleCollapse} aria-label={collapsed ? '展开' : '折叠'}>{collapsed ? '▸' : '▾'}</button>
+    <span class="drag-handle" class:kb-active={kbMode}
+          title="长按拖动排序（Enter 键进入键盘排序）" tabindex="0" role="button" aria-label="拖动或键盘排序"
+          onpointerdown={onHandlePointerDown} onpointermove={onHandlePointerMove}
+          onpointerup={onHandlePointerUp} onpointercancel={onHandlePointerUp} onkeydown={onDragKeydown}>⠿</span>
+    <input class="seq-input" type="text" inputmode="numeric" value={realIndex + 1} onblur={applySeq} aria-label="分组序号" />
+    <input class="group-name" value={g.name} maxlength="30" onblur={renameGroup} aria-label="分组名称" />
     <button class="group-reset" title="重置该组" onclick={onResetGroup}>↻</button>
     <button class="group-del" title="删除该组" onclick={onDeleteGroup}>✕</button>
     {#if collapsed}
       <div class="group-preview">
         {#if !g.items.length}
           <span style="color:var(--c-text-disabled);font-style:italic">暂无分类</span>
-        {:else}
-          {g.items.map((x) => x.name).join('、')}
-        {/if}
+        {:else}{g.items.map((x) => x.name).join('、')}{/if}
       </div>
     {/if}
   </div>
@@ -394,49 +259,26 @@
   <div class="group-body">
     <div class="group-total-row">
       <span>总数量</span>
-      <input
-        class="group-total"
-        type="text"
-        inputmode="numeric"
-        value={String(g.total)}
-        oninput={onTotalInput}
-        aria-label="分组总数量"
-      />
+      <input class="group-total" type="text" inputmode="numeric" value={String(g.total)} oninput={onTotalInput} aria-label="分组总数量" />
       <span>PCS</span>
-      {#if g.totalIsAuto === false}
-        <span class="manual-tag">· 已手改</span>
-      {/if}
+      {#if g.totalIsAuto === false}<span class="manual-tag">· 已手改</span>{/if}
     </div>
 
     <div class="group-toolbar">
       <button class="mini-btn" onclick={onBulkAddItems}>＋ 批量添加</button>
-
       {#if g.items.length && batchGroupId.value !== g.id}
         <button class="mini-btn" onclick={() => enterBatchItems(g.id)}>批量删除/改量</button>
       {/if}
       {#if batchGroupId.value === g.id}
         <div class="batch-bar">
           <label>
-            <input
-              type="checkbox"
-              checked={allItemsSelected(g)}
-              onchange={(e) =>
-                toggleAllItems(g.id, (e.target as HTMLInputElement).checked, g.items)}
-            />
-            全选
+            <input type="checkbox" checked={allItemsSelected(g)}
+                   onchange={(e) => toggleAllItems(g.id, (e.target as HTMLInputElement).checked, g.items)} /> 全选
           </label>
           <span class="info">已选 {(groupSelection[g.id] || []).length} / {g.items.length}</span>
           <div class="actions">
-            <button
-              class="qty-btn"
-              disabled={!(groupSelection[g.id] || []).length}
-              onclick={() => openBulkQtyDialog(g.id)}
-            >改量</button>
-            <button
-              class="del-btn"
-              disabled={!(groupSelection[g.id] || []).length}
-              onclick={() => batchDeleteItems(g)}
-            >删除</button>
+            <button class="qty-btn" disabled={!(groupSelection[g.id] || []).length} onclick={() => openBulkQtyDialog(g.id)}>改量</button>
+            <button class="del-btn" disabled={!(groupSelection[g.id] || []).length} onclick={() => batchDeleteItems(g)}>删除</button>
             <button class="cancel-btn" onclick={cancelBatchItems}>取消</button>
           </div>
         </div>
@@ -444,22 +286,12 @@
     </div>
 
     <div class="group-add-item">
-      <input
-        bind:value={itemInput}
-        placeholder="添加分类，回车…"
-        maxlength="30"
-        onkeydown={(e) => { if (e.key === 'Enter') onAddItem(); }}
-      />
+      <input bind:value={itemInput} placeholder="添加分类，回车…" maxlength="30"
+             onkeydown={(e) => { if (e.key === 'Enter') onAddItem(); }} />
       <button onclick={onAddItem}>添加</button>
-
       <div class="preset-wrap">
-        <button
-          class="preset-btn"
-          type="button"
-          onclick={openPicker}
-          aria-haspopup="menu"
-          aria-expanded={pickerOpen}
-        >📦 预分类 ▾</button>
+        <button class="preset-btn" type="button" onclick={openPicker}
+                aria-haspopup="menu" aria-expanded={pickerOpen}>📦 预分类 ▾</button>
       </div>
     </div>
 
@@ -467,38 +299,22 @@
       {#each g.items as item, idx (item.name)}
         <div class="item">
           {#if batchGroupId.value === g.id}
-            <input
-              type="checkbox"
-              class="item-check"
-              checked={(groupSelection[g.id] || []).includes(item.name)}
-              onchange={() => toggleItemSelect(g.id, item.name)}
-              aria-label={'选择 ' + item.name}
-            />
+            <input type="checkbox" class="item-check"
+                   checked={(groupSelection[g.id] || []).includes(item.name)}
+                   onchange={() => toggleItemSelect(g.id, item.name)} aria-label={'选择 ' + item.name} />
           {:else}
             <div class="sort-btns">
               <button onclick={() => moveItem(idx, -1)} disabled={idx === 0} aria-label="上移">▲</button>
-              <button
-                onclick={() => moveItem(idx, 1)}
-                disabled={idx === g.items.length - 1}
-                aria-label="下移"
-              >▼</button>
+              <button onclick={() => moveItem(idx, 1)} disabled={idx === g.items.length - 1} aria-label="下移">▼</button>
             </div>
           {/if}
           <span class="name" title={item.name}>{item.name}</span>
           <div class="counter">
             <button class="btn" onclick={() => setQty(g, idx, item.qty - 1)} aria-label="减一">−</button>
-            <input
-              class="qty"
-              type="text"
-              inputmode="numeric"
-              value={displayQty(item.name, item.qty)}
-              oninput={(e) => onQtyInput(item.name, e)}
-              onblur={(e) => {
-                const raw = (e.target as HTMLInputElement).value.replace(/\D/g, '');
-                commitQtyDraft(g, item.name, raw);
-              }}
-              aria-label={'数量 ' + item.name}
-            />
+            <input class="qty" type="text" inputmode="numeric" value={displayQty(item.name, item.qty)}
+                   oninput={(e) => onQtyInput(item.name, e)}
+                   onblur={(e) => { const raw = (e.target as HTMLInputElement).value.replace(/\D/g, ''); commitQtyDraft(g, item.name, raw); }}
+                   aria-label={'数量 ' + item.name} />
             <button class="btn" onclick={() => setQty(g, idx, item.qty + 1)} aria-label="加一">+</button>
           </div>
           <button class="move" title="转移到其他分组" onclick={() => onTransferItem(item.name)}>↔</button>
@@ -516,23 +332,14 @@
 </div>
 
 {#if bulkQtyDialog.show && bulkQtyDialog.gid === g.id}
-  <div
-    class="dialog-overlay sub-dialog"
-    role="presentation"
-    onclick={(e) => { if (e.target === e.currentTarget) closeBulkQtyDialog(); }}
-  >
+  <div class="dialog-overlay sub-dialog" role="presentation"
+       onclick={(e) => { if (e.target === e.currentTarget) closeBulkQtyDialog(); }}>
     <div class="dialog-box" role="presentation">
       <h3>🔢 批量修改数量</h3>
       <p class="sub">将对已勾选的 <b>{(groupSelection[g.id] || []).length}</b> 个分类生效。</p>
       <div class="theme-toggle">
-        <button
-          class:active={bulkQtyDialog.mode === 'multiply'}
-          onclick={() => (bulkQtyDialog.mode = 'multiply')}
-        >× 乘以系数</button>
-        <button
-          class:active={bulkQtyDialog.mode === 'set'}
-          onclick={() => (bulkQtyDialog.mode = 'set')}
-        >＝ 设为定值</button>
+        <button class:active={bulkQtyDialog.mode === 'multiply'} onclick={() => (bulkQtyDialog.mode = 'multiply')}>× 乘以系数</button>
+        <button class:active={bulkQtyDialog.mode === 'set'} onclick={() => (bulkQtyDialog.mode = 'set')}>＝ 设为定值</button>
       </div>
       <div class="info-field">
         <div class="field-label">
@@ -549,61 +356,32 @@
 {/if}
 
 {#if pickerOpen}
-  <div
-    class="preset-picker-overlay"
-    role="presentation"
-    onclick={onOverlayClick}
-  >
-    <div
-      class="preset-picker-menu"
-      style="top: {pickerY}px; left: {pickerX}px;"
-      role="menu"
-      aria-label="预分类"
-    >
+  <div class="preset-picker-overlay" role="presentation" onclick={onOverlayClick}>
+    <div class="preset-picker-menu" style="top: {pickerY}px; left: {pickerX}px;" role="menu" aria-label="预分类">
       {#if sharedItems.length > 0}
         <div class="preset-picker-group-title">🌐 共享</div>
         {#each sharedItems as item (item.id)}
           {@const st = getPresetItemState(g, item.name)}
-          <button
-            type="button"
-            class="preset-picker-item"
-            role="menuitem"
-            onclick={() => onPickItem(item.name)}
-          >
+          <button type="button" class="preset-picker-item" role="menuitem" onclick={() => onPickItem(item.name)}>
             <span class="preset-picker-name">{item.name}</span>
-            {#if st === 'in-current'}
-              <span class="preset-picker-mark current">✓</span>
-            {:else if st === 'in-other'}
-              <span class="preset-picker-mark other">其他组</span>
-            {:else}
-              <span class="preset-picker-mark fresh">＋</span>
-            {/if}
+            {#if st === 'in-current'}<span class="preset-picker-mark current">✓</span>
+            {:else if st === 'in-other'}<span class="preset-picker-mark other">其他组</span>
+            {:else}<span class="preset-picker-mark fresh">＋</span>{/if}
           </button>
         {/each}
       {/if}
-
       {#if localItems.length > 0}
         <div class="preset-picker-group-title">📦 本产品</div>
         {#each localItems as name (name)}
           {@const st = getPresetItemState(g, name)}
-          <button
-            type="button"
-            class="preset-picker-item"
-            role="menuitem"
-            onclick={() => onPickItem(name)}
-          >
+          <button type="button" class="preset-picker-item" role="menuitem" onclick={() => onPickItem(name)}>
             <span class="preset-picker-name">{name}</span>
-            {#if st === 'in-current'}
-              <span class="preset-picker-mark current">✓</span>
-            {:else if st === 'in-other'}
-              <span class="preset-picker-mark other">其他组</span>
-            {:else}
-              <span class="preset-picker-mark fresh">＋</span>
-            {/if}
+            {#if st === 'in-current'}<span class="preset-picker-mark current">✓</span>
+            {:else if st === 'in-other'}<span class="preset-picker-mark other">其他组</span>
+            {:else}<span class="preset-picker-mark fresh">＋</span>{/if}
           </button>
         {/each}
       {/if}
-
       {#if sharedItems.length === 0 && localItems.length === 0}
         <div class="preset-picker-empty">暂无预分类</div>
       {/if}

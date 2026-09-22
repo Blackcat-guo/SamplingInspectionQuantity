@@ -5,7 +5,7 @@
     buildMergedText, templatePreviewHtml, getProductSamplingDisplay,
     pushToast, scheduleSave,
     scheduleAutoRespSync, rejectAutoResponsible, addManualResponsible,
-    normalResponsibles, autoRespState,
+    normalResponsibles,
   } from '../lib/stores/app.svelte';
   import { copyText } from '../lib/utils/copy';
 
@@ -22,7 +22,6 @@
   const mergedText = $derived(buildMergedText(true));
   const mergedPlain = $derived(buildMergedText(false));
 
-  // ✅ Bug 2 修复：读取数组内容（join），建立真正的响应式依赖
   $effect(() => {
     const sig = app.mergeSelectedIds.slice().sort().join('|');
     void sig;
@@ -43,12 +42,7 @@
     if (copyTimer) clearTimeout(copyTimer);
     copyTimer = setTimeout(() => { copyOk = false; }, 1800);
   }
-
-  function setMergeSummary(v: boolean) {
-    app.settings.mergeMultiProductSummary = v;
-    scheduleSave();
-  }
-
+  function setMergeSummary(v: boolean) { app.settings.mergeMultiProductSummary = v; scheduleSave(); }
   function pickResp(name: string) {
     addManualResponsible(name);
     respPickerOpen = false;
@@ -62,43 +56,25 @@
     <span class="box-title">📊 多产品汇总</span>
     <span class="box-badge">已选 {list.length} / {app.products.length}</span>
   </div>
-
   {#if app.settings.showMainTips !== false}
-    <div class="merge-supplier-tip">
-      只能选择 <b>同供应商 + 同客户</b> 的产品进行汇总。
-    </div>
+    <div class="merge-supplier-tip">只能选择 <b>同供应商 + 同客户</b> 的产品进行汇总。</div>
   {/if}
-
   <div class="merge-actions">
-    <button
-      onclick={selectAllSameCombination}
-      disabled={!currentProduct()?.supplier}
-    >选中本组合全部</button>
+    <button onclick={selectAllSameCombination} disabled={!currentProduct()?.supplier}>选中本组合全部</button>
     <button onclick={clearMergeSelection} disabled={!app.mergeSelectedIds.length}>清空选择</button>
   </div>
 
   {#each grouped as grp (grp.supplier + '|' + grp.customer)}
     <div class="merge-group">
       <div class="merge-group-title">
-        {grp.supplier || '（未填供应商）'}
-        {#if grp.customer} · {grp.customer}{/if}
+        {grp.supplier || '（未填供应商）'}{#if grp.customer} · {grp.customer}{/if}
       </div>
       <div class="merge-list">
         {#each grp.list as p (p.id)}
-          <label
-            class="merge-item"
-            class:selected={isMergeSelected(p.id)}
-            class:disabled={!canSelectProduct(p)}
-          >
-            <input
-              type="checkbox"
-              checked={isMergeSelected(p.id)}
-              disabled={!canSelectProduct(p)}
-              onchange={() => toggleMergeSelect(p.id)}
-            />
-            <span class="pname">
-              {p.name}{#if p.isSample}<span class="product-sample"> · 样品</span>{/if}
-            </span>
+          <label class="merge-item" class:selected={isMergeSelected(p.id)} class:disabled={!canSelectProduct(p)}>
+            <input type="checkbox" checked={isMergeSelected(p.id)} disabled={!canSelectProduct(p)}
+                   onchange={() => toggleMergeSelect(p.id)} />
+            <span class="pname">{p.name}{#if p.isSample}<span class="product-sample"> · 样品</span>{/if}</span>
             <span class="meta">来料 {p.incomingQty || 0} · 抽检 {getProductSamplingDisplay(p)}</span>
           </label>
         {/each}
@@ -110,15 +86,8 @@
   {#if list.length}
     <div class="merge-soft-field">
       <span class="field-tag">临时处理方式</span>
-      <input
-        value={app.settings.tempHandling}
-        maxlength="80"
-        placeholder="如：返工、让步接收…"
-        oninput={(e) => {
-          app.settings.tempHandling = (e.target as HTMLInputElement).value;
-          scheduleSave();
-        }}
-      />
+      <input value={app.settings.tempHandling} maxlength="80" placeholder="如：返工、让步接收…"
+             oninput={(e) => { app.settings.tempHandling = (e.target as HTMLInputElement).value; scheduleSave(); }} />
     </div>
   {:else}
     <div class="merge-soft-field merge-soft-field--hint">
@@ -133,45 +102,23 @@
       <div style="flex:1;display:flex;flex-wrap:wrap;gap:5px;min-width:0">
         {#if app.settings.responsiblePersons.length}
           {#each app.settings.responsiblePersons as name (name)}
-            <span class="resp-tag">
-              @{name}
-              <button
-                class="resp-tag-x"
-                title="移除"
-                onclick={() => rejectAutoResponsible(name)}
-              >✕</button>
-            </span>
+            <span class="resp-tag">@{name}<button class="resp-tag-x" title="移除" onclick={() => rejectAutoResponsible(name)}>✕</button></span>
           {/each}
         {:else}
-          <span style="font-size:12px;color:var(--c-text-3);padding:4px 0">
-            暂无（选择产品后自动带出）
-          </span>
+          <span style="font-size:12px;color:var(--c-text-3);padding:4px 0">暂无（选择产品后自动带出）</span>
         {/if}
-        <button
-          class="mini-batch-btn"
-          style="padding:3px 9px;font-size:11.5px"
-          onclick={() => (respPickerOpen = !respPickerOpen)}
-        >＋ 添加</button>
+        <button class="mini-batch-btn" style="padding:3px 9px;font-size:11.5px" onclick={() => (respPickerOpen = !respPickerOpen)}>＋ 添加</button>
       </div>
     </div>
     {#if respPickerOpen}
       <div class="resp-panel" style="margin:4px 0 8px">
         <div class="panel-title">选择负责人</div>
         <div class="panel-toolbar">
-          <input
-            value={respFilter}
-            placeholder="🔍 过滤…"
-            oninput={(e) => (respFilter = (e.target as HTMLInputElement).value)}
-          />
+          <input value={respFilter} placeholder="🔍 过滤…" oninput={(e) => (respFilter = (e.target as HTMLInputElement).value)} />
         </div>
         {#if filteredResponsibles.length}
           {#each filteredResponsibles as name (name)}
-            <button
-              type="button"
-              class="responsible-item"
-              style="width:100%;text-align:left;background:none;border:none;cursor:pointer"
-              onclick={() => pickResp(name)}
-            >
+            <button type="button" class="responsible-item" style="width:100%;text-align:left;background:none;border:none;cursor:pointer" onclick={() => pickResp(name)}>
               <span>@{name}</span>
             </button>
           {/each}
@@ -183,11 +130,7 @@
   {/if}
 
   <div class="template-label">汇总模板</div>
-  <textarea
-    class="template-textarea"
-    bind:value={app.settings.summaryTemplate}
-    oninput={() => scheduleSave()}
-  ></textarea>
+  <textarea class="template-textarea" bind:value={app.settings.summaryTemplate} oninput={() => scheduleSave()}></textarea>
   <div class="template-preview">{@html preview}</div>
   {#if app.settings.showMainTips !== false}
     <div class="template-hint">
@@ -202,11 +145,8 @@
     <span class="label">合并结果预览</span>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <label class="mini-switch-label">
-        <input
-          type="checkbox"
-          checked={app.settings.mergeMultiProductSummary !== false}
-          onchange={(e) => setMergeSummary((e.target as HTMLInputElement).checked)}
-        />
+        <input type="checkbox" checked={app.settings.mergeMultiProductSummary !== false}
+               onchange={(e) => setMergeSummary((e.target as HTMLInputElement).checked)} />
         <span>合并描述</span>
       </label>
       <button class="copy-btn" class:copied={copyOk} disabled={!mergedPlain} onclick={onCopy}>
