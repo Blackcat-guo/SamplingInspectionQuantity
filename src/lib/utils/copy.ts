@@ -21,16 +21,13 @@ export function execCopyTextarea(text: string): boolean {
     ta.select();
     ta.setSelectionRange(0, text.length);
     ok = document.execCommand('copy');
-  } catch {
-    ok = false;
-  }
+  } catch { ok = false; }
   try { document.body.removeChild(ta); } catch { /* ignore */ }
   return ok;
 }
 
 export async function copyText(text: string, compat: boolean): Promise<boolean> {
   if (!text) return false;
-  // 同步尝试 execCommand（iOS Safari 要求必须在用户手势同步栈内）
   if (execCopyTextarea(text)) return true;
   if (compat) return false;
   if (navigator.clipboard?.writeText) {
