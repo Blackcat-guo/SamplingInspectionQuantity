@@ -9,7 +9,6 @@
   const presets = $derived(currentPresets());
   let input = $state('');
 
-  // ✅ N3：改用 store 派生（响应式在 class 实例内维护）
   const visibleShared = $derived(presetDerived.visibleSharedPresets);
   const sharedKeys = $derived(presetDerived.globalPresetNameKeys);
 
@@ -19,46 +18,29 @@
     const v = input.trim();
     if (!v) return;
     const k = nameKey(v);
-    if (sharedKeys.has(k)) {
-      pushToast(`共享预分类中已存在「${v}」`, 'error');
-      input = '';
-      return;
-    }
+    if (sharedKeys.has(k)) { pushToast(`共享预分类中已存在「${v}」`, 'error'); input = ''; return; }
     if (cur.presets.some((x) => nameKey(x) === k)) return;
     cur.presets.push(v);
     scheduleSave();
     input = '';
   }
-
   function remove(idx: number) {
     const cur = currentProduct();
     if (!cur) return;
     cur.presets.splice(idx, 1);
     scheduleSave();
   }
-
   function rename(idx: number, e: Event) {
     const cur = currentProduct();
     if (!cur) return;
     const el = e.target as HTMLInputElement;
     const v = el.value.trim();
-    if (!v) {
-      el.value = cur.presets[idx];
-      return;
-    }
-    if (sharedKeys.has(nameKey(v))) {
-      pushToast('已存在同名', 'error');
-      el.value = cur.presets[idx];
-      return;
-    }
-    if (cur.presets.some((x, i) => i !== idx && nameKey(x) === nameKey(v))) {
-      el.value = cur.presets[idx];
-      return;
-    }
+    if (!v) { el.value = cur.presets[idx]; return; }
+    if (sharedKeys.has(nameKey(v))) { pushToast('已存在同名', 'error'); el.value = cur.presets[idx]; return; }
+    if (cur.presets.some((x, i) => i !== idx && nameKey(x) === nameKey(v))) { el.value = cur.presets[idx]; return; }
     cur.presets[idx] = v;
     scheduleSave();
   }
-
   function move(idx: number, delta: number) {
     const cur = currentProduct();
     if (!cur) return;
@@ -68,7 +50,6 @@
     cur.presets.splice(j, 0, x);
     scheduleSave();
   }
-
   function bulkAdd() {
     const cur = currentProduct();
     if (!cur) return;
@@ -80,15 +61,9 @@
     arr.forEach((v) => {
       const k = nameKey(v);
       if (seen.has(k) || sharedKeys.has(k)) return;
-      seen.add(k);
-      cur.presets.push(v);
-      added++;
+      seen.add(k); cur.presets.push(v); added++;
     });
-    if (added) {
-      scheduleSave();
-      pushToast(`已添加 ${added} 个预分类`);
-      logOperation(`批量添加 ${added} 个预分类`);
-    }
+    if (added) { scheduleSave(); pushToast(`已添加 ${added} 个预分类`); logOperation(`批量添加 ${added} 个预分类`); }
   }
 </script>
 
@@ -108,12 +83,7 @@
             <button onclick={() => move(i, -1)} disabled={i === 0} title="上移">▲</button>
             <button onclick={() => move(i, 1)} disabled={i === presets.length - 1} title="下移">▼</button>
           </div>
-          <input
-            class="preset-chip-name"
-            value={name}
-            maxlength="30"
-            onblur={(e) => rename(i, e)}
-          />
+          <input class="preset-chip-name" value={name} maxlength="30" onblur={(e) => rename(i, e)} />
           <button class="preset-chip-del" onclick={() => remove(i)}>✕</button>
         </div>
       {/each}
@@ -122,12 +92,8 @@
       <div style="padding:12px 4px;color:var(--c-text-3);font-size:12.5px;text-align:center">还没有预分类</div>
     {/if}
     <div class="presets-add">
-      <input
-        bind:value={input}
-        placeholder="输入预分类名称，回车添加…"
-        maxlength="30"
-        onkeydown={(e) => { if (e.key === 'Enter') add(); }}
-      />
+      <input bind:value={input} placeholder="输入预分类名称，回车添加…" maxlength="30"
+             onkeydown={(e) => { if (e.key === 'Enter') add(); }} />
       <button onclick={add}>添加</button>
     </div>
     <div class="shared-presets-preview">
