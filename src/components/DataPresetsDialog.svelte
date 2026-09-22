@@ -171,10 +171,11 @@
     editTarget = { kind: 'specialGroup', id };
     editOpen = true;
   }
-  function onEditConfirm(text: string) {
+    function onEditConfirm(text: string) {
     if (!editTarget) return;
     if (editTarget.kind === 'presetGroup') {
-      const p = app.dataPresets.presetGroups.find((x) => x.id === editTarget!.id);
+-     const p = app.dataPresets.presetGroups.find((x) => x.id === editTarget!.id);
++     const p = app.dataPresets.presetGroups.find((x) => x.id === editTarget.id);
       if (p) {
         p.items = text.split(/[\n,，、;；]+/).map((s) => s.trim()).filter(Boolean);
         scheduleSave();
