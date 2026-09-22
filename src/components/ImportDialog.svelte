@@ -21,7 +21,6 @@
     incProducts = false; incPresets = false; incSettings = false;
     mode = 'merge';
   }
-
   function pick() {
     const input = document.createElement('input');
     input.type = 'file';
@@ -49,23 +48,16 @@
     };
     input.click();
   }
-
   function doImport() {
     if (!raw) return;
-    if (!incProducts && !incPresets && !incSettings) {
-      pushToast('请至少勾选一个模块', 'error');
-      return;
-    }
+    if (!incProducts && !incPresets && !incSettings) { pushToast('请至少勾选一个模块', 'error'); return; }
     if (mode === 'overwrite') {
       if (!confirm('⚠️ 覆盖模式会替换现有数据，确定继续？')) return;
       if (!confirm('再次确认：此操作不可恢复。')) return;
     }
     try {
       const res = importPartialPayload(raw, {
-        products: incProducts,
-        dataPresets: incPresets,
-        settings: incSettings,
-        mode,
+        products: incProducts, dataPresets: incPresets, settings: incSettings, mode,
       });
       logOperation(`导入：新增 ${res.added} · 替换 ${res.replaced}`);
       pushToast(`导入完成：新增 ${res.added} · 替换 ${res.replaced}`);
@@ -86,7 +78,6 @@
         <b>文件：</b>{fileName}<br />
         <b>摘要：</b>{summary}
       </p>
-
       <div class="sub-section">
         <div class="panel-head-row"><span class="panel-head-text">选择要导入的模块</span></div>
         <label class="display-toggle">
@@ -104,15 +95,12 @@
           <span>⚙️ 全局设置</span>
           <small>模板 / 主题 / 体验等级</small>
         </label>
-
         <div class="panel-head-row" style="margin-top:12px">
           <span class="panel-head-text">导入模式</span>
         </div>
         <div class="theme-toggle">
           <button class:active={mode === 'merge'} onclick={() => (mode = 'merge')}>合并（去重）</button>
-          <button class:active={mode === 'overwrite'} onclick={() => (mode = 'overwrite')}>
-            覆盖（替换）
-          </button>
+          <button class:active={mode === 'overwrite'} onclick={() => (mode = 'overwrite')}>覆盖（替换）</button>
         </div>
         {#if mode === 'overwrite'}
           <p class="backup-note" style="color:var(--c-danger);margin-top:8px">
