@@ -161,15 +161,17 @@
 </script>
 
 <Dialog bind:open title="📚 数据预设" subtitle="预设客户、供应商、来料数量、工序、负责人、特殊分组、预分组、共享预分类。" wide>
-  <div class="dp-tabs-wrap">
+  <div class="dp-tabs-outer">
+  <div class="dp-tabs-scroll">
     {#each dataTabs as t (t.key)}
       <button class="dp-tab" class:active={tab === t.key} onclick={() => (tab = t.key)}>{t.label}</button>
     {/each}
-    <div class="dp-tab-actions">
-      <button class="dp-expand-btn" title="Tab 导航" onclick={() => (presetNavOpen = true)}>≡</button>
-      <button class="dp-expand-btn" title="打开设置" onclick={onOpenSettings}>⚙️</button>
-    </div>
   </div>
+  <div class="dp-tab-actions">
+    <button class="dp-expand-btn" title="Tab 导航" onclick={() => (presetNavOpen = true)}>≡</button>
+    <button class="dp-expand-btn" title="打开设置" onclick={onOpenSettings}>⚙️</button>
+  </div>
+</div>
 
   <div class="dialog-list">
     {#if tab === 'customer'}
