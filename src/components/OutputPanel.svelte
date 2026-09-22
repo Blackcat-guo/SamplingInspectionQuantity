@@ -32,12 +32,12 @@
     </div>
     <div class="info-grid" style="margin-bottom:8px">
       <div class="info-field">
-        <label>前段</label>
+        <div class="field-label">前段</div>
         <input value={p.prefix || ''} maxlength="60" placeholder="可选"
                oninput={(e) => setProductField('prefix', (e.target as HTMLInputElement).value)} />
       </div>
       <div class="info-field">
-        <label>后段</label>
+        <div class="field-label">后段</div>
         <input value={p.suffix || ''} maxlength="60" placeholder="可选"
                oninput={(e) => setProductField('suffix', (e.target as HTMLInputElement).value)} />
       </div>
