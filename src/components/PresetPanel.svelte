@@ -2,7 +2,7 @@
   import {
     app, currentProduct, currentPresets, nameKey,
     scheduleSave, pushToast, logOperation,
-    presetDerived,
+    presetDerived, askConfirm,
   } from '../lib/stores/app.svelte';
 
   const p = $derived(currentProduct());
@@ -11,6 +11,41 @@
 
   const visibleShared = $derived(presetDerived.visibleSharedPresets);
   const sharedKeys = $derived(presetDerived.globalPresetNameKeys);
+
+  /* ★ v3.7 要求 2：批量删除模式 */
+  let batchMode = $state(false);
+  let selected = $state<string[]>([]);
+
+  function enterBatch() { batchMode = true; selected = []; }
+  function cancelBatch() { batchMode = false; selected = []; }
+  function toggleSelect(name: string) {
+    const i = selected.indexOf(name);
+    if (i >= 0) selected.splice(i, 1);
+    else selected.push(name);
+  }
+  function toggleAll(checked: boolean) {
+    selected = checked ? presets.slice() : [];
+  }
+  async function doBatchDelete() {
+    const cur = currentProduct();
+    if (!cur) return;
+    if (!selected.length) return;
+    const ok = await askConfirm({
+      title: '批量删除预分类',
+      message: `确定删除选中的 ${selected.length} 个预分类吗？`,
+      confirmText: '删除',
+      danger: true,
+    });
+    if (!ok) return;
+    const set = new Set(selected.map(nameKey));
+    const before = cur.presets.length;
+    cur.presets = cur.presets.filter((x) => !set.has(nameKey(x)));
+    const removed = before - cur.presets.length;
+    scheduleSave();
+    logOperation(`批量删除 ${removed} 个预分类`);
+    pushToast(`已删除 ${removed} 个预分类`);
+    cancelBatch();
+  }
 
   function add() {
     const cur = currentProduct();
@@ -71,31 +106,60 @@
   <section class="box">
     <div class="box-head">
       <span class="box-title">预分类管理</span>
-      <div style="display:flex;gap:6px;align-items:center">
-        <button class="mini-batch-btn" onclick={bulkAdd}>＋ 批量添加</button>
-        {#if !presets.length}<span class="box-badge">0 项</span>{/if}
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        {#if !batchMode}
+          <button class="mini-batch-btn" onclick={bulkAdd}>＋ 批量添加</button>
+          {#if presets.length}
+            <button class="mini-batch-btn danger" onclick={enterBatch}>🗑 批量删除</button>
+          {/if}
+          {#if !presets.length}<span class="box-badge">0 项</span>{/if}
+        {:else}
+          <span style="font-size:12px;color:var(--c-text-3)">已选 {selected.length} / {presets.length}</span>
+          <button class="mini-batch-btn" onclick={() => toggleAll(selected.length !== presets.length)}>
+            {selected.length === presets.length ? '取消全选' : '全选'}
+          </button>
+          <button class="mini-batch-btn danger" disabled={!selected.length} onclick={doBatchDelete}>删除</button>
+          <button class="mini-batch-btn" onclick={cancelBatch}>取消</button>
+        {/if}
       </div>
     </div>
+
+    <!-- ★ v3.7 要求 2：chip 网格布局 -->
     <div class="presets-list">
       {#each presets as name, i (name)}
-        <div class="preset-chip">
-          <div class="sort-btns">
-            <button onclick={() => move(i, -1)} disabled={i === 0} title="上移">▲</button>
-            <button onclick={() => move(i, 1)} disabled={i === presets.length - 1} title="下移">▼</button>
-          </div>
-          <input class="preset-chip-name" value={name} maxlength="30" onblur={(e) => rename(i, e)} />
-          <button class="preset-chip-del" onclick={() => remove(i)}>✕</button>
+        <div class="preset-chip" class:selected={selected.includes(name)}>
+          {#if batchMode}
+            <input type="checkbox" class="preset-chip-check"
+                   checked={selected.includes(name)}
+                   onchange={() => toggleSelect(name)}
+                   aria-label={'选择 ' + name} />
+          {:else}
+            <div class="sort-btns">
+              <button onclick={() => move(i, -1)} disabled={i === 0} title="上移">▲</button>
+              <button onclick={() => move(i, 1)} disabled={i === presets.length - 1} title="下移">▼</button>
+            </div>
+          {/if}
+          {#if batchMode}
+            <span class="preset-chip-name-static" title={name}>{name}</span>
+          {:else}
+            <input class="preset-chip-name" value={name} maxlength="30" onblur={(e) => rename(i, e)} />
+            <button class="preset-chip-del" onclick={() => remove(i)}>✕</button>
+          {/if}
         </div>
       {/each}
     </div>
     {#if !presets.length}
       <div style="padding:12px 4px;color:var(--c-text-3);font-size:12.5px;text-align:center">还没有预分类</div>
     {/if}
-    <div class="presets-add">
-      <input bind:value={input} placeholder="输入预分类名称，回车添加…" maxlength="30"
-             onkeydown={(e) => { if (e.key === 'Enter') add(); }} />
-      <button onclick={add}>添加</button>
-    </div>
+
+    {#if !batchMode}
+      <div class="presets-add">
+        <input bind:value={input} placeholder="输入预分类名称，回车添加…" maxlength="30"
+               onkeydown={(e) => { if (e.key === 'Enter') add(); }} />
+        <button onclick={add}>添加</button>
+      </div>
+    {/if}
+
     <div class="shared-presets-preview">
       <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:6px">
         <span style="font-size:12.5px;font-weight:700;color:var(--c-text-2)">🌐 共享预分类</span>
