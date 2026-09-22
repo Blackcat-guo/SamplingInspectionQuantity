@@ -89,7 +89,9 @@
     if (added) { pushToast(`已添加 ${added} 个分类`); logOperation(`向「${g.name}」添加 ${added} 个分类`); }
   }
 
-  /* ---- H1：转移分类改为 ChoiceDialog ---- */
+  /* ============================================================
+     ★ H1：转移分类改为 ChoiceDialog
+     ============================================================ */
   let transferOpen = $state(false);
   let transferItemName = $state('');
   let transferFromGroupId = $state('');
@@ -99,8 +101,10 @@
     if (!p || !transferItemName) return [];
     const key = nameKey(transferItemName);
     return p.groups
-      .filter((x) => x.id !== transferFromGroupId
-                  && !x.items.some((it) => nameKey(it.name) === key))
+      .filter((x) =>
+        x.id !== transferFromGroupId &&
+        !x.items.some((it) => nameKey(it.name) === key),
+      )
       .map((x) => ({
         value: x.id,
         label: x.name,
@@ -129,7 +133,7 @@
     transferFromGroupId = '';
   }
 
-  /* ---- 拖拽 ---- */
+  /* ---------- 拖拽排序 ---------- */
   let longPressTimer: ReturnType<typeof setTimeout> | null = null;
   let pressing = false;
   let startY = 0, startX = 0;
@@ -206,7 +210,7 @@
     dragState.overIndex = -1;
   }
 
-  /* ---- 预分类下拉 ---- */
+  /* ---------- 预分类下拉 ---------- */
   const sharedItems = $derived(presetDerived.visibleSharedPresets);
   const localItems = $derived(presetDerived.localOnlyPresets);
   let pickerOpen = $state(false);
@@ -414,7 +418,7 @@
   </div>
 {/if}
 
-<!-- H1：转移分类弹窗 -->
+<!-- ★ H1：转移分类弹窗 -->
 <ChoiceDialog
   bind:open={transferOpen}
   title="↔ 转移分类"
