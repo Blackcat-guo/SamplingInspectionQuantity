@@ -30,6 +30,9 @@
   let tab = $state('customer');
   let presetNavOpen = $state(false);
 
+  // ★ v3.7 要求 4：Tab 自动滚动
+  let tabsScrollEl = $state<HTMLDivElement | null>(null);
+
   const dataTabs = [
     { key: 'customer', label: '客户' },
     { key: 'supplier', label: '供应商' },
@@ -49,19 +52,31 @@
   let newSpecialResp = $state('');
   let newSpecialGroup = $state('');
   let newPresetGroup = $state('');
-
   let newGlobalPreset = $state('');
   let expandedGpId = $state('');
   let gpFilter = $state('');
 
-  /* H2：文本编辑弹窗状态 */
+  // H2：文本编辑弹窗状态
   let editOpen = $state(false);
   let editTitle = $state('');
   let editSubtitle = $state('');
   let editInitialText = $state('');
   let editTarget = $state<{ kind: 'presetGroup' | 'specialGroup'; id: string } | null>(null);
 
-  function pickPresetTab(key: string) { tab = key; }
+  /* ★ v3.7 要求 4：Tab 点击后自动滚动到视口中央 */
+  function pickPresetTab(key: string) {
+    tab = key;
+    scrollToTab(key);
+  }
+  function scrollToTab(key: string) {
+    if (!tabsScrollEl) return;
+    const idx = dataTabs.findIndex((t) => t.key === key);
+    if (idx < 0) return;
+    const el = tabsScrollEl.querySelectorAll<HTMLElement>('.dp-tab')[idx];
+    if (!el) return;
+    const behavior: ScrollBehavior = app.settings.experienceLevel === 'compat' ? 'auto' : 'smooth';
+    el.scrollIntoView({ behavior, block: 'nearest', inline: 'center' });
+  }
 
   /* ---------- 共享预分类辅助 ---------- */
   function toggleGpPanel(id: string) {
@@ -152,7 +167,7 @@
     scheduleSave();
   }
 
-  /* ★ H2：改为弹窗 */
+  /* H2：改为弹窗 */
   function editPresetGroupItems(id: string) {
     const p = app.dataPresets.presetGroups.find((x) => x.id === id);
     if (!p) return;
@@ -173,7 +188,7 @@
   }
   function onEditConfirm(text: string) {
     if (!editTarget) return;
-    const target = editTarget;   // 局部常量，避免 TS 空断言
+    const target = editTarget;
     if (target.kind === 'presetGroup') {
       const p = app.dataPresets.presetGroups.find((x) => x.id === target.id);
       if (p) {
@@ -189,9 +204,10 @@
 
 <Dialog bind:open title="📚 数据预设" subtitle="预设客户、供应商、来料数量、工序、负责人、特殊分组、预分组、共享预分类。" wide>
   <div class="dp-tabs-outer">
-    <div class="dp-tabs-scroll">
+    <!-- ★ 要求 4：绑定容器 ref，用于自动滚动 -->
+    <div class="dp-tabs-scroll" bind:this={tabsScrollEl}>
       {#each dataTabs as t (t.key)}
-        <button class="dp-tab" class:active={tab === t.key} onclick={() => (tab = t.key)}>{t.label}</button>
+        <button class="dp-tab" class:active={tab === t.key} onclick={() => pickPresetTab(t.key)}>{t.label}</button>
       {/each}
     </div>
     <div class="dp-tab-actions">
