@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import ChoiceDialog from './ChoiceDialog.svelte';
   import {
     app, currentProduct, scheduleSave, pushToast, logOperation,
     setQty, commitQtyDraft, addItem, removeItem, nameKey,
@@ -87,24 +88,48 @@
     arr.forEach((n) => { if (addItem(g, n)) added++; });
     if (added) { pushToast(`已添加 ${added} 个分类`); logOperation(`向「${g.name}」添加 ${added} 个分类`); }
   }
+
+  /* ---- H1：转移分类改为 ChoiceDialog ---- */
+  let transferOpen = $state(false);
+  let transferItemName = $state('');
+  let transferFromGroupId = $state('');
+
+  const transferTargets = $derived.by(() => {
+    const p = currentProduct();
+    if (!p || !transferItemName) return [];
+    const key = nameKey(transferItemName);
+    return p.groups
+      .filter((x) => x.id !== transferFromGroupId
+                  && !x.items.some((it) => nameKey(it.name) === key))
+      .map((x) => ({
+        value: x.id,
+        label: x.name,
+        meta: `${x.items.length} 项`,
+      }));
+  });
+
   function onTransferItem(itemName: string) {
     const p = currentProduct();
     if (!p) return;
     const others = p.groups.filter((x) => x.id !== g.id);
     if (!others.length) { pushToast('没有其他分组可转移', 'error'); return; }
-    const names = others.map((g2, idx) => `${idx + 1}. ${g2.name}`).join('\n');
-    const choice = prompt(`转移到哪个分组？\n${names}\n\n请输入序号：`);
-    if (choice == null) return;
-    const idx = parseInt(choice, 10) - 1;
-    if (!Number.isFinite(idx) || idx < 0 || idx >= others.length) return;
-    const target = others[idx];
-    if (transferItemToGroup(g, itemName, target)) {
+    transferItemName = itemName;
+    transferFromGroupId = g.id;
+    transferOpen = true;
+  }
+  function onTransferPick(targetId: string) {
+    const p = currentProduct();
+    if (!p) return;
+    const target = p.groups.find((x) => x.id === targetId);
+    if (target && transferItemToGroup(g, transferItemName, target)) {
       pushToast(`已转移到「${target.name}」`);
-      logOperation(`分类「${itemName}」转移到「${target.name}」`);
+      logOperation(`分类「${transferItemName}」转移到「${target.name}」`);
     }
+    transferItemName = '';
+    transferFromGroupId = '';
   }
 
-  /* 拖拽 */
+  /* ---- 拖拽 ---- */
   let longPressTimer: ReturnType<typeof setTimeout> | null = null;
   let pressing = false;
   let startY = 0, startX = 0;
@@ -181,7 +206,7 @@
     dragState.overIndex = -1;
   }
 
-  /* 预分类下拉 */
+  /* ---- 预分类下拉 ---- */
   const sharedItems = $derived(presetDerived.visibleSharedPresets);
   const localItems = $derived(presetDerived.localOnlyPresets);
   let pickerOpen = $state(false);
@@ -388,3 +413,13 @@
     </div>
   </div>
 {/if}
+
+<!-- H1：转移分类弹窗 -->
+<ChoiceDialog
+  bind:open={transferOpen}
+  title="↔ 转移分类"
+  subtitle={`将「${transferItemName}」转移到：`}
+  items={transferTargets}
+  onSelect={onTransferPick}
+  filterable={transferTargets.length > 8}
+/>
