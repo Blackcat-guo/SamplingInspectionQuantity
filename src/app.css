@@ -135,7 +135,7 @@ h1{font-size:19px;margin:0 0 6px}
 .output-box .copy-btn{background:linear-gradient(135deg,#10b981,#059669)}
 .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
 .info-field{display:flex;flex-direction:column;gap:3px}
-.info-field>label,.info-field>.field-label{font-size:11px;color:var(--c-text-3);font-weight:700}
+.info-field>label,.info-field>.field-label,.setting-row .field-label{font-size:11px;color:var(--c-text-3);font-weight:700}
 .info-field input,.info-field select{padding:8px 10px;font-size:14px;border:1.5px solid var(--c-border);
   border-radius:9px;background:var(--c-surface);color:var(--c-text);outline:none;width:100%}
 .info-field input:focus{border-color:var(--c-info)}
