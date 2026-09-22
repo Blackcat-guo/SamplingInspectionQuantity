@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { initApp, app, effectiveLevel, currentProduct } from './lib/stores/app.svelte';
+  import {
+    initApp, app, effectiveLevel, currentProduct,
+    collapseAllGroups, expandAllGroups,
+  } from './lib/stores/app.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import TopNav from './components/TopNav.svelte';
   import ProductInfo from './components/ProductInfo.svelte';
@@ -24,6 +27,9 @@
     return () => { if (cleanup) cleanup(); };
   });
 
+  /* ============================================================
+     体验等级 class 切换
+     ============================================================ */
   $effect(() => {
     const el = document.documentElement;
     const lv = effectiveLevel();
@@ -38,9 +44,7 @@
   });
 
   /* ============================================================
-     ★ G2：弹窗互斥（queueMicrotask 方案）
-     - settings / dataPresets 二选一
-     - 其余三个弹窗独立
+     ★ G2：弹窗互斥管理（settings / dataPresets 二选一）
      ============================================================ */
   let settingsOpen = $state(false);
   let dataPresetsOpen = $state(false);
@@ -64,15 +68,47 @@
       else dataPresetsOpen = true;
     });
   }
+
+  /* ============================================================
+     ★ F2：全局快捷键（Ctrl+[ 折叠全部 / Ctrl+] 展开全部）
+     ============================================================ */
+  $effect(() => {
+    const onKeydown = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.shiftKey || e.altKey || e.metaKey) return;
+      if (e.key === '[') {
+        e.preventDefault();
+        collapseAllGroups();
+      } else if (e.key === ']') {
+        e.preventDefault();
+        expandAllGroups();
+      }
+    };
+    window.addEventListener('keydown', onKeydown);
+    return () => window.removeEventListener('keydown', onKeydown);
+  });
+
+  /* ============================================================
+     ★ F4：草稿保存提示（3 秒内显示）
+     ============================================================ */
+  let now = $state(Date.now());
+  $effect(() => {
+    const t = setInterval(() => { now = Date.now(); }, 1000);
+    return () => clearInterval(t);
+  });
+  const showSaveHint = $derived(
+    app.lastSavedAt > 0 && now - app.lastSavedAt < 3000,
+  );
 </script>
 
-<div class="layout" class:exp-elegant={effectiveLevel() === 'elegant'}
+<div class="layout"
+     class:exp-elegant={effectiveLevel() === 'elegant'}
      class:exp-standard={effectiveLevel() === 'standard'}
      class:exp-compat={effectiveLevel() === 'compat'}
      class:compat-mode={effectiveLevel() === 'compat'}
      class:compact-mode={app.settings.compactMode}
      class:no-animation={app.settings.animationLevel === 'none'}
      class:anim-reduced={app.settings.animationLevel === 'reduced'}>
+
   <Sidebar
     onOpenAddProduct={() => (addProductOpen = true)}
     onOpenSettings={openSettings}
@@ -109,6 +145,13 @@
       </div>
     {/if}
   </main>
+
+  <!-- ★ F4：草稿保存提示 -->
+  {#if showSaveHint}
+    <div class="save-hint" aria-live="polite">
+      已自动保存 {new Date(app.lastSavedAt).toLocaleTimeString()}
+    </div>
+  {/if}
 </div>
 
 <WorkTimeDialog bind:open={workTimeOpen} />
