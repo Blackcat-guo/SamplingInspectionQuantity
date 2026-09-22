@@ -1,6 +1,7 @@
 <script lang="ts">
   import Dialog from './Dialog.svelte';
   import NavGridDialog from './NavGridDialog.svelte';
+  import TextEditDialog from './TextEditDialog.svelte';
   import {
     app, addDataPreset, removeCustomerById, removeSupplierByName, renameSupplier, renameCustomerById,
     normalResponsibles, specialResponsibles, pushToast, scheduleSave, uid, nameKey,
@@ -52,6 +53,13 @@
   let newGlobalPreset = $state('');
   let expandedGpId = $state('');
   let gpFilter = $state('');
+
+  /* ★ H2：文本编辑弹窗状态 */
+  let editOpen = $state(false);
+  let editTitle = $state('');
+  let editSubtitle = $state('');
+  let editInitialText = $state('');
+  let editTarget = $state<{ kind: 'presetGroup' | 'specialGroup'; id: string } | null>(null);
 
   function pickPresetTab(key: string) { tab = key; }
 
@@ -143,35 +151,53 @@
     app.dataPresets.presetGroups = app.dataPresets.presetGroups.filter((x) => x.id !== id);
     scheduleSave();
   }
+
+  /* ★ H2：改为弹窗 */
   function editPresetGroupItems(id: string) {
     const p = app.dataPresets.presetGroups.find((x) => x.id === id);
     if (!p) return;
-    const raw = prompt(`编辑「${p.name}」的分类（每行一个）：`, p.items.join('\n'));
-    if (raw == null) return;
-    p.items = raw.split(/[\n,，、;；]+/).map((s) => s.trim()).filter(Boolean);
-    scheduleSave();
+    editTitle = `编辑「${p.name}」的分类`;
+    editSubtitle = '每行一个，或用逗号/顿号/分号分隔；空行自动忽略';
+    editInitialText = p.items.join('\n');
+    editTarget = { kind: 'presetGroup', id };
+    editOpen = true;
   }
   function editSpecialGroupItems(id: string) {
     const sg = app.dataPresets.specialGroups.find((x) => x.id === id);
     if (!sg) return;
-    const raw = prompt(`编辑「${sg.name}」的分类（每行一个）：`, sg.items.join('\n'));
-    if (raw == null) return;
-    setSpecialGroupItems(id, raw);
+    editTitle = `编辑「${sg.name}」的分类`;
+    editSubtitle = '每行一个，或用逗号/顿号/分号分隔；空行自动忽略';
+    editInitialText = sg.items.join('\n');
+    editTarget = { kind: 'specialGroup', id };
+    editOpen = true;
+  }
+  function onEditConfirm(text: string) {
+    if (!editTarget) return;
+    if (editTarget.kind === 'presetGroup') {
+      const p = app.dataPresets.presetGroups.find((x) => x.id === editTarget!.id);
+      if (p) {
+        p.items = text.split(/[\n,，、;；]+/).map((s) => s.trim()).filter(Boolean);
+        scheduleSave();
+      }
+    } else {
+      setSpecialGroupItems(editTarget.id, text);
+    }
+    editTarget = null;
   }
 </script>
 
 <Dialog bind:open title="📚 数据预设" subtitle="预设客户、供应商、来料数量、工序、负责人、特殊分组、预分组、共享预分类。" wide>
   <div class="dp-tabs-outer">
-  <div class="dp-tabs-scroll">
-    {#each dataTabs as t (t.key)}
-      <button class="dp-tab" class:active={tab === t.key} onclick={() => (tab = t.key)}>{t.label}</button>
-    {/each}
+    <div class="dp-tabs-scroll">
+      {#each dataTabs as t (t.key)}
+        <button class="dp-tab" class:active={tab === t.key} onclick={() => (tab = t.key)}>{t.label}</button>
+      {/each}
+    </div>
+    <div class="dp-tab-actions">
+      <button class="dp-expand-btn" title="Tab 导航" onclick={() => (presetNavOpen = true)}>≡</button>
+      <button class="dp-expand-btn" title="打开设置" onclick={onOpenSettings}>⚙️</button>
+    </div>
   </div>
-  <div class="dp-tab-actions">
-    <button class="dp-expand-btn" title="Tab 导航" onclick={() => (presetNavOpen = true)}>≡</button>
-    <button class="dp-expand-btn" title="打开设置" onclick={onOpenSettings}>⚙️</button>
-  </div>
-</div>
 
   <div class="dialog-list">
     {#if tab === 'customer'}
@@ -616,4 +642,12 @@
   items={dataTabs}
   activeKey={tab}
   onSelect={pickPresetTab}
+/>
+
+<TextEditDialog
+  bind:open={editOpen}
+  title={editTitle}
+  subtitle={editSubtitle}
+  initialText={editInitialText}
+  onConfirm={onEditConfirm}
 />
