@@ -30,7 +30,8 @@
     if (!parsed.valid.length) return;
     parsed.valid.forEach((n) => addProduct(n, {
       supplier, customer, process,
-      incomingQty: parseInt(incoming, 10) || 0, isSample,
+      incomingQty: parseInt(incoming, 10) || 0,
+      isSample,
     }));
     logOperation(`添加 ${parsed.valid.length} 个产品`);
     pushToast(`已添加 ${parsed.valid.length} 个产品`);
@@ -48,32 +49,32 @@
       <div class="panel-head-row"><span class="panel-head-text">统一设置（可选）</span></div>
       <div class="info-grid">
         <div class="info-field">
-          <label>供应商</label>
+          <div class="field-label">供应商</div>
           <input bind:value={supplier} maxlength="40" list="addSupplierList" />
           <datalist id="addSupplierList">
             {#each app.dataPresets.suppliers as s}<option value={s}></option>{/each}
           </datalist>
         </div>
         <div class="info-field">
-          <label>客户</label>
+          <div class="field-label">客户</div>
           <input bind:value={customer} maxlength="40" list="addCustomerList" />
           <datalist id="addCustomerList">
             {#each app.dataPresets.customers as c}<option value={c.name}></option>{/each}
           </datalist>
         </div>
         <div class="info-field">
-          <label>发生工序</label>
+          <div class="field-label">发生工序</div>
           <input bind:value={process} maxlength="40" list="addProcessList" />
           <datalist id="addProcessList">
             {#each app.dataPresets.processes as p}<option value={p}></option>{/each}
           </datalist>
         </div>
         <div class="info-field">
-          <label>来料数量</label>
+          <div class="field-label">来料数量</div>
           <input bind:value={incoming} type="text" inputmode="numeric" maxlength="9" />
         </div>
         <div class="info-field" style="grid-column:1/-1">
-          <label>类型</label>
+          <div class="field-label">类型</div>
           <label class="sample-toggle">
             <input type="checkbox" bind:checked={isSample} />
             <span>标记为样品</span>
