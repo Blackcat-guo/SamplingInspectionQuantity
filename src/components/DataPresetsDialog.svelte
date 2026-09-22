@@ -54,7 +54,7 @@
   let expandedGpId = $state('');
   let gpFilter = $state('');
 
-  /* ★ H2：文本编辑弹窗状态 */
+  /* H2：文本编辑弹窗状态 */
   let editOpen = $state(false);
   let editTitle = $state('');
   let editSubtitle = $state('');
@@ -171,17 +171,17 @@
     editTarget = { kind: 'specialGroup', id };
     editOpen = true;
   }
-    function onEditConfirm(text: string) {
+  function onEditConfirm(text: string) {
     if (!editTarget) return;
-    if (editTarget.kind === 'presetGroup') {
--     const p = app.dataPresets.presetGroups.find((x) => x.id === editTarget!.id);
-+     const p = app.dataPresets.presetGroups.find((x) => x.id === editTarget.id);
+    const target = editTarget;   // 局部常量，避免 TS 空断言
+    if (target.kind === 'presetGroup') {
+      const p = app.dataPresets.presetGroups.find((x) => x.id === target.id);
       if (p) {
         p.items = text.split(/[\n,，、;；]+/).map((s) => s.trim()).filter(Boolean);
         scheduleSave();
       }
     } else {
-      setSpecialGroupItems(editTarget.id, text);
+      setSpecialGroupItems(target.id, text);
     }
     editTarget = null;
   }
