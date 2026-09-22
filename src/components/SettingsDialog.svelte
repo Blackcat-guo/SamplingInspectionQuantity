@@ -63,7 +63,6 @@
 </script>
 
 <Dialog bind:open title="⚙️ 设置" subtitle="通用 · 显示 · 备份与恢复 · 操作日志 · 说明书 · 关于" wide>
-  <!-- 主 Tab 行：左侧滚动 + 右侧 [≡] [📚] 固定按钮 -->
   <div class="dp-tabs-outer">
     <div class="dp-tabs-scroll">
       {#each tabs as t (t.key)}
@@ -103,7 +102,7 @@
 
     {#if tab === 'display'}
       <div class="setting-row">
-        <label>✨ 体验等级（当前：{experienceLevelLabel()}）</label>
+        <div class="field-label">✨ 体验等级（当前：{experienceLevelLabel()}）</div>
         <div class="theme-toggle" style="margin-bottom:0">
           <button class:active={app.settings.experienceLevel === 'auto'} onclick={() => setExperience('auto')}>自动</button>
           <button class:active={app.settings.experienceLevel === 'elegant'} onclick={() => setExperience('elegant')}>优雅</button>
@@ -114,7 +113,7 @@
       </div>
 
       <div class="setting-row">
-        <label>🔤 全局字体大小（当前：{fontSizeLabel()}）</label>
+        <div class="field-label">🔤 全局字体大小（当前：{fontSizeLabel()}）</div>
         <div class="theme-toggle" style="margin-bottom:0">
           {#each ['small', 'standard', 'large'] as k (k)}
             <button class:active={app.settings.fontSize === k} onclick={() => setFontSize(k as any)}>
@@ -125,7 +124,7 @@
       </div>
 
       <div class="setting-row">
-        <label>🎬 动画强度（当前：{animationLevelLabel()}）</label>
+        <div class="field-label">🎬 动画强度（当前：{animationLevelLabel()}）</div>
         <div class="theme-toggle" style="margin-bottom:0">
           {#each ['normal', 'reduced', 'none'] as k (k)}
             <button class:active={app.settings.animationLevel === k} onclick={() => setAnimationLevel(k as any)}>
@@ -224,7 +223,6 @@
 
     {#if tab === 'manual'}
       <div class="manual-layout-vertical">
-        <!-- 说明书章节导航：左侧滚动 + 右侧固定 ≡ -->
         <div class="manual-tabs-wrap">
           <div class="manual-tabs-scroll">
             {#each MANUAL_SECTIONS as sec (sec.id)}
