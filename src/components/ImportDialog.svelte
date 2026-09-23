@@ -69,7 +69,7 @@
   }
 </script>
 
-<Dialog bind:open title="📥 导入数据" subtitle="支持 .json 与 .js；字段与 counts.html 完全兼容。">
+<Dialog bind:open variant="center" title="📥 导入数据" subtitle="支持 .json 与 .js；字段与 counts.html 完全兼容。">
   <div class="dialog-list">
     <button class="backup-action" onclick={pick}>📎 选择文件</button>
 
