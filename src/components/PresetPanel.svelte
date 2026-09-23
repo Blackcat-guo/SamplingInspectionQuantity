@@ -1,4 +1,5 @@
 <script lang="ts">
+  import TextEditDialog from './TextEditDialog.svelte';
   import {
     app, currentProduct, currentPresets, nameKey,
     scheduleSave, pushToast, logOperation,
@@ -12,7 +13,7 @@
   const visibleShared = $derived(presetDerived.visibleSharedPresets);
   const sharedKeys = $derived(presetDerived.globalPresetNameKeys);
 
-  /* ★ v3.7 要求 2：批量删除模式 */
+  /* 批量删除模式 */
   let batchMode = $state(false);
   let selected = $state<string[]>([]);
 
@@ -28,8 +29,7 @@
   }
   async function doBatchDelete() {
     const cur = currentProduct();
-    if (!cur) return;
-    if (!selected.length) return;
+    if (!cur || !selected.length) return;
     const ok = await askConfirm({
       title: '批量删除预分类',
       message: `确定删除选中的 ${selected.length} 个预分类吗？`,
@@ -45,6 +45,27 @@
     logOperation(`批量删除 ${removed} 个预分类`);
     pushToast(`已删除 ${removed} 个预分类`);
     cancelBatch();
+  }
+
+  /* ★ v3.7.1 需求2：批量添加改用 TextEditDialog */
+  let bulkOpen = $state(false);
+  function openBulk() { bulkOpen = true; }
+  function onBulkConfirm(text: string) {
+    const cur = currentProduct();
+    if (!cur) return;
+    const arr = text.split(/[\n,，、;；]+/).map((s) => s.trim()).filter(Boolean);
+    let added = 0;
+    const seen = new Set(cur.presets.map(nameKey));
+    arr.forEach((v) => {
+      const k = nameKey(v);
+      if (seen.has(k) || sharedKeys.has(k)) return;
+      seen.add(k); cur.presets.push(v); added++;
+    });
+    if (added) {
+      scheduleSave();
+      pushToast(`已添加 ${added} 个预分类`);
+      logOperation(`批量添加 ${added} 个预分类`);
+    }
   }
 
   function add() {
@@ -85,21 +106,6 @@
     cur.presets.splice(j, 0, x);
     scheduleSave();
   }
-  function bulkAdd() {
-    const cur = currentProduct();
-    if (!cur) return;
-    const raw = prompt('批量添加预分类（每行一个 / 逗号分隔）：');
-    if (!raw) return;
-    const arr = raw.split(/[\n,，、;；]+/).map((s) => s.trim()).filter(Boolean);
-    let added = 0;
-    const seen = new Set(cur.presets.map(nameKey));
-    arr.forEach((v) => {
-      const k = nameKey(v);
-      if (seen.has(k) || sharedKeys.has(k)) return;
-      seen.add(k); cur.presets.push(v); added++;
-    });
-    if (added) { scheduleSave(); pushToast(`已添加 ${added} 个预分类`); logOperation(`批量添加 ${added} 个预分类`); }
-  }
 </script>
 
 {#if p}
@@ -108,7 +114,7 @@
       <span class="box-title">预分类管理</span>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         {#if !batchMode}
-          <button class="mini-batch-btn" onclick={bulkAdd}>＋ 批量添加</button>
+          <button class="mini-batch-btn" onclick={openBulk}>＋ 批量添加</button>
           {#if presets.length}
             <button class="mini-batch-btn danger" onclick={enterBatch}>🗑 批量删除</button>
           {/if}
@@ -124,7 +130,6 @@
       </div>
     </div>
 
-    <!-- ★ v3.7 要求 2：chip 网格布局 -->
     <div class="presets-list">
       {#each presets as name, i (name)}
         <div class="preset-chip" class:selected={selected.includes(name)}>
@@ -174,3 +179,10 @@
     </div>
   </section>
 {/if}
+
+<TextEditDialog
+  bind:open={bulkOpen}
+  title="批量添加预分类"
+  subtitle="每行一个，或用逗号/顿号/分号分隔；重复项会自动跳过"
+  onConfirm={onBulkConfirm}
+/>
