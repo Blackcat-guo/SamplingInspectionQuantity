@@ -1,17 +1,20 @@
 <script lang="ts">
   import { onMount, onDestroy, type Snippet } from 'svelte';
+  import { effectiveLevel } from '../lib/stores/app.svelte';
 
   let {
     open = $bindable(false),
     title = '',
     subtitle = '',
     wide = false,
+    variant = 'center',
     children,
   } = $props<{
     open: boolean;
     title: string;
     subtitle?: string;
     wide?: boolean;
+    variant?: 'center' | 'sheet';
     children?: Snippet;
   }>();
 
@@ -56,12 +59,48 @@
     }
   });
 
+  /* ★ v3.7.7 · 任务 D · focusin → 滚动到视口中间（仅 Dialog 内生效） */
+  $effect(() => {
+    if (!open) return;
+    const container = boxEl;
+    if (!container) return;
+    const onFocusIn = (e: FocusEvent) => {
+      const el = e.target as HTMLElement;
+      if (!el?.matches?.('input, textarea, select')) return;
+      setTimeout(() => {
+        el.scrollIntoView({
+          block: 'center',
+          behavior: effectiveLevel() === 'compat' ? 'auto' : 'smooth',
+        });
+      }, 250);
+    };
+    container.addEventListener('focusin', onFocusIn);
+    return () => container.removeEventListener('focusin', onFocusIn);
+  });
+
+  /* ★ v3.7.7 · 任务 E · visualViewport 键盘适配（仅 sheet 变体） */
+  $effect(() => {
+    if (!open || variant !== 'sheet') return;
+    const vv = (window as any).visualViewport;
+    if (!vv) return;
+    const onResize = () => {
+      if (!boxEl) return;
+      boxEl.style.maxHeight = Math.max(200, vv.height * 0.85) + 'px';
+    };
+    vv.addEventListener('resize', onResize);
+    onResize();
+    return () => {
+      vv.removeEventListener('resize', onResize);
+      if (boxEl) boxEl.style.maxHeight = '';
+    };
+  });
+
   onMount(() => document.addEventListener('keydown', onKeydown, true));
   onDestroy(() => document.removeEventListener('keydown', onKeydown, true));
 </script>
 
 {#if open}
-  <div class="dialog-overlay" role="presentation"
+  <div class="dialog-overlay" class:sheet={variant === 'sheet'} role="presentation"
        onclick={(e) => { if (e.target === e.currentTarget) open = false; }}>
     <div class="dialog-box" class:wide bind:this={boxEl} tabindex="-1" role="dialog" aria-modal="true">
       {#if title}<h3>{title}</h3>{/if}
