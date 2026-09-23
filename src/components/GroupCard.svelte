@@ -77,7 +77,6 @@
   function onResetGroup() { resetGroup(realIndex); }
   function onDeleteGroup() { removeGroup(realIndex); }
 
-  /* ★ v3.7.1 需求2：批量添加分类改用 TextEditDialog */
   let bulkAddOpen = $state(false);
   function onBulkAddItems() { bulkAddOpen = true; }
   function onBulkAddConfirm(text: string) {
@@ -97,7 +96,7 @@
     return `${sum}/${denom} = ${Math.round((sum / denom) * 100)}%`;
   }
 
-  /* H1：转移分类 ChoiceDialog */
+  /* H1：转移分类 */
   let transferOpen = $state(false);
   let transferItemName = $state('');
   let transferFromGroupId = $state('');
@@ -135,7 +134,7 @@
     transferFromGroupId = '';
   }
 
-  /* ---------- 拖拽排序 ---------- */
+  /* 拖拽排序 */
   let longPressTimer: ReturnType<typeof setTimeout> | null = null;
   let pressing = false;
   let startY = 0, startX = 0;
@@ -212,12 +211,13 @@
     dragState.overIndex = -1;
   }
 
-  /* ---------- 预分类下拉 ---------- */
+  /* 预分类下拉 */
   const sharedItems = $derived(presetDerived.visibleSharedPresets);
   const localItems = $derived(presetDerived.localOnlyPresets);
   let pickerOpen = $state(false);
   let pickerX = $state(0);
   let pickerY = $state(0);
+  let pickerMaxH = $state(0);
   let triggerEl: HTMLElement | null = null;
 
   function openPicker(e: MouseEvent) {
@@ -226,17 +226,23 @@
     computePickerPosition();
     pickerOpen = true;
   }
+
+  /* ★ v3.7.4：去除上翻，始终贴按钮下方 */
   function computePickerPosition() {
     if (!triggerEl) return;
     const rect = triggerEl.getBoundingClientRect();
     const vw = window.innerWidth, vh = window.innerHeight;
-    const MENU_W = Math.min(280, vw - 24), MENU_H = 320, MARGIN = 12, GAP = 6;
-    let x = rect.left, y = rect.bottom + GAP;
+    const MENU_W = Math.min(280, vw - 24), MARGIN = 8, GAP = 4;
+    let x = rect.left;
     if (x + MENU_W > vw - MARGIN) x = vw - MENU_W - MARGIN;
     if (x < MARGIN) x = MARGIN;
-    if (y + MENU_H > vh - MARGIN && rect.top - MENU_H - GAP > MARGIN) y = rect.top - MENU_H - GAP;
-    if (y + MENU_H > vh - MARGIN) y = Math.max(MARGIN, vh - MENU_H - MARGIN);
+    const y = rect.bottom + GAP;
+    const itemCount = sharedItems.length + localItems.length;
+    const naturalHeight = (sharedItems.length ? 20 : 0) + (localItems.length ? 20 : 0)
+      + itemCount * 40 + 8;
+    const spaceBelow = vh - y - MARGIN;
     pickerX = x; pickerY = y;
+    pickerMaxH = Math.min(naturalHeight, Math.max(spaceBelow, 100));
   }
   function closePresetPicker() { pickerOpen = false; triggerEl = null; }
   function onOverlayClick(e: MouseEvent) { if (e.target === e.currentTarget) closePresetPicker(); }
@@ -381,7 +387,9 @@
 
 {#if pickerOpen}
   <div class="preset-picker-overlay" role="presentation" onclick={onOverlayClick}>
-    <div class="preset-picker-menu" style="top: {pickerY}px; left: {pickerX}px;" role="menu" aria-label="预分类">
+    <div class="preset-picker-menu"
+         style="top: {pickerY}px; left: {pickerX}px; max-height: {pickerMaxH}px;"
+         role="menu" aria-label="预分类">
       {#if sharedItems.length > 0}
         <div class="preset-picker-group-title">🌐 共享</div>
         {#each sharedItems as item (item.id)}
