@@ -25,6 +25,18 @@
   let menuW = $state(0);
   let anchorEl: HTMLElement | null = null;
 
+  /* ★ v3.7.7 · C · textarea 自适应高度 */
+  let textareaEl = $state<HTMLTextAreaElement | null>(null);
+
+  function autoResize(el: HTMLTextAreaElement) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 280) + 'px';
+  }
+
+  $effect(() => {
+    if (textareaEl) autoResize(textareaEl);
+  });
+
   function openCombo(name: string, e: FocusEvent) {
     if (comboCloseTimer) { clearTimeout(comboCloseTimer); comboCloseTimer = null; }
     activeCombo = name;
@@ -75,7 +87,7 @@
     };
   });
 
-  /* ★ P0 修正：弹窗关闭时清理 combo 状态，防止下拉残留 */
+  /* 弹窗关闭时清理 combo 状态 */
   $effect(() => {
     if (!open) {
       activeCombo = '';
@@ -139,10 +151,19 @@
   }
 </script>
 
-<Dialog bind:open title="➕ 添加产品" subtitle="产品名称即为料号；每行一个，也可用逗号、顿号、分号分隔。" wide>
+<Dialog bind:open variant="sheet" title="➕ 添加产品"
+        subtitle="产品名称即为料号；每行一个，也可用逗号、顿号、分号分隔。" wide>
   <div class="dialog-list">
-    <textarea bind:value={text} placeholder="0011&#10;0012&#10;0013"
-              style="width:100%;min-height:110px;padding:11px;font-size:13.5px;border:1.5px solid var(--c-border);border-radius:11px;background:var(--c-surface);color:var(--c-text);outline:none;resize:vertical;font-family:inherit"></textarea>
+    <!-- ★ v3.7.7 · C · textarea 自适应高度 -->
+    <textarea
+      bind:this={textareaEl}
+      bind:value={text}
+      placeholder="0011&#10;0012&#10;0013"
+      oninput={(e) => autoResize(e.currentTarget as HTMLTextAreaElement)}
+      style="width:100%;min-height:110px;max-height:280px;padding:11px;font-size:13.5px;
+             border:1.5px solid var(--c-border);border-radius:11px;background:var(--c-surface);
+             color:var(--c-text);outline:none;resize:none;overflow-y:auto;font-family:inherit;
+             transition:height .15s ease"></textarea>
 
     <div class="sub-section">
       <div class="panel-head-row"><span class="panel-head-text">统一设置（可选）</span></div>
@@ -214,8 +235,6 @@
       </div>
     {/if}
   </div>
-
-  <!-- ★ P0 修正：4 个下拉移到 Dialog 内部（dialog-actions 之前） -->
 
   {#if activeCombo === 'add-supplier'}
     <div class="combo-dropdown-fixed" role="listbox"
