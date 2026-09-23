@@ -40,7 +40,7 @@
   }
 </script>
 
-<Dialog bind:open {title} {subtitle} wide>
+<Dialog bind:open variant="center" {title} {subtitle} wide>
   <div class="dialog-list">
     {#if filterable}
       <div class="panel-toolbar" style="margin-bottom:8px">
