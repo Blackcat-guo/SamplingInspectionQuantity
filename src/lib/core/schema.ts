@@ -10,7 +10,7 @@ export interface Product {
   id: string; name: string; prefix: string; suffix: string;
   supplier: string; customer: string; process: string;
   incomingQty: number; isSample: boolean;
-  inspectionQty: number;              // ★ v3.7 新增
+  inspectionQty: number;
   presets: string[]; groups: Group[];
 }
 export interface Customer { id: string; name: string; responsibleIds: string[]; }
@@ -55,6 +55,7 @@ export interface Settings {
   tempHandling: string;
   responsiblePersons: string[];
   collapsedGroups: string[];
+  comboVisibleItems: number;      // ★ v3.7.4 新增
 }
 
 export const uid = (): string =>
