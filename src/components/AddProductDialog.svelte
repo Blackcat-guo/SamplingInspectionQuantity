@@ -12,11 +12,16 @@
   let isSample = $state(false);
 
   /* ============================================================
-     ★ v3.7.2 需求1：自定义 combobox 状态
+     自定义 combobox 状态
      ============================================================ */
   let activeCombo = $state('');
   let comboCloseTimer: ReturnType<typeof setTimeout> | null = null;
 
+  /** ★ P1-1 修复：先清定时器再打开，避免快速切换时下拉被误关 */
+  function openCombo(name: string) {
+    if (comboCloseTimer) { clearTimeout(comboCloseTimer); comboCloseTimer = null; }
+    activeCombo = name;
+  }
   function closeCombo() {
     if (comboCloseTimer) { clearTimeout(comboCloseTimer); comboCloseTimer = null; }
     activeCombo = '';
@@ -40,7 +45,7 @@
     };
   });
 
-  /* 派生过滤列表（无匹配返回空数组，UI 显示"无匹配"） */
+  /* 派生过滤列表 */
   const filteredAddSuppliers = $derived.by(() => {
     const q = supplier.trim().toLowerCase();
     const list = app.dataPresets.suppliers;
@@ -105,7 +110,7 @@
       <div class="panel-head-row"><span class="panel-head-text">统一设置（可选）</span></div>
       <div class="info-grid">
 
-        <!-- ========== 供应商 combobox ========== -->
+        <!-- 供应商 -->
         <div class="info-field">
           <div class="field-label">供应商</div>
           <div class="combo-wrap">
@@ -114,7 +119,7 @@
               maxlength="40"
               placeholder="选择或输入"
               autocomplete="off"
-              onfocus={() => (activeCombo = 'add-supplier')}
+              onfocus={() => openCombo('add-supplier')}
               oninput={(e) => { supplier = (e.currentTarget as HTMLInputElement).value; }}
               onblur={delayedCloseCombo}
             />
@@ -144,7 +149,7 @@
           </div>
         </div>
 
-        <!-- ========== 客户 combobox ========== -->
+        <!-- 客户 -->
         <div class="info-field">
           <div class="field-label">客户</div>
           <div class="combo-wrap">
@@ -153,7 +158,7 @@
               maxlength="40"
               placeholder="选择或输入"
               autocomplete="off"
-              onfocus={() => (activeCombo = 'add-customer')}
+              onfocus={() => openCombo('add-customer')}
               oninput={(e) => { customer = (e.currentTarget as HTMLInputElement).value; }}
               onblur={delayedCloseCombo}
             />
@@ -183,7 +188,7 @@
           </div>
         </div>
 
-        <!-- ========== 发生工序 combobox ========== -->
+        <!-- 发生工序 -->
         <div class="info-field">
           <div class="field-label">发生工序</div>
           <div class="combo-wrap">
@@ -192,7 +197,7 @@
               maxlength="40"
               placeholder="选择或输入"
               autocomplete="off"
-              onfocus={() => (activeCombo = 'add-process')}
+              onfocus={() => openCombo('add-process')}
               oninput={(e) => { process = (e.currentTarget as HTMLInputElement).value; }}
               onblur={delayedCloseCombo}
             />
@@ -222,7 +227,7 @@
           </div>
         </div>
 
-        <!-- ========== 来料数量 combobox ========== -->
+        <!-- 来料数量 -->
         <div class="info-field">
           <div class="field-label">来料数量</div>
           <div class="combo-wrap">
@@ -233,7 +238,7 @@
               maxlength="9"
               placeholder="0"
               autocomplete="off"
-              onfocus={() => (activeCombo = 'add-incoming')}
+              onfocus={() => openCombo('add-incoming')}
               oninput={(e) => {
                 const raw = (e.currentTarget as HTMLInputElement).value.replace(/\D/g, '').slice(0, 9);
                 (e.currentTarget as HTMLInputElement).value = raw;
