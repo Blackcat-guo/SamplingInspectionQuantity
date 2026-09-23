@@ -13,6 +13,7 @@
     dragState, moveGroupTo, effectiveLevel,
     presetDerived, getPresetItemState, scheduleAutoRespSync,
     removeGroup, resetGroup,
+    positionDropdownBelow,
   } from '../lib/stores/app.svelte';
   import type { Group } from '../lib/core/schema';
 
@@ -211,13 +212,14 @@
     dragState.overIndex = -1;
   }
 
-  /* 预分类下拉 */
+  /* ★ v3.7.7 · B · 预分类下拉统一用 positionDropdownBelow + combo-dropdown-fixed */
   const sharedItems = $derived(presetDerived.visibleSharedPresets);
   const localItems = $derived(presetDerived.localOnlyPresets);
   let pickerOpen = $state(false);
   let pickerX = $state(0);
   let pickerY = $state(0);
   let pickerMaxH = $state(0);
+  let pickerW = $state(0);
   let triggerEl: HTMLElement | null = null;
 
   function openPicker(e: MouseEvent) {
@@ -227,22 +229,17 @@
     pickerOpen = true;
   }
 
-  /* ★ v3.7.4：去除上翻，始终贴按钮下方 */
   function computePickerPosition() {
     if (!triggerEl) return;
-    const rect = triggerEl.getBoundingClientRect();
-    const vw = window.innerWidth, vh = window.innerHeight;
-    const MENU_W = Math.min(280, vw - 24), MARGIN = 8, GAP = 4;
-    let x = rect.left;
-    if (x + MENU_W > vw - MARGIN) x = vw - MENU_W - MARGIN;
-    if (x < MARGIN) x = MARGIN;
-    const y = rect.bottom + GAP;
-    const itemCount = sharedItems.length + localItems.length;
-    const naturalHeight = (sharedItems.length ? 20 : 0) + (localItems.length ? 20 : 0)
-      + itemCount * 40 + 8;
-    const spaceBelow = vh - y - MARGIN;
-    pickerX = x; pickerY = y;
-    pickerMaxH = Math.min(naturalHeight, Math.max(spaceBelow, 100));
+    const pos = positionDropdownBelow(triggerEl, {
+      itemHeight: 40,      // 预分类项单行
+      hintHeight: 24,
+      // naturalHeight 未传，使用 comboVisibleItems 默认
+    });
+    pickerX = pos.x;
+    pickerY = pos.y;
+    pickerMaxH = pos.maxHeight;
+    pickerW = pos.width;
   }
   function closePresetPicker() { pickerOpen = false; triggerEl = null; }
   function onOverlayClick(e: MouseEvent) { if (e.target === e.currentTarget) closePresetPicker(); }
@@ -387,18 +384,17 @@
 
 {#if pickerOpen}
   <div class="preset-picker-overlay" role="presentation" onclick={onOverlayClick}>
-    <div class="preset-picker-menu"
-         style="top: {pickerY}px; left: {pickerX}px; max-height: {pickerMaxH}px;"
-         role="menu" aria-label="预分类">
+    <div class="combo-dropdown-fixed" role="menu" aria-label="预分类"
+         style="top:{pickerY}px;left:{pickerX}px;min-width:{pickerW}px;max-height:{pickerMaxH}px">
       {#if sharedItems.length > 0}
         <div class="preset-picker-group-title">🌐 共享</div>
         {#each sharedItems as item (item.id)}
           {@const st = getPresetItemState(g, item.name)}
-          <button type="button" class="preset-picker-item" role="menuitem" onclick={() => onPickItem(item.name)}>
-            <span class="preset-picker-name">{item.name}</span>
-            {#if st === 'in-current'}<span class="preset-picker-mark current">✓</span>
-            {:else if st === 'in-other'}<span class="preset-picker-mark other">其他组</span>
-            {:else}<span class="preset-picker-mark fresh">＋</span>{/if}
+          <button type="button" class="combo-item" role="menuitem" onclick={() => onPickItem(item.name)}>
+            <span class="txt">{item.name}</span>
+            {#if st === 'in-current'}<span class="tick">✓</span>
+            {:else if st === 'in-other'}<span class="tick" style="color:var(--c-warn);font-size:11px">其他组</span>
+            {:else}<span class="tick">＋</span>{/if}
           </button>
         {/each}
       {/if}
@@ -406,16 +402,16 @@
         <div class="preset-picker-group-title">📦 本产品</div>
         {#each localItems as name (name)}
           {@const st = getPresetItemState(g, name)}
-          <button type="button" class="preset-picker-item" role="menuitem" onclick={() => onPickItem(name)}>
-            <span class="preset-picker-name">{name}</span>
-            {#if st === 'in-current'}<span class="preset-picker-mark current">✓</span>
-            {:else if st === 'in-other'}<span class="preset-picker-mark other">其他组</span>
-            {:else}<span class="preset-picker-mark fresh">＋</span>{/if}
+          <button type="button" class="combo-item" role="menuitem" onclick={() => onPickItem(name)}>
+            <span class="txt">{name}</span>
+            {#if st === 'in-current'}<span class="tick">✓</span>
+            {:else if st === 'in-other'}<span class="tick" style="color:var(--c-warn);font-size:11px">其他组</span>
+            {:else}<span class="tick">＋</span>{/if}
           </button>
         {/each}
       {/if}
       {#if sharedItems.length === 0 && localItems.length === 0}
-        <div class="preset-picker-empty">暂无预分类</div>
+        <div class="combo-empty">暂无预分类</div>
       {/if}
     </div>
   </div>
