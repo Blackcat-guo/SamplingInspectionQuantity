@@ -1,6 +1,3 @@
-README.md（v3.7 完整版）
-
-```markdown
 # 📦 抽检数量统计 (SamplingInspectionQuantity)
 
 基于 **Svelte 5** 完全重构的抽检数量统计与多产品汇总工具。编译为**单文件 HTML**，完美适配手机 Chrome，支持完全离线使用，自动部署至 GitHub Pages。
