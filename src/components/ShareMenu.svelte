@@ -40,7 +40,7 @@
   }
 </script>
 
-<Dialog bind:open title="📤 选择分享方式"
+<Dialog bind:open variant="sheet" title="📤 选择分享方式"
         subtitle="微信 / 钉钉 / 飞书等第三方 App 不开放“直接传入文本”的 URL Scheme，因此选择后会先复制到剪贴板，再尝试打开目标 App，请手动粘贴。">
   <div class="dialog-list">
     <button type="button" class="share-option" class:disabled={!shareable}
