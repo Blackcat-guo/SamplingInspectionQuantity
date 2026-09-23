@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import ChoiceDialog from './ChoiceDialog.svelte';
+  import TextEditDialog from './TextEditDialog.svelte';
   import {
     app, currentProduct, scheduleSave, pushToast, logOperation,
     setQty, commitQtyDraft, addItem, removeItem, nameKey,
@@ -75,16 +76,20 @@
   }
   function onResetGroup() { resetGroup(realIndex); }
   function onDeleteGroup() { removeGroup(realIndex); }
-  function onBulkAddItems() {
-    const raw = prompt(`向「${g.name}」批量添加分类（每行一个）：`);
-    if (!raw) return;
-    const arr = raw.split(/[\n,，、;；]+/).map((s) => s.trim()).filter(Boolean);
+
+  /* ★ v3.7.1 需求2：批量添加分类改用 TextEditDialog */
+  let bulkAddOpen = $state(false);
+  function onBulkAddItems() { bulkAddOpen = true; }
+  function onBulkAddConfirm(text: string) {
+    const arr = text.split(/[\n,，、;；]+/).map((s) => s.trim()).filter(Boolean);
     let added = 0;
     arr.forEach((n) => { if (addItem(g, n)) added++; });
-    if (added) { pushToast(`已添加 ${added} 个分类`); logOperation(`向「${g.name}」添加 ${added} 个分类`); }
+    if (added) {
+      pushToast(`已添加 ${added} 个分类`);
+      logOperation(`向「${g.name}」添加 ${added} 个分类`);
+    }
   }
 
-  /* ★ v3.7：不良率显示为「分子/分母 = 百分比」 */
   function rateDisplay(group: Group): string {
     const denom = product?.inspectionQty || 0;
     const sum = groupSum(group);
@@ -342,7 +347,6 @@
       {/each}
     </div>
 
-    <!-- ★ v3.7：不良率使用产品级抽检数量为分母，显示「分子/分母 = 百分比」 -->
     <div class="group-summary">
       <span>分类数：<b class="count-val">{g.items.length}</b></span>
       <span>数量总和：<b>{groupSum(g)}</b></span>
@@ -416,4 +420,11 @@
   items={transferTargets}
   onSelect={onTransferPick}
   filterable={transferTargets.length > 8}
+/>
+
+<TextEditDialog
+  bind:open={bulkAddOpen}
+  title="批量添加分类"
+  subtitle={`向「${g.name}」批量添加分类；每行一个，或用逗号/顿号/分号分隔`}
+  onConfirm={onBulkAddConfirm}
 />
