@@ -11,13 +11,10 @@
   let incoming = $state('');
   let isSample = $state(false);
 
-  /* ============================================================
-     自定义 combobox 状态
-     ============================================================ */
+  /* 自定义 combobox 状态 */
   let activeCombo = $state('');
   let comboCloseTimer: ReturnType<typeof setTimeout> | null = null;
 
-  /** ★ P1-1 修复：先清定时器再打开，避免快速切换时下拉被误关 */
   function openCombo(name: string) {
     if (comboCloseTimer) { clearTimeout(comboCloseTimer); comboCloseTimer = null; }
     activeCombo = name;
@@ -38,14 +35,12 @@
     closeCombo();
   }
 
-  /* 卸载时清理定时器 */
   $effect(() => {
     return () => {
       if (comboCloseTimer) clearTimeout(comboCloseTimer);
     };
   });
 
-  /* 派生过滤列表 */
   const filteredAddSuppliers = $derived.by(() => {
     const q = supplier.trim().toLowerCase();
     const list = app.dataPresets.suppliers;
@@ -71,7 +66,6 @@
     return list.filter((s) => s.includes(q));
   });
 
-  /* 解析产品名 */
   const parsed = $derived.by(() => {
     const names = text.split(/[\n,，、;；]+/).map((s) => s.trim()).filter(Boolean);
     const existing = new Set(app.products.map((p) => nameKey(p.name)));
@@ -132,8 +126,8 @@
                     class:active={s === supplier}
                     role="option"
                     aria-selected={s === supplier}
-                    onmousedown={(e) => { e.preventDefault(); pickCombo('supplier', s); }}
-                    ontouchstart={(e) => { e.preventDefault(); pickCombo('supplier', s); }}
+                    onpointerdown={(e) => e.preventDefault()}
+                    onclick={() => pickCombo('supplier', s)}
                   >
                     <span class="txt">{s}</span>
                     {#if s === supplier}<span class="tick">✓</span>{/if}
@@ -171,8 +165,8 @@
                     class:active={s === customer}
                     role="option"
                     aria-selected={s === customer}
-                    onmousedown={(e) => { e.preventDefault(); pickCombo('customer', s); }}
-                    ontouchstart={(e) => { e.preventDefault(); pickCombo('customer', s); }}
+                    onpointerdown={(e) => e.preventDefault()}
+                    onclick={() => pickCombo('customer', s)}
                   >
                     <span class="txt">{s}</span>
                     {#if s === customer}<span class="tick">✓</span>{/if}
@@ -210,8 +204,8 @@
                     class:active={s === process}
                     role="option"
                     aria-selected={s === process}
-                    onmousedown={(e) => { e.preventDefault(); pickCombo('process', s); }}
-                    ontouchstart={(e) => { e.preventDefault(); pickCombo('process', s); }}
+                    onpointerdown={(e) => e.preventDefault()}
+                    onclick={() => pickCombo('process', s)}
                   >
                     <span class="txt">{s}</span>
                     {#if s === process}<span class="tick">✓</span>{/if}
@@ -255,8 +249,8 @@
                     class:active={s === incoming}
                     role="option"
                     aria-selected={s === incoming}
-                    onmousedown={(e) => { e.preventDefault(); pickCombo('incoming', s); }}
-                    ontouchstart={(e) => { e.preventDefault(); pickCombo('incoming', s); }}
+                    onpointerdown={(e) => e.preventDefault()}
+                    onclick={() => pickCombo('incoming', s)}
                   >
                     <span class="txt">{s}</span>
                     {#if s === incoming}<span class="tick">✓</span>{/if}
