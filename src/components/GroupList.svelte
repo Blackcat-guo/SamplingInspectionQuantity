@@ -3,6 +3,7 @@
     app, currentProduct, currentGroups, addGroup, addStandardGroups,
     expandAllGroups, collapseAllGroups, scheduleSave,
     createGroupFromPreset,
+    positionDropdownBelow,
   } from '../lib/stores/app.svelte';
   import GroupCard from './GroupCard.svelte';
 
@@ -15,6 +16,7 @@
   let presetMenuX = $state(0);
   let presetMenuY = $state(0);
   let presetMenuMaxH = $state(0);
+  let presetMenuW = $state(0);
   let presetTriggerEl: HTMLElement | null = null;
 
   const filtered = $derived.by(() => {
@@ -32,7 +34,7 @@
     nameInput = '';
   }
 
-  /* ★ v3.7.4：预分组下拉 — 去除上翻，始终贴按钮下方 */
+  /* ★ v3.7.7 · B · 预分组下拉统一用 positionDropdownBelow */
   function openPresetMenu(e: MouseEvent) {
     if (presetMenuOpen) { closePresetMenu(); return; }
     presetTriggerEl = e.currentTarget as HTMLElement;
@@ -41,18 +43,15 @@
   }
   function computeMenuPosition() {
     if (!presetTriggerEl) return;
-    const rect = presetTriggerEl.getBoundingClientRect();
-    const vw = window.innerWidth, vh = window.innerHeight;
-    const MENU_W = 240, MARGIN = 8, GAP = 4;
-    let x = rect.left;
-    if (x + MENU_W > vw - MARGIN) x = vw - MENU_W - MARGIN;
-    if (x < MARGIN) x = MARGIN;
-    const y = rect.bottom + GAP;
-    const naturalHeight = 24 + app.dataPresets.presetGroups.length * 40 + 8;
-    const spaceBelow = vh - y - MARGIN;
-    presetMenuX = x;
-    presetMenuY = y;
-    presetMenuMaxH = Math.min(naturalHeight, Math.max(spaceBelow, 100));
+    const pos = positionDropdownBelow(presetTriggerEl, {
+      itemHeight: 64,             // 预分组项较高（两行：标题 + 预览）
+      hintHeight: 0,
+      // naturalHeight 未传，使用 comboVisibleItems 默认
+    });
+    presetMenuX = pos.x;
+    presetMenuY = pos.y;
+    presetMenuMaxH = pos.maxHeight;
+    presetMenuW = pos.width;
   }
   function closePresetMenu() { presetMenuOpen = false; presetTriggerEl = null; }
 
@@ -143,7 +142,7 @@
   <div class="preset-menu-overlay" role="presentation"
        onclick={(e) => { if (e.target === e.currentTarget) closePresetMenu(); }}>
     <div class="preset-menu-fixed"
-         style="top:{presetMenuY}px;left:{presetMenuX}px;max-height:{presetMenuMaxH}px"
+         style="top:{presetMenuY}px;left:{presetMenuX}px;min-width:{presetMenuW}px;max-height:{presetMenuMaxH}px"
          role="menu">
       {#each app.dataPresets.presetGroups as pg (pg.id)}
         <button type="button" role="menuitem" onclick={() => onPickPreset(pg.id)}>
