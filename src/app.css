@@ -400,22 +400,73 @@ html[data-theme="dark"] .template-preview .ph-empty{background:#7f1d1d;color:#fe
   border:1px solid var(--c-purple-border);color:var(--c-purple-text);font-size:12px}
 
 /* ============================================================
-   对话框
+   对话框 · v3.7.6 底部 Sheet 改造
    ============================================================ */
-.dialog-overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:center;
-  justify-content:center;z-index:var(--z-dialog);padding:20px;backdrop-filter:blur(3px)}
-.dialog-overlay.sub-dialog{z-index:var(--z-dialog-sub)}
-.dialog-box{width:100%;max-width:460px;max-height:calc(100vh - 40px);background:var(--c-surface);
-  border-radius:var(--r-lg);padding:20px 22px;box-shadow:0 24px 60px -18px rgba(15,23,42,.5);
+/* 主弹窗遮罩：底部对齐，移动端贴边 */
+.dialog-overlay{
+  position:fixed;inset:0;background:rgba(15,23,42,.55);
+  display:flex;
+  align-items:flex-end;         /* ★ v3.7.6 center → flex-end */
+  justify-content:center;
+  z-index:var(--z-dialog);
+  padding:0;                    /* ★ v3.7.6 移动端贴边 */
+  backdrop-filter:blur(3px);
+}
+/* 子弹窗遮罩：保持居中（ConfirmDialog / bulkQtyDialog 等） */
+.dialog-overlay.sub-dialog{
+  z-index:var(--z-dialog-sub);
+  align-items:center;           /* ★ v3.7.6 覆盖回居中 */
+  padding:20px;
+}
+
+/* 主弹窗框体：底部 Sheet */
+.dialog-box{
+  width:100%;
+  max-width:640px;                                /* ★ v3.7.6 从 460 提升 */
+  max-height:85vh;                                /* ★ v3.7.6 从 calc(100vh-40px) 改 85vh */
+  max-height:85dvh;                               /* ★ v3.7.6 dvh 兜底（键盘自适应），顺序不能反 */
+  background:var(--c-surface);
+  border-radius:20px 20px 0 0;                    /* ★ v3.7.6 只上方圆角 */
+  padding:20px 22px calc(20px + env(safe-area-inset-bottom, 0px));  /* ★ v3.7.6 底部避让 home indicator */
+  box-shadow:0 -8px 40px -12px rgba(15,23,42,.35);/* ★ v3.7.6 从下方投影 */
   display:flex;flex-direction:column;overflow:hidden;outline:none;
-  animation:dlgEnter .28s var(--ease) both;
-  transition:background-color .3s ease,border-color .3s ease,color .3s ease}
-/* ★ v3.7.5 B2 修复：去掉 transform，避免创建 containing block 破坏子元素 position:fixed */
+  animation:sheetEnter .32s cubic-bezier(.32,1.15,.5,1) both;       /* ★ v3.7.6 从下方滑入 */
+  transition:background-color .3s ease,border-color .3s ease,color .3s ease;
+}
+
+/* v3.7.6 新增：主弹窗从底部滑入 */
+@keyframes sheetEnter{
+  from{opacity:0;transform:translateY(100%)}
+  to{opacity:1;transform:none}
+}
+
+/* v3.7.5 保留：子弹窗淡入（纯 opacity，不创建 containing block） */
 @keyframes dlgEnter{from{opacity:0}to{opacity:1}}
-.dialog-box.wide{max-width:520px}
+
+/* 子弹窗的框体：恢复居中四角 */
+.dialog-overlay.sub-dialog .dialog-box{
+  border-radius:var(--r-lg);                      /* ★ v3.7.6 恢复四角圆角 */
+  max-width:460px;                                /* ★ v3.7.6 子弹窗收窄 */
+  padding:20px 22px;                              /* ★ v3.7.6 无 safe-area 避让 */
+  box-shadow:0 24px 60px -18px rgba(15,23,42,.5); /* ★ v3.7.6 居中阴影 */
+  animation:dlgEnter .28s var(--ease) both;       /* ★ v3.7.6 子弹窗用淡入 */
+}
+
+/* wide 与主宽一致，宽窄由外层 .dialog-box 统一控制 */
+.dialog-box.wide{max-width:640px}
+
 .dialog-box h3{font-size:16px;margin:0 0 10px;color:var(--c-text);flex-shrink:0}
 .dialog-box .sub{font-size:12.5px;color:var(--c-text-3);margin:0 0 16px;line-height:1.6}
-.dialog-list{flex:1;min-height:0;overflow-y:auto;margin-bottom:10px;padding-right:4px}
+
+/* v3.7.6：内容区滚动不穿透 */
+.dialog-list{
+  flex:1;min-height:0;
+  overflow-y:auto;
+  overscroll-behavior:contain;   /* ★ v3.7.6 内部滚到底不带动父级 */
+  margin-bottom:10px;
+  padding-right:4px;
+}
+
 .dialog-actions{display:flex;gap:10px;flex-shrink:0}
 .dialog-actions button{flex:1;padding:12px;border:none;border-radius:11px;font-size:13.5px;font-weight:700}
 .dialog-actions .cancel{background:var(--c-bg-soft);color:var(--c-text-2)}
@@ -822,7 +873,8 @@ button:not(:disabled):active{transform:translateY(0) scale(.97)}
     box-shadow:0 0 40px -10px rgba(15,23,42,.3);transition:transform .3s var(--ease)}
   .sidebar.open{transform:translateX(0)}
   .main{padding:64px 10px 40px}
-  .dialog-overlay{padding:12px}
+  .dialog-overlay{padding:0}                     /* ★ v3.7.6 移动端：贴边 */
+  .dialog-overlay.sub-dialog{padding:12px}       /* ★ v3.7.6 子弹窗保留安全留白 */
   .product-edit,.product-copy,.product-del{width:36px;height:36px;font-size:15px}
   .group-collapse,.drag-handle,.seq-input,.group-reset,.group-del{min-width:36px;min-height:36px}
   .counter .btn{width:36px;height:36px;font-size:18px}
