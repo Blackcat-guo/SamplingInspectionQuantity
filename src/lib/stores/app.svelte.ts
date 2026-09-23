@@ -35,6 +35,7 @@ const defaultSettings = (): Settings => ({
   autoBackup: true, showShortcutHints: true, showMainTips: true, showTopNavText: true,
   bulkAddConfirmThreshold: 5, tempHandling: '',
   responsiblePersons: [], collapsedGroups: [],
+  comboVisibleItems: 4,
 });
 
 const defaultDataPresets = (): DataPresets => ({
@@ -313,14 +314,12 @@ export function setIncomingQty(qty: number): void {
   if (from === n) return;
   history.pushSnapshot(app.products, p.id);
   p.incomingQty = n;
-  // 修改来料数量 → 抽检数量强制重置为 AQL
   const aql = calcSampling(n);
   p.inspectionQty = aql;
   p.groups.forEach((g) => { g.total = aql; g.totalIsAuto = true; });
   scheduleSave();
 }
 
-/** 手动设置抽检数量，同步所有分组 total */
 export function setInspectionQty(qty: number): void {
   const p = currentProduct();
   if (!p) return;
@@ -469,7 +468,6 @@ export function resetGroup(index: number): void {
 
 export function groupSum(g: Group): number { return g.items.reduce((s, it) => s + it.qty, 0); }
 
-/** 不良率分母改用产品级 inspectionQty */
 export function groupRate(g: Group): string {
   const p = currentProduct();
   if (!p) return '--';
@@ -781,8 +779,8 @@ export function buildSamplingLineFromTotals(totals: number[], withLabels: boolea
     if (isFull) text = withLabels ? `全检数量：${qty}PCS` : `全检${qty}PCS`;
     else text = withLabels ? `抽检数量：${qty}PCS` : `抽检${qty}PCS`;
   } else {
-    if (isFull) text = withLabels ? `全检数量合计：${sum}PCS（各组分别为 ${valid.join('、')}）` : `全检合计${sum}PCS`;
-    else text = withLabels ? `抽检数量合计：${sum}PCS（各组分别为 ${valid.join('、')}）` : `抽检合计${sum}PCS`;
+    if (isFull) text = withLabels ? `全检数量：${sum}PCS` : `全检${sum}PCS`;
+    else text = withLabels ? `抽检数量：${sum}PCS` : `抽检${sum}PCS`;
   }
   return text + (text ? ',' : '');
 }
@@ -817,7 +815,7 @@ function computeMergedSummary(list: Product[], shouldMerge: boolean, withLabels:
       }
     } else {
       const sum = allTotals.reduce((a, b) => a + b, 0);
-      if (sum > 0) samplingLine = isFull ? `全检合计${sum}PCS,` : `抽检合计${sum}PCS,`;
+      if (sum > 0) samplingLine = isFull ? `全检${sum}PCS,` : `抽检${sum}PCS,`;
     }
     const groupMap = new Map<
       string,
@@ -877,7 +875,7 @@ function computeMergedSummary(list: Product[], shouldMerge: boolean, withLabels:
       let inspectText = '';
       if (uniq.length === 1) inspectText = pFull ? `全检${uniq[0]}PCS` : `抽检${uniq[0]}PCS`;
       else if (uniq.length === 0) inspectText = '抽检0PCS';
-      else inspectText = pFull ? `全检合计${pSum}PCS` : `抽检合计${pSum}PCS`;
+      else inspectText = pFull ? `全检${pSum}PCS` : `抽检${pSum}PCS`;
       const gp: string[] = [];
       p.groups.forEach((g) => {
         const items = g.items
@@ -1113,6 +1111,62 @@ export function setExperience(level: Settings['experienceLevel']): void {
   pushToast('体验等级：' + (level === 'auto' ? '自动' : level === 'elegant' ? '优雅' : level === 'standard' ? '标准' : '兼容'));
 }
 
+export function setComboVisibleItems(n: number): void {
+  const v = clampInt(n, 1, 20);
+  if (app.settings.comboVisibleItems === v) return;
+  app.settings.comboVisibleItems = v;
+  scheduleSave();
+}
+
+/* ============================================================
+   下拉定位工具（固定锚点下方，不做上翻）
+   ============================================================ */
+export interface DropdownPosition {
+  x: number;
+  y: number;
+  maxHeight: number;
+  width: number;
+}
+
+export function positionDropdownBelow(
+  anchor: HTMLElement,
+  options: {
+    itemHeight?: number;
+    hintHeight?: number;
+    padding?: number;
+    minWidth?: number;
+    maxWidth?: number;
+    naturalHeight?: number;
+  } = {},
+): DropdownPosition {
+  const {
+    itemHeight = 40,
+    hintHeight = 24,
+    padding = 8,
+    minWidth = 200,
+    maxWidth = 360,
+  } = options;
+  const rect = anchor.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const MARGIN = 8;
+  const GAP = 4;
+
+  const width = Math.min(Math.max(rect.width, minWidth), maxWidth, vw - MARGIN * 2);
+  let x = rect.left;
+  if (x + width > vw - MARGIN) x = vw - width - MARGIN;
+  if (x < MARGIN) x = MARGIN;
+
+  const y = rect.bottom + GAP;
+
+  const naturalHeight = options.naturalHeight
+    ?? (hintHeight + app.settings.comboVisibleItems * itemHeight + padding);
+  const spaceBelow = vh - y - MARGIN;
+  const maxHeight = Math.min(naturalHeight, Math.max(spaceBelow, 100));
+
+  return { x, y, maxHeight, width };
+}
+
 /* ============================================================
    主题 / 字体
    ============================================================ */
@@ -1187,6 +1241,9 @@ export function applyPayload(payload: any): void {
     tempHandling: typeof s.tempHandling === 'string' ? s.tempHandling : '',
     responsiblePersons: Array.isArray(s.responsiblePersons) ? s.responsiblePersons.filter((x: unknown) => typeof x === 'string') : [],
     collapsedGroups: Array.isArray(s.collapsedGroups) ? s.collapsedGroups.filter((x: unknown) => typeof x === 'string') : [],
+    comboVisibleItems: Number.isFinite(Number(s.comboVisibleItems))
+      ? clampInt(s.comboVisibleItems, 1, 20)
+      : 4,
   });
   const wantId = payload?.currentProductId;
   app.currentProductId = wantId && app.products.some((p) => p.id === wantId) ? wantId : app.products[0]?.id ?? '';
@@ -1240,9 +1297,6 @@ export type {
   SpecialGroup, PresetGroup, GlobalPreset, Shortcut,
 };
 
-/* ============================================================
-   说明书 11 章（独立文件重导出）
-   ============================================================ */
 export { MANUAL_SECTIONS } from '../manual';
 export type { ManualSection } from '../manual';
 
