@@ -100,10 +100,6 @@ input:focus,textarea:focus,select:focus{box-shadow:0 0 0 3px rgba(99,102,241,.15
 .product-edit:hover,.product-copy:hover{background:var(--c-primary-soft);color:var(--c-primary-dark)}
 .product-del:hover{background:var(--c-danger-soft);color:var(--c-danger)}
 .product-empty{padding:24px 12px;text-align:center;font-size:12.5px;color:var(--c-text-3);line-height:1.7}
-.sidebar-global{flex-shrink:0;padding:8px 12px 14px;border-top:1px solid var(--c-border)}
-.sidebar-global button{width:100%;padding:10px 12px;border:1.5px solid var(--c-success-border);border-radius:9px;
-  background:var(--c-success-soft);color:var(--c-success);font-size:13px;font-weight:700;
-  display:flex;align-items:center;justify-content:center;gap:6px}
 .overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(2px);z-index:var(--z-sidebar-overlay)}
 .overlay:not(.show){display:none}
 
@@ -738,3 +734,6 @@ button.share-option{width:100%;text-align:left;font-family:inherit}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
+.sidebar-settings{width:26px;height:26px;display:grid;place-items:center;border:none;border-radius:7px;
+  background:var(--c-bg-soft);color:var(--c-text-3);font-size:13px;font-weight:800;padding:0;flex-shrink:0;line-height:1}
+.sidebar-settings:hover{background:var(--c-primary-soft);color:var(--c-primary-dark)}
