@@ -81,7 +81,7 @@
   }
 </script>
 
-<Dialog bind:open title="⚙️ 设置" subtitle="通用 · 显示 · 备份与恢复 · 操作日志 · 说明书 · 关于" wide>
+<Dialog bind:open variant="center" title="⚙️ 设置" subtitle="通用 · 显示 · 备份与恢复 · 操作日志 · 说明书 · 关于" wide>
   <div class="dp-tabs-outer">
     <div class="dp-tabs-scroll" bind:this={tabsScrollEl}>
       {#each tabs as t (t.key)}
@@ -183,7 +183,6 @@
       </label>
       <p class="backup-note">包含语音输入与图片识别两个面板。</p>
 
-      <!-- ★ v3.7.4：下拉菜单默认显示项数 -->
       <div class="setting-row">
         <div class="field-label">📋 下拉菜单默认显示项数（当前：{app.settings.comboVisibleItems}）</div>
         <div class="theme-toggle" style="margin-bottom:0">
@@ -247,7 +246,7 @@
     {/if}
 
     {#if tab === 'about'}
-      <p class="backup-note"><b>版本：</b>v3.7.4（Svelte 5 重构版）</p>
+      <p class="backup-note"><b>版本：</b>v3.7.7（Svelte 5 重构版）</p>
       <p class="backup-note">本版本使用 Svelte 5 编译时框架，运行时开销极低，产物体积缩小 60%+。</p>
     {/if}
   </div>
