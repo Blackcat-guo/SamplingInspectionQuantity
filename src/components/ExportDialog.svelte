@@ -34,7 +34,7 @@
   }
 </script>
 
-<Dialog bind:open title="💾 导出数据" subtitle="选择要包含的模块；数据格式与完整导出兼容。">
+<Dialog bind:open variant="center" title="💾 导出数据" subtitle="选择要包含的模块；数据格式与完整导出兼容。">
   <div class="dialog-list">
     <label class="display-toggle">
       <input type="checkbox" bind:checked={incProducts} />
