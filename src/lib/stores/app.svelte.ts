@@ -747,7 +747,7 @@ export function buildOutputText(withLabels: boolean): string {
   const body = parts.join('，');
   const pre = (p.prefix || '').trim();
   const suf = (p.suffix || '').trim();
-  // ★ v3.7.5 B1：直接用产品级 inspectionQty，避免分组 total 重复累加
+  // ★ v3.7.5 B1 修复：单产品抽检直接用 p.inspectionQty，不再用 g.total
   const totals = p.inspectionQty > 0 ? [p.inspectionQty] : [];
   const samplingText = buildSamplingLineFromTotals(totals, withLabels, p.incomingQty || 0);
   if (!body && !pre && !suf && !samplingText)
@@ -786,7 +786,7 @@ export function buildSamplingLineFromTotals(totals: number[], withLabels: boolea
   return text + (text ? ',' : '');
 }
 
-// ★ v3.7.5 B1：直接返回产品级 inspectionQty
+// ★ v3.7.5 B1 修复：直接用产品级 inspectionQty
 export function getProductSamplingDisplay(p: Product): number {
   return p.inspectionQty || 0;
 }
@@ -795,7 +795,7 @@ function computeMergedSummary(list: Product[], shouldMerge: boolean, withLabels:
   if (!list.length) return { samplingLine: '', summaryText: '' };
   const showZero = app.settings.showZeroQtyItems !== false;
   const denom = list[0]?.inspectionQty || 0;
-  // ★ v3.7.5 B1：改用产品级 inspectionQty，避免分组 total 重复累加（13+15→127 修复）
+  // ★ v3.7.5 B1 修复：allTotals 改用 p.inspectionQty，避免旧数据 g.total 未同步导致 127 类错误
   const allTotals = list.map((p) => p.inspectionQty || 0).filter((t) => t > 0);
   const uniqueTotals = [...new Set(allTotals)];
   const sameSampling = uniqueTotals.length <= 1;
@@ -867,15 +867,11 @@ function computeMergedSummary(list: Product[], shouldMerge: boolean, withLabels:
     const lines: string[] = [];
     list.forEach((p) => {
       const pDenom = p.inspectionQty || 0;
-      // ★ v3.7.5 B1：改用产品级 inspectionQty
-      const pTotals = p.inspectionQty > 0 ? [p.inspectionQty] : [];
-      const uniq = [...new Set(pTotals)];
-      const pSum = pTotals.reduce((a, b) => a + b, 0);
-      const pFull = (p.incomingQty || 0) > 0 && pSum === p.incomingQty && pSum > 0;
-      let inspectText = '';
-      if (uniq.length === 1) inspectText = pFull ? `全检${uniq[0]}PCS` : `抽检${uniq[0]}PCS`;
-      else if (uniq.length === 0) inspectText = '抽检0PCS';
-      else inspectText = pFull ? `全检${pSum}PCS` : `抽检${pSum}PCS`;
+      const pSum = p.inspectionQty || 0;
+      const pFull = (p.incomingQty || 0) > 0 && pSum === p.incomingQty;
+      const inspectText = pSum > 0
+        ? (pFull ? `全检${pSum}PCS` : `抽检${pSum}PCS`)
+        : '抽检0PCS';
       const gp: string[] = [];
       p.groups.forEach((g) => {
         const items = g.items
@@ -906,7 +902,7 @@ export function buildMergedText(withLabels: boolean): string {
   const shouldMerge = app.settings.mergeMultiProductSummary !== false;
   const { samplingLine, summaryText } = computeMergedSummary(list, shouldMerge, withLabels);
   const totalIncoming = list.reduce((s, p) => s + (p.incomingQty || 0), 0);
-  // ★ v3.7.5 B1：改用产品级 inspectionQty
+  // ★ v3.7.5 B1 修复：totalSampling 累加 p.inspectionQty
   const totalSampling = list.reduce((s, p) => s + (p.inspectionQty || 0), 0);
   const tempHandling = (app.settings.tempHandling || '').trim();
   const responsible = app.settings.responsiblePersons.map((n) => '@' + n).join(' ');
@@ -939,7 +935,7 @@ export function templatePreviewHtml(): string {
   const shouldMerge = app.settings.mergeMultiProductSummary !== false;
   const { samplingLine, summaryText } = computeMergedSummary(target, shouldMerge, false);
   const totalIncoming = target.reduce((s, p) => s + (p.incomingQty || 0), 0);
-  // ★ v3.7.5 B1：改用产品级 inspectionQty
+  // ★ v3.7.5 B1 修复：totalSampling 累加 p.inspectionQty
   const totalSampling = target.reduce((s, p) => s + (p.inspectionQty || 0), 0);
   const vals: Record<string, string> = {
     customer, supplier, process, tempHandling, responsible, lotLines,
@@ -1202,16 +1198,15 @@ export function loadFromStorage(): void {
 
 export function applyPayload(payload: any): void {
   app.products = (Array.isArray(payload?.products) ? payload.products : []).map(normalizeProduct);
-
   // ★ v3.7.5 B1 数据迁移：确保 inspectionQty 与 group.total 一致
-  // 修复 v3.7 之前遗留数据：g.total 保留旧值（如 100+），导致合并汇总时重复累加成 127
-  app.products.forEach((p) => {
-    if (typeof p.inspectionQty !== 'number' || !Number.isFinite(p.inspectionQty) || p.inspectionQty < 0) {
+  // 旧数据（v3.7 之前）可能只有 g.total，或 g.total 与 inspectionQty 不同步
+  // → 统一以 inspectionQty 为准；缺失时从第一个分组的 total 或 AQL 推算
+  app.products.forEach((p: Product) => {
+    if (typeof p.inspectionQty !== 'number' || !Number.isFinite(p.inspectionQty)) {
       p.inspectionQty = p.groups?.[0]?.total || calcSampling(p.incomingQty || 0);
     }
     p.groups.forEach((g) => { g.total = p.inspectionQty; });
   });
-
   app.globalPresets = cleanGlobalPresets(payload?.globalPresets || []);
   app.mergeSelectedIds = Array.isArray(payload?.mergeSelectedIds)
     ? payload.mergeSelectedIds.filter((x: unknown) => typeof x === 'string') : [];
@@ -1795,13 +1790,6 @@ export function importPartialPayload(raw: any, opts: ImportOptions): { added: nu
         });
       }
     }
-    // ★ v3.7.5 B1：导入后同步 inspectionQty 与 group.total
-    app.products.forEach((p) => {
-      if (typeof p.inspectionQty !== 'number' || !Number.isFinite(p.inspectionQty) || p.inspectionQty < 0) {
-        p.inspectionQty = p.groups?.[0]?.total || calcSampling(p.incomingQty || 0);
-      }
-      p.groups.forEach((g) => { g.total = p.inspectionQty; });
-    });
   }
   if (opts.dataPresets && raw?.dataPresets) {
     const dp = raw.dataPresets;
