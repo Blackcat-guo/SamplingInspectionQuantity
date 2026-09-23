@@ -30,7 +30,6 @@
   let tab = $state('customer');
   let presetNavOpen = $state(false);
 
-  // v3.7 要求 4：Tab 自动滚动
   let tabsScrollEl = $state<HTMLDivElement | null>(null);
 
   const dataTabs = [
@@ -56,14 +55,12 @@
   let expandedGpId = $state('');
   let gpFilter = $state('');
 
-  /* H2：编辑分类弹窗 */
   let editOpen = $state(false);
   let editTitle = $state('');
   let editSubtitle = $state('');
   let editInitialText = $state('');
   let editTarget = $state<{ kind: 'presetGroup' | 'specialGroup'; id: string } | null>(null);
 
-  /* ★ v3.7.1 需求2：批量添加弹窗 */
   let bulkOpen = $state(false);
   let bulkKind = $state<'' | 'customer' | 'supplier'>('');
   let bulkTitle = $state('');
@@ -86,7 +83,6 @@
     bulkKind = '';
   }
 
-  /* ---------- Tab 自动滚动 ---------- */
   function pickPresetTab(key: string) {
     tab = key;
     scrollToTab(key);
@@ -101,7 +97,6 @@
     el.scrollIntoView({ behavior, block: 'nearest', inline: 'center' });
   }
 
-  /* ---------- 共享预分类辅助 ---------- */
   function toggleGpPanel(id: string) {
     expandedGpId = expandedGpId === id ? '' : id;
     gpFilter = '';
@@ -123,7 +118,6 @@
     if (addGlobalPreset(newGlobalPreset)) newGlobalPreset = '';
   }
 
-  /* ---------- 分页 ---------- */
   const pageSize = $derived(pageSizeFor());
 
   const customerPages = $derived(Math.max(1, Math.ceil(app.dataPresets.customers.length / pageSize)));
@@ -185,7 +179,6 @@
     scheduleSave();
   }
 
-  /* H2：编辑分类 */
   function editPresetGroupItems(id: string) {
     const p = app.dataPresets.presetGroups.find((x) => x.id === id);
     if (!p) return;
@@ -220,7 +213,7 @@
   }
 </script>
 
-<Dialog bind:open title="📚 数据预设" subtitle="预设客户、供应商、来料数量、工序、负责人、特殊分组、预分组、共享预分类。" wide>
+<Dialog bind:open variant="center" title="📚 数据预设" subtitle="预设客户、供应商、来料数量、工序、负责人、特殊分组、预分组、共享预分类。" wide>
   <div class="dp-tabs-outer">
     <div class="dp-tabs-scroll" bind:this={tabsScrollEl}>
       {#each dataTabs as t (t.key)}
