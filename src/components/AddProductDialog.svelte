@@ -11,6 +11,62 @@
   let incoming = $state('');
   let isSample = $state(false);
 
+  /* ============================================================
+     ★ v3.7.2 需求1：自定义 combobox 状态
+     ============================================================ */
+  let activeCombo = $state('');
+  let comboCloseTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function closeCombo() {
+    if (comboCloseTimer) { clearTimeout(comboCloseTimer); comboCloseTimer = null; }
+    activeCombo = '';
+  }
+  function delayedCloseCombo() {
+    if (comboCloseTimer) clearTimeout(comboCloseTimer);
+    comboCloseTimer = setTimeout(() => { comboCloseTimer = null; activeCombo = ''; }, 150);
+  }
+  function pickCombo(field: 'supplier' | 'customer' | 'process' | 'incoming', value: string) {
+    if (field === 'supplier') supplier = value;
+    else if (field === 'customer') customer = value;
+    else if (field === 'process') process = value;
+    else incoming = value;
+    closeCombo();
+  }
+
+  /* 卸载时清理定时器 */
+  $effect(() => {
+    return () => {
+      if (comboCloseTimer) clearTimeout(comboCloseTimer);
+    };
+  });
+
+  /* 派生过滤列表（无匹配返回空数组，UI 显示"无匹配"） */
+  const filteredAddSuppliers = $derived.by(() => {
+    const q = supplier.trim().toLowerCase();
+    const list = app.dataPresets.suppliers;
+    if (!q) return list;
+    return list.filter((s) => String(s).toLowerCase().includes(q));
+  });
+  const filteredAddCustomers = $derived.by(() => {
+    const q = customer.trim().toLowerCase();
+    const list = app.dataPresets.customers.map((c) => c.name);
+    if (!q) return list;
+    return list.filter((s) => String(s).toLowerCase().includes(q));
+  });
+  const filteredAddProcesses = $derived.by(() => {
+    const q = process.trim().toLowerCase();
+    const list = app.dataPresets.processes;
+    if (!q) return list;
+    return list.filter((s) => String(s).toLowerCase().includes(q));
+  });
+  const filteredAddIncoming = $derived.by(() => {
+    const q = incoming.trim();
+    const list = app.dataPresets.incomingQtyPresets.map((v) => String(v));
+    if (!q) return list;
+    return list.filter((s) => s.includes(q));
+  });
+
+  /* 解析产品名 */
   const parsed = $derived.by(() => {
     const names = text.split(/[\n,，、;；]+/).map((s) => s.trim()).filter(Boolean);
     const existing = new Set(app.products.map((p) => nameKey(p.name)));
@@ -48,41 +104,167 @@
     <div class="sub-section">
       <div class="panel-head-row"><span class="panel-head-text">统一设置（可选）</span></div>
       <div class="info-grid">
-        <!-- ★ v3.7.1 需求1：供应商关联数据预设 -->
+
+        <!-- ========== 供应商 combobox ========== -->
         <div class="info-field">
           <div class="field-label">供应商</div>
-          <input bind:value={supplier} maxlength="40" list="addSupplierList" placeholder="选择或输入" />
-          <datalist id="addSupplierList">
-            {#each app.dataPresets.suppliers as s}<option value={s}></option>{/each}
-          </datalist>
+          <div class="combo-wrap">
+            <input
+              value={supplier}
+              maxlength="40"
+              placeholder="选择或输入"
+              autocomplete="off"
+              onfocus={() => (activeCombo = 'add-supplier')}
+              oninput={(e) => { supplier = (e.currentTarget as HTMLInputElement).value; }}
+              onblur={delayedCloseCombo}
+            />
+            {#if activeCombo === 'add-supplier'}
+              <div class="combo-dropdown" role="listbox">
+                <div class="combo-hint">数据预设中的供应商</div>
+                {#each filteredAddSuppliers as s (s)}
+                  <div
+                    class="combo-item"
+                    class:active={s === supplier}
+                    role="option"
+                    aria-selected={s === supplier}
+                    onmousedown={(e) => { e.preventDefault(); pickCombo('supplier', s); }}
+                    ontouchstart={(e) => { e.preventDefault(); pickCombo('supplier', s); }}
+                  >
+                    <span class="txt">{s}</span>
+                    {#if s === supplier}<span class="tick">✓</span>{/if}
+                  </div>
+                {/each}
+                {#if filteredAddSuppliers.length === 0}
+                  <div class="combo-empty">
+                    {app.dataPresets.suppliers.length === 0 ? '暂无供应商预设' : '无匹配'}
+                  </div>
+                {/if}
+              </div>
+            {/if}
+          </div>
         </div>
 
-        <!-- ★ 客户关联数据预设 -->
+        <!-- ========== 客户 combobox ========== -->
         <div class="info-field">
           <div class="field-label">客户</div>
-          <input bind:value={customer} maxlength="40" list="addCustomerList" placeholder="选择或输入" />
-          <datalist id="addCustomerList">
-            {#each app.dataPresets.customers as c}<option value={c.name}></option>{/each}
-          </datalist>
+          <div class="combo-wrap">
+            <input
+              value={customer}
+              maxlength="40"
+              placeholder="选择或输入"
+              autocomplete="off"
+              onfocus={() => (activeCombo = 'add-customer')}
+              oninput={(e) => { customer = (e.currentTarget as HTMLInputElement).value; }}
+              onblur={delayedCloseCombo}
+            />
+            {#if activeCombo === 'add-customer'}
+              <div class="combo-dropdown" role="listbox">
+                <div class="combo-hint">数据预设中的客户</div>
+                {#each filteredAddCustomers as s (s)}
+                  <div
+                    class="combo-item"
+                    class:active={s === customer}
+                    role="option"
+                    aria-selected={s === customer}
+                    onmousedown={(e) => { e.preventDefault(); pickCombo('customer', s); }}
+                    ontouchstart={(e) => { e.preventDefault(); pickCombo('customer', s); }}
+                  >
+                    <span class="txt">{s}</span>
+                    {#if s === customer}<span class="tick">✓</span>{/if}
+                  </div>
+                {/each}
+                {#if filteredAddCustomers.length === 0}
+                  <div class="combo-empty">
+                    {app.dataPresets.customers.length === 0 ? '暂无客户预设' : '无匹配'}
+                  </div>
+                {/if}
+              </div>
+            {/if}
+          </div>
         </div>
 
-        <!-- ★ 发生工序关联数据预设 -->
+        <!-- ========== 发生工序 combobox ========== -->
         <div class="info-field">
           <div class="field-label">发生工序</div>
-          <input bind:value={process} maxlength="40" list="addProcessList" placeholder="选择或输入" />
-          <datalist id="addProcessList">
-            {#each app.dataPresets.processes as p}<option value={p}></option>{/each}
-          </datalist>
+          <div class="combo-wrap">
+            <input
+              value={process}
+              maxlength="40"
+              placeholder="选择或输入"
+              autocomplete="off"
+              onfocus={() => (activeCombo = 'add-process')}
+              oninput={(e) => { process = (e.currentTarget as HTMLInputElement).value; }}
+              onblur={delayedCloseCombo}
+            />
+            {#if activeCombo === 'add-process'}
+              <div class="combo-dropdown" role="listbox">
+                <div class="combo-hint">数据预设中的工序</div>
+                {#each filteredAddProcesses as s (s)}
+                  <div
+                    class="combo-item"
+                    class:active={s === process}
+                    role="option"
+                    aria-selected={s === process}
+                    onmousedown={(e) => { e.preventDefault(); pickCombo('process', s); }}
+                    ontouchstart={(e) => { e.preventDefault(); pickCombo('process', s); }}
+                  >
+                    <span class="txt">{s}</span>
+                    {#if s === process}<span class="tick">✓</span>{/if}
+                  </div>
+                {/each}
+                {#if filteredAddProcesses.length === 0}
+                  <div class="combo-empty">
+                    {app.dataPresets.processes.length === 0 ? '暂无工序预设' : '无匹配'}
+                  </div>
+                {/if}
+              </div>
+            {/if}
+          </div>
         </div>
 
-        <!-- ★ 来料数量关联数据预设 -->
+        <!-- ========== 来料数量 combobox ========== -->
         <div class="info-field">
           <div class="field-label">来料数量</div>
-          <input bind:value={incoming} type="text" inputmode="numeric" maxlength="9"
-                 list="addIncomingList" placeholder="0" />
-          <datalist id="addIncomingList">
-            {#each app.dataPresets.incomingQtyPresets as v}<option value={String(v)}></option>{/each}
-          </datalist>
+          <div class="combo-wrap">
+            <input
+              value={incoming}
+              type="text"
+              inputmode="numeric"
+              maxlength="9"
+              placeholder="0"
+              autocomplete="off"
+              onfocus={() => (activeCombo = 'add-incoming')}
+              oninput={(e) => {
+                const raw = (e.currentTarget as HTMLInputElement).value.replace(/\D/g, '').slice(0, 9);
+                (e.currentTarget as HTMLInputElement).value = raw;
+                incoming = raw;
+              }}
+              onblur={delayedCloseCombo}
+            />
+            {#if activeCombo === 'add-incoming'}
+              <div class="combo-dropdown" role="listbox">
+                <div class="combo-hint">数据预设中的来料数量</div>
+                {#each filteredAddIncoming as s (s)}
+                  <div
+                    class="combo-item"
+                    class:active={s === incoming}
+                    role="option"
+                    aria-selected={s === incoming}
+                    onmousedown={(e) => { e.preventDefault(); pickCombo('incoming', s); }}
+                    ontouchstart={(e) => { e.preventDefault(); pickCombo('incoming', s); }}
+                  >
+                    <span class="txt">{s}</span>
+                    {#if s === incoming}<span class="tick">✓</span>{/if}
+                  </div>
+                {/each}
+                {#if filteredAddIncoming.length === 0}
+                  <div class="combo-empty">
+                    {app.dataPresets.incomingQtyPresets.length === 0 ? '暂无来料数量预设' : '无匹配'}
+                  </div>
+                {/if}
+              </div>
+            {/if}
+          </div>
         </div>
 
         <div class="info-field" style="grid-column:1/-1">
