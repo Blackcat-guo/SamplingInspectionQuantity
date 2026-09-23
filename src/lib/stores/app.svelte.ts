@@ -219,7 +219,6 @@ export function effectiveLevel(): 'auto' | 'elegant' | 'standard' | 'compat' {
    ============================================================ */
 export function realGroupIndex(g: Group): number { return currentGroups().indexOf(g); }
 
-/** v3.7：用产品级 inspectionQty 同步分组 total */
 export function syncSamplingToGroups(product: Product): void {
   if (!product) return;
   const s = product.inspectionQty || calcSampling(product.incomingQty || 0);
@@ -314,14 +313,14 @@ export function setIncomingQty(qty: number): void {
   if (from === n) return;
   history.pushSnapshot(app.products, p.id);
   p.incomingQty = n;
-  // ★ v3.7：修改来料数量 → 抽检数量强制重置为 AQL
+  // 修改来料数量 → 抽检数量强制重置为 AQL
   const aql = calcSampling(n);
   p.inspectionQty = aql;
   p.groups.forEach((g) => { g.total = aql; g.totalIsAuto = true; });
   scheduleSave();
 }
 
-/** ★ v3.7 新增：手动设置抽检数量，同步所有分组 total */
+/** 手动设置抽检数量，同步所有分组 total */
 export function setInspectionQty(qty: number): void {
   const p = currentProduct();
   if (!p) return;
@@ -470,7 +469,7 @@ export function resetGroup(index: number): void {
 
 export function groupSum(g: Group): number { return g.items.reduce((s, it) => s + it.qty, 0); }
 
-/** ★ v3.7：不良率分母改用产品级 inspectionQty */
+/** 不良率分母改用产品级 inspectionQty */
 export function groupRate(g: Group): string {
   const p = currentProduct();
   if (!p) return '--';
@@ -732,7 +731,7 @@ export function groupedProducts(): { supplier: string; customer: string; list: P
 }
 
 /* ============================================================
-   输出文本（v3.7：分母改用 product.inspectionQty）
+   输出文本
    ============================================================ */
 export function buildOutputText(withLabels: boolean): string {
   const p = currentProduct();
@@ -1240,6 +1239,12 @@ export type {
   Product, Group, DataPresets, Settings, Customer, Responsible,
   SpecialGroup, PresetGroup, GlobalPreset, Shortcut,
 };
+
+/* ============================================================
+   说明书 11 章（独立文件重导出）
+   ============================================================ */
+export { MANUAL_SECTIONS } from '../manual';
+export type { ManualSection } from '../manual';
 
 /* ============================================================
    UI 状态
@@ -1843,246 +1848,6 @@ export function experienceHint(): string {
     : lv === 'compat' ? '关闭动画与毛玻璃，适合低端设备与老旧浏览器'
     : '平衡性能与观感（推荐）';
 }
-
-/* ============================================================
-   任务 C：说明书 9 章
-   ============================================================ */
-export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] = [
-  {
-    id: 'quickstart',
-    title: '第一章 · 快速开始',
-    content: `
-<h4>1.1 三步上手</h4>
-<ol>
-  <li>左上角「＋ 添加产品」录入产品名</li>
-  <li>「添加分组」→ 输入 3 或 1-3 批量创建</li>
-  <li>在分组内添加分类并录入数量</li>
-</ol>
-<blockquote>📘 <b>案例：产品1 完整录入</b><br>
-① 添加产品输入 <code>产品1</code><br>
-② 添加分组输入 <code>3</code> → 得到「分组1 / 分组2 / 分组3」<br>
-③ 在分组1 输入 <code>分类A</code> 回车<br>
-④ 数量 +1 至 5，抽检数量设为 20<br>
-⑤ 下方「本产品汇总」自动生成：
-<pre>客户：客户A
-供应商来料：供应商A
-发生工序：工序A
-料号及来料批量：
-产品1，来料1000PCS
-问题描述：
-抽检20PCS,
-分组1：分类A5PCS，不良率25%</pre>
-</blockquote>
-<h4>1.2 保存位置</h4>
-<p>数据自动保存在浏览器 <code>localStorage</code>，键名 <code>category_counts_v5</code>。关闭页面不会丢失。</p>
-`,
-  },
-  {
-    id: 'product',
-    title: '第二章 · 产品管理',
-    content: `
-<h4>2.1 支持的批量操作</h4>
-<ul>
-  <li>批量添加（一行一个 / 逗号分隔）</li>
-  <li>复制产品（整组数据结构复制，含分组、预分类）</li>
-  <li>批量勾选删除（侧栏「☑ 批量管理」）</li>
-  <li>内联重命名（✏️ 就地编辑，Enter 保存，Esc 取消）</li>
-</ul>
-<blockquote>📘 <b>案例：批量添加 3 个相近产品</b><br>
-在「添加产品」文本域输入：
-<pre>产品1
-产品2
-产品3</pre>
-或写成一行：<code>产品1, 产品2, 产品3</code><br>
-点「添加 3 个产品」→ 侧栏立刻出现 3 个产品，共用同一组「统一设置」的供应商 / 客户 / 工序。
-</blockquote>
-<h4>2.2 抽检数量</h4>
-<p>v3.7 起，抽检数量为<b>产品级统一值</b>，所有分组共用。可在产品信息面板直接编辑，或点 [−] [+] 微调。</p>
-<h4>2.3 样品标记</h4>
-<p>勾选后该产品参与「特殊分组」负责人联动判定（当特殊分组设置「仅样品触发」时生效）。</p>
-`,
-  },
-  {
-    id: 'group',
-    title: '第三章 · 分组与分类',
-    content: `
-<h4>3.1 添加分组</h4>
-<ul>
-  <li>输入单数字 <code>3</code> → 创建「分组1 ~ 分组3」</li>
-  <li>输入区间 <code>1-3</code> → 创建「分组1 ~ 分组3」</li>
-  <li>输入逗号 <code>1,3,5</code> → 创建「分组1、分组3、分组5」</li>
-  <li>输入文字 <code>分组A</code> → 创建名为「分组A」的分组</li>
-</ul>
-<h4>3.2 一键标准分组</h4>
-<p>点「📋 标准分组」→ 一键添加 分组A / 分组B / 分组C 三组。</p>
-<h4>3.3 ★ 从预分组一键建组</h4>
-<p>添加分组栏右侧「📦 预分组 ▾」→ 点击下拉项 → 立即新建一个分组，组名 = 预分组名，分类 = 预分组的 items（自动去重）。</p>
-<h4>3.4 分组内操作</h4>
-<ul>
-  <li><b>折叠</b>：点击 ▾/▸ 切换，折叠时显示分类名预览</li>
-  <li><b>拖拽排序</b>：长按 ⠿ 260ms 后拖动</li>
-  <li><b>键盘排序</b>：聚焦 ⠿ 按 Enter 进入，↑↓ 移动，Esc 退出</li>
-  <li><b>批量改量</b>：批量删除/改量 → 勾选 → 改量（× 系数 / = 定值）</li>
-  <li><b>分类转移</b>：点 ↔ 弹出选择弹窗，选择目标分组</li>
-  <li><b>预分类下拉</b>：从共享 + 本产品的预分类快速加入</li>
-</ul>
-`,
-  },
-  {
-    id: 'preset',
-    title: '第四章 · 数据预设',
-    content: `
-<h4>4.1 可预设的内容</h4>
-<ul>
-  <li>客户（可绑定负责人）</li>
-  <li>供应商</li>
-  <li>来料数量</li>
-  <li>工序</li>
-  <li>临时处理方式</li>
-  <li>负责人（常规 / 特殊分组）</li>
-  <li>特殊分组（关联分类 + 负责人）</li>
-  <li>共享预分类（生效范围勾选产品）</li>
-  <li>预分组</li>
-  <li>样品（样品 Tab）</li>
-</ul>
-<h4>4.2 ★ 特殊分组负责人自动联动</h4>
-<blockquote>📘 <b>案例：客户绑定负责人 + 特殊分组命中</b><br>
-① 数据预设 → 客户 → 新增「客户A」，勾选负责人 @张三<br>
-② 数据预设 → 特殊分组 → 新增「特殊组A」
-<ul>
-  <li>分类：分类A、分类B</li>
-  <li>负责人：@李四</li>
-  <li>勾选「仅样品触发」</li>
-</ul>
-③ 主面板选一个「客户=客户A、样品=true」的产品，且含「分类A」<br>
-④ 多产品汇总 → 负责人自动带出：<b>@张三 @李四</b><br>
-⑤ 手动 ✕ 移除 @李四 → 切换产品组合后不再加回（否决集合）
-</blockquote>
-<h4>4.3 共享预分类生效范围</h4>
-<p>每项共享预分类可设置：<code>null</code>（全部产品）/ <code>[]</code>（不生效）/ <code>[ids]</code>（部分产品）。</p>
-<h4>4.4 语音输入</h4>
-<p><b>环境要求</b>：HTTPS 或 localhost，且浏览器支持 <code>SpeechRecognition</code> API。不满足条件时语音面板自动隐藏。</p>
-<h4>4.5 图片识别（OCR）</h4>
-<p>调用 OCR.space 的 HTTPS 接口（无需后端）。API Key 存 sessionStorage，关闭标签页即清除。</p>
-<h4>4.6 识别文本与候选列表</h4>
-<p>文本来源：语音 / OCR / 手动粘贴。三种拆分方式：智能 / 仅空格和逗号 / 按行拆分。</p>
-<h4>4.7 完整案例：从截图到分组</h4>
-<blockquote>📘 <b>端到端流程</b><br>
-① 微信收到不良品照片，保存到相册<br>
-② 打开本应用 → 选中「产品1」<br>
-③ 识别工具区 → 「从相册选择图片」→ 选 2 张<br>
-④ 点「开始识别」→ 文本区自动填入「分类A 分类B 分类C」<br>
-⑤ 点「生成候选列表」→ 3 项全部未命中<br>
-⑥ 目标分组选「分组A」→ 点「应用选中的 3 项」<br>
-⑦ 分组A 出现 3 个分类，数量均为 1<br>
-⑧ 按 <kbd>Ctrl</kbd>+<kbd>Z</kbd> 可整体撤回
-</blockquote>
-`,
-  },
-  {
-    id: 'merge',
-    title: '第五章 · 多产品汇总',
-    content: `
-<h4>5.1 汇总规则</h4>
-<p>只能选择 <b>同供应商 + 同客户</b> 的产品一起汇总；不同组合自动分组显示。</p>
-<h4>5.2 两种汇总格式</h4>
-<ul>
-  <li><b>合并描述</b>（默认）：同分组名聚合，分类合并累加</li>
-  <li><b>逐料号拆分</b>：每个产品独立一行</li>
-</ul>
-<h4>5.3 本产品汇总（独立区块）</h4>
-<p>多产品汇总下方有「本产品汇总」，只显示当前产品。支持前段 / 后段附加。</p>
-`,
-  },
-  {
-    id: 'work',
-    title: '第六章 · 工时计算',
-    content: `
-<h4>6.1 三个关键参数</h4>
-<ul>
-  <li>上班时间 / 下班时间（支持跨天）</li>
-  <li>休息时间段（最多 10 段，自动合并重叠）</li>
-  <li>加班基准：18:00 之后计为加班</li>
-</ul>
-<blockquote>📘 <b>案例 A：标准工作日</b><br>
-上班 09:00 / 下班 18:00 / 休息 12:00~13:00<br>
-输出：总 9h，休息 1h，实际 8h，加班 0h
-</blockquote>
-<blockquote>📘 <b>案例 B：加班日</b><br>
-上班 09:00 / 下班 21:00 / 休息 12:00~13:00 + 18:00~18:30<br>
-输出：总 12h，休息 1.5h，实际 10.5h，加班 2.5h
-</blockquote>
-<blockquote>📘 <b>案例 C：跨天夜班</b><br>
-上班 22:00 / 下班 06:00（次日）/ 无休息<br>
-输出：总 8h，休息 0h，实际 8h，加班 0h
-</blockquote>
-`,
-  },
-  {
-    id: 'io',
-    title: '第七章 · 导入导出',
-    content: `
-<h4>7.1 两种导出</h4>
-<ul>
-  <li><b>导出数据</b>：弹窗中勾选需要的模块（产品 / 预设 / 设置）</li>
-  <li><b>导入数据</b>：选文件 → 自动检测模块 → 勾选 + 选择模式</li>
-</ul>
-<h4>7.2 支持的文件格式</h4>
-<ul>
-  <li><code>.json</code>：标准格式，推荐</li>
-  <li><code>.js</code>：支持 <code>export default {...}</code> / <code>const data = {...}</code> / <code>window.data = {...}</code></li>
-</ul>
-<h4>7.3 覆盖模式</h4>
-<p>选择「覆盖」模式时会二次确认，且自动清理负责人 ID 悬空引用。</p>
-`,
-  },
-  {
-    id: 'shortcut',
-    title: '第八章 · 快捷键',
-    content: `
-<h4>8.1 全局快捷键</h4>
-<table style="width:100%;border-collapse:collapse">
-  <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>撤回上一步操作</td></tr>
-  <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td><td>恢复（重做）</td></tr>
-  <tr><td><kbd>Ctrl</kbd>+<kbd>[</kbd></td><td>折叠全部分组</td></tr>
-  <tr><td><kbd>Ctrl</kbd>+<kbd>]</kbd></td><td>展开全部分组</td></tr>
-  <tr><td><kbd>Esc</kbd></td><td>关闭当前弹窗</td></tr>
-</table>
-<h4>8.2 分组内快捷键</h4>
-<ul>
-  <li>聚焦 ⠿ 按 <kbd>Enter</kbd> → 进入键盘排序</li>
-  <li>排序中 <kbd>↑</kbd>/<kbd>↓</kbd> → 上/下移</li>
-  <li>排序中 <kbd>Esc</kbd> → 退出排序</li>
-</ul>
-`,
-  },
-  {
-    id: 'faq',
-    title: '第九章 · 常见问题',
-    content: `
-<h4>Q1 · 撤回按钮灰着？</h4>
-<p>说明历史栈为空。</p>
-<h4>Q2 · 抽检数不随来料变化？</h4>
-<p>v3.7 起修改来料数量会强制重置抽检数量为 AQL；手动改过抽检数量后不会再随来料变化，除非再次修改来料数量。</p>
-<h4>Q3 · 特殊分组没带出负责人？</h4>
-<p>四种可能：① 客户没绑定负责人；② 分类名不匹配；③ 特殊分组勾选了"仅样品触发"但产品非样品；④ 负责人被手动移除（否决集合）。</p>
-<h4>Q4 · 数据存哪？会丢吗？</h4>
-<p>存在浏览器 <code>localStorage</code>。换设备 / 清缓存会丢，<b>建议定期导出备份。</b></p>
-<h4>Q5 · 主题切换卡顿？</h4>
-<p>设置 → 显示 → 体验等级切到「兼容」关闭所有动画。</p>
-<h4>Q6 · 什么时候显示"全检"？</h4>
-<p>当「各分组总数量之和 = 来料数量」时。</p>
-<h4>Q7 · 分享按钮怎么用？</h4>
-<p>点「📤 分享」→ 选择方式：系统分享 / 微信 / 钉钉 / 飞书 / QQ / 邮件 / 仅复制。</p>
-<h4>Q8 · 预分组下拉从哪来？</h4>
-<p>数据预设 → 预分组 Tab。新增预分组后，添加分组栏会出现「📦 预分组 ▾」。</p>
-<h4>Q9 · 为什么有些分类在别的分组灰着？</h4>
-<p>同一产品内分类名唯一。</p>
-<h4>Q10 · 语音 / OCR 面板不显示？</h4>
-<p>① 浏览器不支持（语音需 HTTPS + SpeechRecognition）；② 设置 → 显示关闭了「显示识别工具」。</p>
-`,
-  },
-];
 
 /* ============================================================
    任务 E：数据预设导航弹窗状态
