@@ -14,6 +14,7 @@
   let presetMenuOpen = $state(false);
   let presetMenuX = $state(0);
   let presetMenuY = $state(0);
+  let presetMenuMaxH = $state(0);
   let presetTriggerEl: HTMLElement | null = null;
 
   const filtered = $derived.by(() => {
@@ -31,7 +32,7 @@
     nameInput = '';
   }
 
-  /* ★ 要求 1：预分组下拉改为 position:fixed + 边界判断 */
+  /* ★ v3.7.4：预分组下拉 — 去除上翻，始终贴按钮下方 */
   function openPresetMenu(e: MouseEvent) {
     if (presetMenuOpen) { closePresetMenu(); return; }
     presetTriggerEl = e.currentTarget as HTMLElement;
@@ -42,14 +43,16 @@
     if (!presetTriggerEl) return;
     const rect = presetTriggerEl.getBoundingClientRect();
     const vw = window.innerWidth, vh = window.innerHeight;
-    const MENU_W = 240, MENU_H = 320, MARGIN = 12, GAP = 6;
-    let x = rect.left, y = rect.bottom + GAP;
+    const MENU_W = 240, MARGIN = 8, GAP = 4;
+    let x = rect.left;
     if (x + MENU_W > vw - MARGIN) x = vw - MENU_W - MARGIN;
     if (x < MARGIN) x = MARGIN;
-    if (y + MENU_H > vh - MARGIN && rect.top - MENU_H - GAP > MARGIN) y = rect.top - MENU_H - GAP;
-    if (y + MENU_H > vh - MARGIN) y = Math.max(MARGIN, vh - MENU_H - MARGIN);
+    const y = rect.bottom + GAP;
+    const naturalHeight = 24 + app.dataPresets.presetGroups.length * 40 + 8;
+    const spaceBelow = vh - y - MARGIN;
     presetMenuX = x;
     presetMenuY = y;
+    presetMenuMaxH = Math.min(naturalHeight, Math.max(spaceBelow, 100));
   }
   function closePresetMenu() { presetMenuOpen = false; presetTriggerEl = null; }
 
@@ -136,10 +139,12 @@
   </div>
 {/if}
 
-<!-- ★ 要求 1：预分组下拉（fixed 定位） -->
 {#if presetMenuOpen}
-  <div class="preset-menu-overlay" role="presentation" onclick={(e) => { if (e.target === e.currentTarget) closePresetMenu(); }}>
-    <div class="preset-menu-fixed" style="top:{presetMenuY}px;left:{presetMenuX}px" role="menu">
+  <div class="preset-menu-overlay" role="presentation"
+       onclick={(e) => { if (e.target === e.currentTarget) closePresetMenu(); }}>
+    <div class="preset-menu-fixed"
+         style="top:{presetMenuY}px;left:{presetMenuX}px;max-height:{presetMenuMaxH}px"
+         role="menu">
       {#each app.dataPresets.presetGroups as pg (pg.id)}
         <button type="button" role="menuitem" onclick={() => onPickPreset(pg.id)}>
           <div style="font-weight:700">{pg.name}</div>
