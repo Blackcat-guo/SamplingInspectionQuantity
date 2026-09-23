@@ -11,7 +11,6 @@
   let incoming = $state('');
   let isSample = $state(false);
 
-  /* 自定义 combobox 状态 */
   let activeCombo = $state('');
   let comboCloseTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -36,9 +35,7 @@
   }
 
   $effect(() => {
-    return () => {
-      if (comboCloseTimer) clearTimeout(comboCloseTimer);
-    };
+    return () => { if (comboCloseTimer) clearTimeout(comboCloseTimer); };
   });
 
   const filteredAddSuppliers = $derived.by(() => {
@@ -104,162 +101,108 @@
       <div class="panel-head-row"><span class="panel-head-text">统一设置（可选）</span></div>
       <div class="info-grid">
 
-        <!-- 供应商 -->
         <div class="info-field">
           <div class="field-label">供应商</div>
           <div class="combo-wrap">
-            <input
-              value={supplier}
-              maxlength="40"
-              placeholder="选择或输入"
-              autocomplete="off"
-              onfocus={() => openCombo('add-supplier')}
-              oninput={(e) => { supplier = (e.currentTarget as HTMLInputElement).value; }}
-              onblur={delayedCloseCombo}
-            />
+            <input value={supplier} maxlength="40" placeholder="选择或输入" autocomplete="off"
+                   onfocus={() => openCombo('add-supplier')}
+                   oninput={(e) => { supplier = (e.currentTarget as HTMLInputElement).value; }}
+                   onblur={delayedCloseCombo} />
             {#if activeCombo === 'add-supplier'}
               <div class="combo-dropdown" role="listbox">
                 <div class="combo-hint">数据预设中的供应商</div>
                 {#each filteredAddSuppliers as s (s)}
-                  <div
-                    class="combo-item"
-                    class:active={s === supplier}
-                    role="option"
-                    aria-selected={s === supplier}
-                    onpointerdown={(e) => e.preventDefault()}
-                    onclick={() => pickCombo('supplier', s)}
-                  >
+                  <div class="combo-item" class:active={s === supplier} role="option" aria-selected={s === supplier}
+                       onpointerdown={(e) => e.preventDefault()}
+                       onclick={() => pickCombo('supplier', s)}>
                     <span class="txt">{s}</span>
                     {#if s === supplier}<span class="tick">✓</span>{/if}
                   </div>
                 {/each}
                 {#if filteredAddSuppliers.length === 0}
-                  <div class="combo-empty">
-                    {app.dataPresets.suppliers.length === 0 ? '暂无供应商预设' : '无匹配'}
-                  </div>
+                  <div class="combo-empty">{app.dataPresets.suppliers.length === 0 ? '暂无供应商预设' : '无匹配'}</div>
                 {/if}
               </div>
             {/if}
           </div>
         </div>
 
-        <!-- 客户 -->
         <div class="info-field">
           <div class="field-label">客户</div>
           <div class="combo-wrap">
-            <input
-              value={customer}
-              maxlength="40"
-              placeholder="选择或输入"
-              autocomplete="off"
-              onfocus={() => openCombo('add-customer')}
-              oninput={(e) => { customer = (e.currentTarget as HTMLInputElement).value; }}
-              onblur={delayedCloseCombo}
-            />
+            <input value={customer} maxlength="40" placeholder="选择或输入" autocomplete="off"
+                   onfocus={() => openCombo('add-customer')}
+                   oninput={(e) => { customer = (e.currentTarget as HTMLInputElement).value; }}
+                   onblur={delayedCloseCombo} />
             {#if activeCombo === 'add-customer'}
               <div class="combo-dropdown" role="listbox">
                 <div class="combo-hint">数据预设中的客户</div>
                 {#each filteredAddCustomers as s (s)}
-                  <div
-                    class="combo-item"
-                    class:active={s === customer}
-                    role="option"
-                    aria-selected={s === customer}
-                    onpointerdown={(e) => e.preventDefault()}
-                    onclick={() => pickCombo('customer', s)}
-                  >
+                  <div class="combo-item" class:active={s === customer} role="option" aria-selected={s === customer}
+                       onpointerdown={(e) => e.preventDefault()}
+                       onclick={() => pickCombo('customer', s)}>
                     <span class="txt">{s}</span>
                     {#if s === customer}<span class="tick">✓</span>{/if}
                   </div>
                 {/each}
                 {#if filteredAddCustomers.length === 0}
-                  <div class="combo-empty">
-                    {app.dataPresets.customers.length === 0 ? '暂无客户预设' : '无匹配'}
-                  </div>
+                  <div class="combo-empty">{app.dataPresets.customers.length === 0 ? '暂无客户预设' : '无匹配'}</div>
                 {/if}
               </div>
             {/if}
           </div>
         </div>
 
-        <!-- 发生工序 -->
         <div class="info-field">
           <div class="field-label">发生工序</div>
           <div class="combo-wrap">
-            <input
-              value={process}
-              maxlength="40"
-              placeholder="选择或输入"
-              autocomplete="off"
-              onfocus={() => openCombo('add-process')}
-              oninput={(e) => { process = (e.currentTarget as HTMLInputElement).value; }}
-              onblur={delayedCloseCombo}
-            />
+            <input value={process} maxlength="40" placeholder="选择或输入" autocomplete="off"
+                   onfocus={() => openCombo('add-process')}
+                   oninput={(e) => { process = (e.currentTarget as HTMLInputElement).value; }}
+                   onblur={delayedCloseCombo} />
             {#if activeCombo === 'add-process'}
               <div class="combo-dropdown" role="listbox">
                 <div class="combo-hint">数据预设中的工序</div>
                 {#each filteredAddProcesses as s (s)}
-                  <div
-                    class="combo-item"
-                    class:active={s === process}
-                    role="option"
-                    aria-selected={s === process}
-                    onpointerdown={(e) => e.preventDefault()}
-                    onclick={() => pickCombo('process', s)}
-                  >
+                  <div class="combo-item" class:active={s === process} role="option" aria-selected={s === process}
+                       onpointerdown={(e) => e.preventDefault()}
+                       onclick={() => pickCombo('process', s)}>
                     <span class="txt">{s}</span>
                     {#if s === process}<span class="tick">✓</span>{/if}
                   </div>
                 {/each}
                 {#if filteredAddProcesses.length === 0}
-                  <div class="combo-empty">
-                    {app.dataPresets.processes.length === 0 ? '暂无工序预设' : '无匹配'}
-                  </div>
+                  <div class="combo-empty">{app.dataPresets.processes.length === 0 ? '暂无工序预设' : '无匹配'}</div>
                 {/if}
               </div>
             {/if}
           </div>
         </div>
 
-        <!-- 来料数量 -->
         <div class="info-field">
           <div class="field-label">来料数量</div>
           <div class="combo-wrap">
-            <input
-              value={incoming}
-              type="text"
-              inputmode="numeric"
-              maxlength="9"
-              placeholder="0"
-              autocomplete="off"
-              onfocus={() => openCombo('add-incoming')}
-              oninput={(e) => {
-                const raw = (e.currentTarget as HTMLInputElement).value.replace(/\D/g, '').slice(0, 9);
-                (e.currentTarget as HTMLInputElement).value = raw;
-                incoming = raw;
-              }}
-              onblur={delayedCloseCombo}
-            />
+            <input value={incoming} type="text" inputmode="numeric" maxlength="9" placeholder="0" autocomplete="off"
+                   onfocus={() => openCombo('add-incoming')}
+                   oninput={(e) => {
+                     const raw = (e.currentTarget as HTMLInputElement).value.replace(/\D/g, '').slice(0, 9);
+                     (e.currentTarget as HTMLInputElement).value = raw;
+                     incoming = raw;
+                   }}
+                   onblur={delayedCloseCombo} />
             {#if activeCombo === 'add-incoming'}
               <div class="combo-dropdown" role="listbox">
                 <div class="combo-hint">数据预设中的来料数量</div>
                 {#each filteredAddIncoming as s (s)}
-                  <div
-                    class="combo-item"
-                    class:active={s === incoming}
-                    role="option"
-                    aria-selected={s === incoming}
-                    onpointerdown={(e) => e.preventDefault()}
-                    onclick={() => pickCombo('incoming', s)}
-                  >
+                  <div class="combo-item" class:active={s === incoming} role="option" aria-selected={s === incoming}
+                       onpointerdown={(e) => e.preventDefault()}
+                       onclick={() => pickCombo('incoming', s)}>
                     <span class="txt">{s}</span>
                     {#if s === incoming}<span class="tick">✓</span>{/if}
                   </div>
                 {/each}
                 {#if filteredAddIncoming.length === 0}
-                  <div class="combo-empty">
-                    {app.dataPresets.incomingQtyPresets.length === 0 ? '暂无来料数量预设' : '无匹配'}
-                  </div>
+                  <div class="combo-empty">{app.dataPresets.incomingQtyPresets.length === 0 ? '暂无来料数量预设' : '无匹配'}</div>
                 {/if}
               </div>
             {/if}
