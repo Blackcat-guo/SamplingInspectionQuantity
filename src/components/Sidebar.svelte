@@ -64,6 +64,8 @@
     <button class="sidebar-sort" onclick={toggleSort} aria-label="切换排序">
       {sortDir === 'desc' ? '↓' : sortDir === 'asc' ? '↑' : '↕'}
     </button>
+    <!-- ★ v3.7.1 需求3：设置按钮移动到 head -->
+    <button class="sidebar-settings" onclick={onOpenSettings} title="设置" aria-label="设置">⚙️</button>
     <button class="sidebar-close" onclick={() => (app.sidebarOpen = false)} aria-label="关闭侧栏">✕</button>
   </div>
 
@@ -141,9 +143,5 @@
         {#if app.products.length}没有匹配的产品{:else}还没有产品<br />点击上方「＋ 添加产品」{/if}
       </div>
     {/if}
-  </div>
-
-  <div class="sidebar-global">
-    <button onclick={onOpenSettings}><span>⚙️ 设置</span></button>
   </div>
 </aside>
