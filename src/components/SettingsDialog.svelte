@@ -9,6 +9,7 @@
     setShowTopNavText, setShowMainTips, setShowZeroQty,
     setMergeMultiProductSummary, setShowRecognizeTools,
     setFontSize, setAnimationLevel,
+    setComboVisibleItems,
     fontSizeLabel, animationLevelLabel, experienceLevelLabel, experienceHint,
   } from '../lib/stores/app.svelte';
   import ExportDialog from './ExportDialog.svelte';
@@ -25,7 +26,6 @@
   let settingsNavOpen = $state(false);
   let manualNavOpen = $state(false);
 
-  // ★ v3.7 要求 4：Tab 自动滚动
   let tabsScrollEl = $state<HTMLDivElement | null>(null);
   let manualScrollEl = $state<HTMLDivElement | null>(null);
 
@@ -182,6 +182,20 @@
         <small>{app.settings.showRecognizeTools !== false ? '已开启' : '已隐藏'}</small>
       </label>
       <p class="backup-note">包含语音输入与图片识别两个面板。</p>
+
+      <!-- ★ v3.7.4：下拉菜单默认显示项数 -->
+      <div class="setting-row">
+        <div class="field-label">📋 下拉菜单默认显示项数（当前：{app.settings.comboVisibleItems}）</div>
+        <div class="theme-toggle" style="margin-bottom:0">
+          {#each [4, 6, 8, 10, 15, 20] as n (n)}
+            <button class:active={app.settings.comboVisibleItems === n}
+                    onclick={() => setComboVisibleItems(n)}>{n}</button>
+          {/each}
+        </div>
+        <p class="backup-note" style="margin-top:6px">
+          控制 combobox 下拉在屏幕空间充足时最多显示多少项；空间不足时自动压缩并滚动。
+        </p>
+      </div>
     {/if}
 
     {#if tab === 'backup'}
@@ -233,7 +247,7 @@
     {/if}
 
     {#if tab === 'about'}
-      <p class="backup-note"><b>版本：</b>v3.7（Svelte 5 重构版）</p>
+      <p class="backup-note"><b>版本：</b>v3.7.4（Svelte 5 重构版）</p>
       <p class="backup-note">本版本使用 Svelte 5 编译时框架，运行时开销极低，产物体积缩小 60%+。</p>
     {/if}
   </div>
