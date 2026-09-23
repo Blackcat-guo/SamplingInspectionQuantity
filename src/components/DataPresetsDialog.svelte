@@ -30,7 +30,7 @@
   let tab = $state('customer');
   let presetNavOpen = $state(false);
 
-  // ★ v3.7 要求 4：Tab 自动滚动
+  // v3.7 要求 4：Tab 自动滚动
   let tabsScrollEl = $state<HTMLDivElement | null>(null);
 
   const dataTabs = [
@@ -56,14 +56,37 @@
   let expandedGpId = $state('');
   let gpFilter = $state('');
 
-  // H2：文本编辑弹窗状态
+  /* H2：编辑分类弹窗 */
   let editOpen = $state(false);
   let editTitle = $state('');
   let editSubtitle = $state('');
   let editInitialText = $state('');
   let editTarget = $state<{ kind: 'presetGroup' | 'specialGroup'; id: string } | null>(null);
 
-  /* ★ v3.7 要求 4：Tab 点击后自动滚动到视口中央 */
+  /* ★ v3.7.1 需求2：批量添加弹窗 */
+  let bulkOpen = $state(false);
+  let bulkKind = $state<'' | 'customer' | 'supplier'>('');
+  let bulkTitle = $state('');
+  let bulkSubtitle = $state('');
+
+  function openBulk(kind: 'customer' | 'supplier') {
+    bulkKind = kind;
+    bulkTitle = kind === 'customer' ? '批量添加客户' : '批量添加供应商';
+    bulkSubtitle = '每行一个，或用逗号/顿号/分号分隔；重复项会自动跳过';
+    bulkOpen = true;
+  }
+  function onBulkConfirm(text: string) {
+    if (!bulkKind) return;
+    const arr = text.split(/[\n,，、;；]+/).map((s) => s.trim()).filter(Boolean);
+    if (!arr.length) return;
+    let n = 0;
+    const kind = bulkKind;
+    arr.forEach((v) => { if (addDataPreset(kind, v)) n++; });
+    if (n) pushToast(`已添加 ${n} 个${kind === 'customer' ? '客户' : '供应商'}`);
+    bulkKind = '';
+  }
+
+  /* ---------- Tab 自动滚动 ---------- */
   function pickPresetTab(key: string) {
     tab = key;
     scrollToTab(key);
@@ -132,11 +155,6 @@
   const pgPage = $derived(Math.min(presetPages.presetGroup || 1, pgPages));
   const pgList = $derived(app.dataPresets.presetGroups.slice((pgPage - 1) * pageSize, pgPage * pageSize));
 
-  function bulkText() {
-    const raw = prompt('批量添加（每行一个 / 逗号分隔）：');
-    if (!raw) return [];
-    return raw.split(/[\n,，、;；]+/).map((s) => s.trim()).filter(Boolean);
-  }
   function prevPage(key: string) { setPresetPage(key, (presetPages[key] || 1) - 1); }
   function nextPage(key: string) { setPresetPage(key, (presetPages[key] || 1) + 1); }
 
@@ -167,7 +185,7 @@
     scheduleSave();
   }
 
-  /* H2：改为弹窗 */
+  /* H2：编辑分类 */
   function editPresetGroupItems(id: string) {
     const p = app.dataPresets.presetGroups.find((x) => x.id === id);
     if (!p) return;
@@ -204,7 +222,6 @@
 
 <Dialog bind:open title="📚 数据预设" subtitle="预设客户、供应商、来料数量、工序、负责人、特殊分组、预分组、共享预分类。" wide>
   <div class="dp-tabs-outer">
-    <!-- ★ 要求 4：绑定容器 ref，用于自动滚动 -->
     <div class="dp-tabs-scroll" bind:this={tabsScrollEl}>
       {#each dataTabs as t (t.key)}
         <button class="dp-tab" class:active={tab === t.key} onclick={() => pickPresetTab(t.key)}>{t.label}</button>
@@ -220,13 +237,7 @@
     {#if tab === 'customer'}
       <div class="panel-head-row">
         <span class="panel-head-text">客户列表（{app.dataPresets.customers.length}）</span>
-        <button class="mini-batch-btn" onclick={() => {
-          const arr = bulkText();
-          if (!arr.length) return;
-          let n = 0;
-          arr.forEach((v) => { if (addDataPreset('customer', v)) n++; });
-          if (n) pushToast(`已添加 ${n} 个客户`);
-        }}>＋ 批量添加</button>
+        <button class="mini-batch-btn" onclick={() => openBulk('customer')}>＋ 批量添加</button>
       </div>
       {#if customerPages > 1}
         <div class="pager">
@@ -288,13 +299,7 @@
     {#if tab === 'supplier'}
       <div class="panel-head-row">
         <span class="panel-head-text">供应商列表（{app.dataPresets.suppliers.length}）</span>
-        <button class="mini-batch-btn" onclick={() => {
-          const arr = bulkText();
-          if (!arr.length) return;
-          let n = 0;
-          arr.forEach((v) => { if (addDataPreset('supplier', v)) n++; });
-          if (n) pushToast(`已添加 ${n} 个供应商`);
-        }}>＋ 批量添加</button>
+        <button class="mini-batch-btn" onclick={() => openBulk('supplier')}>＋ 批量添加</button>
       </div>
       {#if supplierPages > 1}
         <div class="pager">
@@ -667,4 +672,11 @@
   subtitle={editSubtitle}
   initialText={editInitialText}
   onConfirm={onEditConfirm}
+/>
+
+<TextEditDialog
+  bind:open={bulkOpen}
+  title={bulkTitle}
+  subtitle={bulkSubtitle}
+  onConfirm={onBulkConfirm}
 />
