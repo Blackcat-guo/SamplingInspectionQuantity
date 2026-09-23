@@ -48,31 +48,43 @@
     <div class="sub-section">
       <div class="panel-head-row"><span class="panel-head-text">统一设置（可选）</span></div>
       <div class="info-grid">
+        <!-- ★ v3.7.1 需求1：供应商关联数据预设 -->
         <div class="info-field">
           <div class="field-label">供应商</div>
-          <input bind:value={supplier} maxlength="40" list="addSupplierList" />
+          <input bind:value={supplier} maxlength="40" list="addSupplierList" placeholder="选择或输入" />
           <datalist id="addSupplierList">
             {#each app.dataPresets.suppliers as s}<option value={s}></option>{/each}
           </datalist>
         </div>
+
+        <!-- ★ 客户关联数据预设 -->
         <div class="info-field">
           <div class="field-label">客户</div>
-          <input bind:value={customer} maxlength="40" list="addCustomerList" />
+          <input bind:value={customer} maxlength="40" list="addCustomerList" placeholder="选择或输入" />
           <datalist id="addCustomerList">
             {#each app.dataPresets.customers as c}<option value={c.name}></option>{/each}
           </datalist>
         </div>
+
+        <!-- ★ 发生工序关联数据预设 -->
         <div class="info-field">
           <div class="field-label">发生工序</div>
-          <input bind:value={process} maxlength="40" list="addProcessList" />
+          <input bind:value={process} maxlength="40" list="addProcessList" placeholder="选择或输入" />
           <datalist id="addProcessList">
             {#each app.dataPresets.processes as p}<option value={p}></option>{/each}
           </datalist>
         </div>
+
+        <!-- ★ 来料数量关联数据预设 -->
         <div class="info-field">
           <div class="field-label">来料数量</div>
-          <input bind:value={incoming} type="text" inputmode="numeric" maxlength="9" />
+          <input bind:value={incoming} type="text" inputmode="numeric" maxlength="9"
+                 list="addIncomingList" placeholder="0" />
+          <datalist id="addIncomingList">
+            {#each app.dataPresets.incomingQtyPresets as v}<option value={String(v)}></option>{/each}
+          </datalist>
         </div>
+
         <div class="info-field" style="grid-column:1/-1">
           <div class="field-label">类型</div>
           <label class="sample-toggle">
