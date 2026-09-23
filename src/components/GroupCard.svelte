@@ -1,9 +1,10 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import ChoiceDialog from './ChoiceDialog.svelte';
   import {
     app, currentProduct, scheduleSave, pushToast, logOperation,
     setQty, commitQtyDraft, addItem, removeItem, nameKey,
-    groupSum, groupRate, setGroupTotal,
+    groupSum, groupRate,
     bulkQtyDialog, openBulkQtyDialog, closeBulkQtyDialog, applyBulkQty,
     groupSelection, batchGroupId,
     toggleItemSelect, toggleAllItems, batchDeleteItems, cancelBatchItems, enterBatchItems,
@@ -23,6 +24,7 @@
   const collapsed = $derived(
     Array.isArray(app.settings.collapsedGroups) && app.settings.collapsedGroups.includes(g.id),
   );
+  const product = $derived(currentProduct());
 
   function toggleCollapse() {
     const arr = Array.isArray(app.settings.collapsedGroups) ? app.settings.collapsedGroups.slice() : [];
@@ -44,12 +46,6 @@
     return key in qtyDrafts ? qtyDrafts[key] : String(qty);
   }
   function onAddItem() { if (!itemInput.trim()) return; if (addItem(g, itemInput)) itemInput = ''; }
-  function onTotalInput(e: Event) {
-    const raw = (e.target as HTMLInputElement).value.replace(/\D/g, '');
-    (e.target as HTMLInputElement).value = raw;
-    const n = raw === '' ? 0 : parseInt(raw, 10);
-    setGroupTotal(g, Number.isFinite(n) ? Math.max(0, n) : 0);
-  }
   function renameGroup(e: Event) {
     const v = (e.target as HTMLInputElement).value;
     if (g.name === v) return;
@@ -87,24 +83,54 @@
     arr.forEach((n) => { if (addItem(g, n)) added++; });
     if (added) { pushToast(`已添加 ${added} 个分类`); logOperation(`向「${g.name}」添加 ${added} 个分类`); }
   }
+
+  /* ★ v3.7：不良率显示为「分子/分母 = 百分比」 */
+  function rateDisplay(group: Group): string {
+    const denom = product?.inspectionQty || 0;
+    const sum = groupSum(group);
+    if (!denom) return sum > 0 ? '--' : '0%';
+    return `${sum}/${denom} = ${Math.round((sum / denom) * 100)}%`;
+  }
+
+  /* H1：转移分类 ChoiceDialog */
+  let transferOpen = $state(false);
+  let transferItemName = $state('');
+  let transferFromGroupId = $state('');
+
+  const transferTargets = $derived.by(() => {
+    const p = currentProduct();
+    if (!p || !transferItemName) return [];
+    const key = nameKey(transferItemName);
+    return p.groups
+      .filter((x) =>
+        x.id !== transferFromGroupId &&
+        !x.items.some((it) => nameKey(it.name) === key),
+      )
+      .map((x) => ({ value: x.id, label: x.name, meta: `${x.items.length} 项` }));
+  });
+
   function onTransferItem(itemName: string) {
     const p = currentProduct();
     if (!p) return;
     const others = p.groups.filter((x) => x.id !== g.id);
     if (!others.length) { pushToast('没有其他分组可转移', 'error'); return; }
-    const names = others.map((g2, idx) => `${idx + 1}. ${g2.name}`).join('\n');
-    const choice = prompt(`转移到哪个分组？\n${names}\n\n请输入序号：`);
-    if (choice == null) return;
-    const idx = parseInt(choice, 10) - 1;
-    if (!Number.isFinite(idx) || idx < 0 || idx >= others.length) return;
-    const target = others[idx];
-    if (transferItemToGroup(g, itemName, target)) {
+    transferItemName = itemName;
+    transferFromGroupId = g.id;
+    transferOpen = true;
+  }
+  function onTransferPick(targetId: string) {
+    const p = currentProduct();
+    if (!p) return;
+    const target = p.groups.find((x) => x.id === targetId);
+    if (target && transferItemToGroup(g, transferItemName, target)) {
       pushToast(`已转移到「${target.name}」`);
-      logOperation(`分类「${itemName}」转移到「${target.name}」`);
+      logOperation(`分类「${transferItemName}」转移到「${target.name}」`);
     }
+    transferItemName = '';
+    transferFromGroupId = '';
   }
 
-  /* 拖拽 */
+  /* ---------- 拖拽排序 ---------- */
   let longPressTimer: ReturnType<typeof setTimeout> | null = null;
   let pressing = false;
   let startY = 0, startX = 0;
@@ -181,7 +207,7 @@
     dragState.overIndex = -1;
   }
 
-  /* 预分类下拉 */
+  /* ---------- 预分类下拉 ---------- */
   const sharedItems = $derived(presetDerived.visibleSharedPresets);
   const localItems = $derived(presetDerived.localOnlyPresets);
   let pickerOpen = $state(false);
@@ -257,13 +283,6 @@
   </div>
 
   <div class="group-body">
-    <div class="group-total-row">
-      <span>总数量</span>
-      <input class="group-total" type="text" inputmode="numeric" value={String(g.total)} oninput={onTotalInput} aria-label="分组总数量" />
-      <span>PCS</span>
-      {#if g.totalIsAuto === false}<span class="manual-tag">· 已手改</span>{/if}
-    </div>
-
     <div class="group-toolbar">
       <button class="mini-btn" onclick={onBulkAddItems}>＋ 批量添加</button>
       {#if g.items.length && batchGroupId.value !== g.id}
@@ -323,10 +342,11 @@
       {/each}
     </div>
 
+    <!-- ★ v3.7：不良率使用产品级抽检数量为分母，显示「分子/分母 = 百分比」 -->
     <div class="group-summary">
       <span>分类数：<b class="count-val">{g.items.length}</b></span>
       <span>数量总和：<b>{groupSum(g)}</b></span>
-      <span>不良率：<b class="rate-val">{groupRate(g)}</b></span>
+      <span>不良率：<b class="rate-val">{rateDisplay(g)}</b></span>
     </div>
   </div>
 </div>
@@ -388,3 +408,12 @@
     </div>
   </div>
 {/if}
+
+<ChoiceDialog
+  bind:open={transferOpen}
+  title="↔ 转移分类"
+  subtitle={`将「${transferItemName}」转移到：`}
+  items={transferTargets}
+  onSelect={onTransferPick}
+  filterable={transferTargets.length > 8}
+/>

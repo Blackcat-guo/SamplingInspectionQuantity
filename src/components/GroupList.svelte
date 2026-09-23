@@ -11,9 +11,10 @@
 
   let nameInput = $state('');
   let filter = $state('');
-  let bulkTotalOpen = $state(false);
-  let bulkTotalInput = $state('');
   let presetMenuOpen = $state(false);
+  let presetMenuX = $state(0);
+  let presetMenuY = $state(0);
+  let presetTriggerEl: HTMLElement | null = null;
 
   const filtered = $derived.by(() => {
     const q = filter.trim().toLowerCase();
@@ -29,25 +30,38 @@
     addGroup(nameInput);
     nameInput = '';
   }
+
+  /* ★ 要求 1：预分组下拉改为 position:fixed + 边界判断 */
+  function openPresetMenu(e: MouseEvent) {
+    if (presetMenuOpen) { closePresetMenu(); return; }
+    presetTriggerEl = e.currentTarget as HTMLElement;
+    computeMenuPosition();
+    presetMenuOpen = true;
+  }
+  function computeMenuPosition() {
+    if (!presetTriggerEl) return;
+    const rect = presetTriggerEl.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const MENU_W = 240, MENU_H = 320, MARGIN = 12, GAP = 6;
+    let x = rect.left, y = rect.bottom + GAP;
+    if (x + MENU_W > vw - MARGIN) x = vw - MENU_W - MARGIN;
+    if (x < MARGIN) x = MARGIN;
+    if (y + MENU_H > vh - MARGIN && rect.top - MENU_H - GAP > MARGIN) y = rect.top - MENU_H - GAP;
+    if (y + MENU_H > vh - MARGIN) y = Math.max(MARGIN, vh - MENU_H - MARGIN);
+    presetMenuX = x;
+    presetMenuY = y;
+  }
+  function closePresetMenu() { presetMenuOpen = false; presetTriggerEl = null; }
+
   async function onPickPreset(pgId: string) {
-    presetMenuOpen = false;
+    closePresetMenu();
     await createGroupFromPreset(pgId);
   }
-  function applyBulkTotal() {
-    const cur = currentProduct();
-    if (!cur) return;
-    const n = parseInt(bulkTotalInput.replace(/\D/g, ''), 10);
-    if (!Number.isFinite(n)) return;
-    if (!confirm(`将全部 ${cur.groups.length} 个分组的总数量设为 ${n}？`)) return;
-    cur.groups.forEach((g) => { g.total = n; g.totalIsAuto = false; });
-    scheduleSave();
-    bulkTotalInput = '';
-    bulkTotalOpen = false;
-  }
+
   function resetAllQty() {
     const cur = currentProduct();
     if (!cur) return;
-    if (!confirm('确定将所有分类的数量清零吗？（分组总数量不变）')) return;
+    if (!confirm('确定将所有分类的数量清零吗？')) return;
     cur.groups.forEach((g) => g.items.forEach((it) => { it.qty = 0; }));
     scheduleSave();
   }
@@ -59,6 +73,21 @@
     cur.presets = [];
     scheduleSave();
   }
+
+  $effect(() => {
+    if (!presetMenuOpen) return;
+    const onKeydown = (e: KeyboardEvent) => { if (e.key === 'Escape') closePresetMenu(); };
+    const onScroll = () => closePresetMenu();
+    const onResize = () => closePresetMenu();
+    document.addEventListener('keydown', onKeydown, true);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onResize);
+    return () => {
+      document.removeEventListener('keydown', onKeydown, true);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
+    };
+  });
 </script>
 
 {#if p}
@@ -69,38 +98,9 @@
     <button class="add-group-standard" onclick={addStandardGroups}>📋 标准分组</button>
     {#if app.dataPresets.presetGroups.length}
       <div class="preset-wrap">
-        <button class="add-group-standard" onclick={() => (presetMenuOpen = !presetMenuOpen)}>📦 预分组 ▾</button>
-        {#if presetMenuOpen}
-          <div class="preset-menu" role="menu">
-            {#each app.dataPresets.presetGroups as pg (pg.id)}
-              <button type="button" role="menuitem" onclick={() => onPickPreset(pg.id)}>
-                <div style="font-weight:700">{pg.name}</div>
-                <div style="font-size:11px;color:var(--c-text-3);font-weight:400">
-                  {pg.items.length ? pg.items.slice(0, 3).join('、') + (pg.items.length > 3 ? '…' : '') : '（空分组）'}
-                </div>
-              </button>
-            {/each}
-          </div>
-        {/if}
-      </div>
-    {/if}
-  </div>
-
-  <div style="margin-top:10px">
-    <button type="button"
-            style="width:100%;padding:9px 12px;border:1.5px dashed var(--c-border);border-radius:11px;background:var(--c-surface-2);color:var(--c-text-3);font-size:12.5px;font-weight:700;text-align:left"
-            onclick={() => (bulkTotalOpen = !bulkTotalOpen)}>
-      {bulkTotalOpen ? '▼' : '▶'} 批量设置总数量（点击展开）
-    </button>
-    {#if bulkTotalOpen}
-      <div style="display:flex;gap:10px;margin-top:8px">
-        <input bind:value={bulkTotalInput} type="text" inputmode="numeric"
-               placeholder="批量设置所有组总数量…" maxlength="9"
-               style="flex:1;padding:10px 13px;font-size:14px;border:1.5px solid var(--c-border);border-radius:11px;background:var(--c-surface-2);color:var(--c-text);outline:none" />
-        <button onclick={applyBulkTotal}
-                style="padding:10px 16px;border:none;border-radius:11px;background:var(--c-primary-soft);color:var(--c-primary-dark);font-size:13.5px;font-weight:600">
-          应用到全部组
-        </button>
+        <button class="add-group-standard" type="button"
+                onclick={openPresetMenu}
+                aria-haspopup="menu" aria-expanded={presetMenuOpen}>📦 预分组 ▾</button>
       </div>
     {/if}
   </div>
@@ -133,5 +133,21 @@
     {:else if !filtered.length}
       <div class="empty">没有匹配的分组或分类</div>
     {/if}
+  </div>
+{/if}
+
+<!-- ★ 要求 1：预分组下拉（fixed 定位） -->
+{#if presetMenuOpen}
+  <div class="preset-menu-overlay" role="presentation" onclick={(e) => { if (e.target === e.currentTarget) closePresetMenu(); }}>
+    <div class="preset-menu-fixed" style="top:{presetMenuY}px;left:{presetMenuX}px" role="menu">
+      {#each app.dataPresets.presetGroups as pg (pg.id)}
+        <button type="button" role="menuitem" onclick={() => onPickPreset(pg.id)}>
+          <div style="font-weight:700">{pg.name}</div>
+          <div style="font-size:11px;color:var(--c-text-3);font-weight:400">
+            {pg.items.length ? pg.items.slice(0, 3).join('、') + (pg.items.length > 3 ? '…' : '') : '（空分组）'}
+          </div>
+        </button>
+      {/each}
+    </div>
   </div>
 {/if}

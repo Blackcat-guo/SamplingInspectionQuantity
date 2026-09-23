@@ -1,15 +1,21 @@
 <script lang="ts">
   import {
-    app, currentProduct, calcSampling, setIncomingQty, setProductField, toggleSample,
-    setProductSupplier, setProductCustomer, canUndo, canRedo, undo, redo,
-    sortNatural,
+    app, currentProduct, calcSampling, setIncomingQty, setInspectionQty,
+    setProductField, toggleSample, setProductSupplier, setProductCustomer,
+    canUndo, canRedo, undo, redo, sortNatural,
   } from '../lib/stores/app.svelte';
 
   const p = $derived(currentProduct());
   let incomingText = $state('');
+  let inspectionText = $state('');
+
   $effect(() => {
     const cur = p?.incomingQty ?? 0;
     incomingText = cur > 0 ? String(cur) : '';
+  });
+  $effect(() => {
+    const cur = p?.inspectionQty ?? 0;
+    inspectionText = cur > 0 ? String(cur) : '';
   });
 
   const suppliers = $derived(sortNatural(app.dataPresets.suppliers));
@@ -22,6 +28,18 @@
     (e.target as HTMLInputElement).value = raw;
     incomingText = raw;
     setIncomingQty(raw === '' ? 0 : parseInt(raw, 10));
+  }
+  function onInspectionInput(e: Event) {
+    const raw = (e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 9);
+    (e.target as HTMLInputElement).value = raw;
+    inspectionText = raw;
+    setInspectionQty(raw === '' ? 0 : parseInt(raw, 10));
+  }
+  function bumpInspection(delta: number) {
+    if (!p) return;
+    const next = Math.max(0, (p.inspectionQty || 0) + delta);
+    setInspectionQty(next);
+    inspectionText = String(next);
   }
 </script>
 
@@ -36,7 +54,7 @@
   {#if app.settings.showMainTips !== false}
     <p class="tip">
       <b>{p.name}</b> · 产品名称即为料号；同供应商 + 同客户才能一起汇总；
-      各分组总数量以你的实际输入为准；长按 ⠿ 拖动可调整分组顺序。
+      抽检数量为产品级统一值，所有分组共用；长按 ⠿ 拖动可调整分组顺序。
     </p>
   {/if}
 
@@ -91,16 +109,24 @@
         </label>
       </div>
     </div>
+
+    <!-- ★ v3.7：抽检数量卡片（含 F1 快捷加减） -->
     <div class="sampling-display">
       <div>
-        <div>AQL 参考抽检数</div>
+        <div>抽检数量</div>
         {#if app.settings.showMainTips !== false}
-          <div class="sub">一般水平Ⅱ · AQL=1.0 · 仅作初始填入</div>
+          <div class="sub">
+            参考：AQL(来料 {p.incomingQty || 0}) = {calcSampling(p.incomingQty || 0)}
+          </div>
         {/if}
       </div>
-      <div class="val">
-        {p.incomingQty > 0 ? calcSampling(p.incomingQty) : '—'}
-        <span style="font-size:13px;color:var(--c-text-3);font-weight:600">PCS</span>
+      <div class="sampling-control">
+        <button class="sampling-step-btn" type="button" aria-label="减一" onclick={() => bumpInspection(-1)}>−</button>
+        <input class="sampling-input" type="text" inputmode="numeric"
+               value={inspectionText} placeholder="0" maxlength="9"
+               oninput={onInspectionInput} aria-label="抽检数量" />
+        <button class="sampling-step-btn" type="button" aria-label="加一" onclick={() => bumpInspection(1)}>+</button>
+        <span class="sampling-unit">PCS</span>
       </div>
     </div>
   </section>

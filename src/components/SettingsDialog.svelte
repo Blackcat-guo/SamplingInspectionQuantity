@@ -25,6 +25,10 @@
   let settingsNavOpen = $state(false);
   let manualNavOpen = $state(false);
 
+  // ★ v3.7 要求 4：Tab 自动滚动
+  let tabsScrollEl = $state<HTMLDivElement | null>(null);
+  let manualScrollEl = $state<HTMLDivElement | null>(null);
+
   const tabs = [
     { key: 'general', label: '通用' },
     { key: 'display', label: '显示' },
@@ -38,13 +42,27 @@
   const currentManualHtml = $derived.by(
     () => MANUAL_SECTIONS.find((s) => s.id === manualActive)?.content || '',
   );
-
   const manualNavItems = $derived(
     MANUAL_SECTIONS.map((s) => ({ key: s.id, label: s.title })),
   );
 
-  function pickSettingsTab(key: string) { tab = key; }
-  function pickManualSection(key: string) { manualActive = key; }
+  function scrollEl(scrollEl: HTMLElement | null, idx: number) {
+    if (!scrollEl || idx < 0) return;
+    const el = scrollEl.querySelectorAll<HTMLElement>('.dp-tab, .manual-tab')[idx];
+    if (!el) return;
+    const behavior: ScrollBehavior = app.settings.experienceLevel === 'compat' ? 'auto' : 'smooth';
+    el.scrollIntoView({ behavior, block: 'nearest', inline: 'center' });
+  }
+  function pickSettingsTab(key: string) {
+    tab = key;
+    const idx = tabs.findIndex((t) => t.key === key);
+    scrollEl(tabsScrollEl, idx);
+  }
+  function pickManualSection(key: string) {
+    manualActive = key;
+    const idx = MANUAL_SECTIONS.findIndex((s) => s.id === key);
+    scrollEl(manualScrollEl, idx);
+  }
 
   function factoryReset() {
     if (!confirm('⚠️ 恢复出厂设置会清空所有数据，确定继续？')) return;
@@ -64,15 +82,15 @@
 </script>
 
 <Dialog bind:open title="⚙️ 设置" subtitle="通用 · 显示 · 备份与恢复 · 操作日志 · 说明书 · 关于" wide>
-  <!-- 主 Tab 行：左侧滚动 + 右侧固定 ≡ -->
   <div class="dp-tabs-outer">
-    <div class="dp-tabs-scroll">
+    <div class="dp-tabs-scroll" bind:this={tabsScrollEl}>
       {#each tabs as t (t.key)}
-        <button class="dp-tab" class:active={tab === t.key} onclick={() => (tab = t.key)}>{t.label}</button>
+        <button class="dp-tab" class:active={tab === t.key} onclick={() => pickSettingsTab(t.key)}>{t.label}</button>
       {/each}
     </div>
     <div class="dp-tab-actions">
       <button class="dp-expand-btn" title="Tab 导航" onclick={() => (settingsNavOpen = true)}>≡</button>
+      <button class="dp-expand-btn" title="打开数据预设" onclick={onOpenDataPresets}>📚</button>
     </div>
   </div>
 
@@ -84,27 +102,20 @@
         <button class:active={app.themeMode === 'dark'} onclick={() => setThemeMode('dark')}>🌙 深色</button>
       </div>
       <label class="display-toggle">
-        <input
-          type="checkbox"
-          checked={app.settings.compactMode}
-          onchange={(e) => setSetting('compactMode', (e.target as HTMLInputElement).checked)}
-        />
+        <input type="checkbox" checked={app.settings.compactMode}
+               onchange={(e) => setSetting('compactMode', (e.target as HTMLInputElement).checked)} />
         <span>📐 界面紧凑模式</span>
       </label>
       <label class="display-toggle">
-        <input
-          type="checkbox"
-          checked={app.settings.confirmBeforeDelete}
-          onchange={(e) => setSetting('confirmBeforeDelete', (e.target as HTMLInputElement).checked)}
-        />
+        <input type="checkbox" checked={app.settings.confirmBeforeDelete}
+               onchange={(e) => setSetting('confirmBeforeDelete', (e.target as HTMLInputElement).checked)} />
         <span>🗑 删除前二次确认</span>
       </label>
-      <button class="backup-action" onclick={onOpenDataPresets}>📚 打开数据预设</button>
     {/if}
 
     {#if tab === 'display'}
       <div class="setting-row">
-        <label>✨ 体验等级（当前：{experienceLevelLabel()}）</label>
+        <div class="field-label">✨ 体验等级（当前：{experienceLevelLabel()}）</div>
         <div class="theme-toggle" style="margin-bottom:0">
           <button class:active={app.settings.experienceLevel === 'auto'} onclick={() => setExperience('auto')}>自动</button>
           <button class:active={app.settings.experienceLevel === 'elegant'} onclick={() => setExperience('elegant')}>优雅</button>
@@ -115,7 +126,7 @@
       </div>
 
       <div class="setting-row">
-        <label>🔤 全局字体大小（当前：{fontSizeLabel()}）</label>
+        <div class="field-label">🔤 全局字体大小（当前：{fontSizeLabel()}）</div>
         <div class="theme-toggle" style="margin-bottom:0">
           {#each ['small', 'standard', 'large'] as k (k)}
             <button class:active={app.settings.fontSize === k} onclick={() => setFontSize(k as any)}>
@@ -126,7 +137,7 @@
       </div>
 
       <div class="setting-row">
-        <label>🎬 动画强度（当前：{animationLevelLabel()}）</label>
+        <div class="field-label">🎬 动画强度（当前：{animationLevelLabel()}）</div>
         <div class="theme-toggle" style="margin-bottom:0">
           {#each ['normal', 'reduced', 'none'] as k (k)}
             <button class:active={app.settings.animationLevel === k} onclick={() => setAnimationLevel(k as any)}>
@@ -137,55 +148,36 @@
       </div>
 
       <label class="display-toggle">
-        <input
-          type="checkbox"
-          checked={app.settings.showTopNavText !== false}
-          onchange={(e) => setShowTopNavText((e.target as HTMLInputElement).checked)}
-        />
+        <input type="checkbox" checked={app.settings.showTopNavText !== false}
+               onchange={(e) => setShowTopNavText((e.target as HTMLInputElement).checked)} />
         <span>🔤 显示导航栏文字描述</span>
         <small>{app.settings.showTopNavText !== false ? '已显示' : '仅显示图标（更紧凑）'}</small>
       </label>
 
       <label class="display-toggle">
-        <input
-          type="checkbox"
-          checked={app.settings.showMainTips !== false}
-          onchange={(e) => setShowMainTips((e.target as HTMLInputElement).checked)}
-        />
+        <input type="checkbox" checked={app.settings.showMainTips !== false}
+               onchange={(e) => setShowMainTips((e.target as HTMLInputElement).checked)} />
         <span>💬 显示主界面文字描述</span>
         <small>{app.settings.showMainTips !== false ? '已显示' : '已隐藏（更紧凑）'}</small>
       </label>
 
       <label class="display-toggle">
-        <input
-          type="checkbox"
-          checked={app.settings.showZeroQtyItems !== false}
-          onchange={(e) => setShowZeroQty((e.target as HTMLInputElement).checked)}
-        />
+        <input type="checkbox" checked={app.settings.showZeroQtyItems !== false}
+               onchange={(e) => setShowZeroQty((e.target as HTMLInputElement).checked)} />
         <span>📊 汇总与预览中显示数量为 0 的分类</span>
         <small>{app.settings.showZeroQtyItems !== false ? '已开启' : '已隐藏'}</small>
       </label>
 
       <label class="display-toggle">
-        <input
-          type="checkbox"
-          checked={app.settings.mergeMultiProductSummary !== false}
-          onchange={(e) => setMergeMultiProductSummary((e.target as HTMLInputElement).checked)}
-        />
+        <input type="checkbox" checked={app.settings.mergeMultiProductSummary !== false}
+               onchange={(e) => setMergeMultiProductSummary((e.target as HTMLInputElement).checked)} />
         <span>📊 多产品汇总时合并「问题描述」</span>
-        <small>
-          {app.settings.mergeMultiProductSummary !== false
-            ? '按分组名聚合，适合关联分析'
-            : '每个产品独立一行，适合逐料号追溯'}
-        </small>
+        <small>{app.settings.mergeMultiProductSummary !== false ? '按分组名聚合，适合关联分析' : '每个产品独立一行，适合逐料号追溯'}</small>
       </label>
 
       <label class="display-toggle">
-        <input
-          type="checkbox"
-          checked={app.settings.showRecognizeTools !== false}
-          onchange={(e) => setShowRecognizeTools((e.target as HTMLInputElement).checked)}
-        />
+        <input type="checkbox" checked={app.settings.showRecognizeTools !== false}
+               onchange={(e) => setShowRecognizeTools((e.target as HTMLInputElement).checked)} />
         <span>🛠 显示识别工具</span>
         <small>{app.settings.showRecognizeTools !== false ? '已开启' : '已隐藏'}</small>
       </label>
@@ -225,15 +217,11 @@
 
     {#if tab === 'manual'}
       <div class="manual-layout-vertical">
-        <!-- 说明书章节导航：左侧滚动 + 右侧固定 ≡ -->
         <div class="manual-tabs-wrap">
-          <div class="manual-tabs-scroll">
+          <div class="manual-tabs-scroll" bind:this={manualScrollEl}>
             {#each MANUAL_SECTIONS as sec (sec.id)}
-              <button
-                class="manual-tab"
-                class:active={manualActive === sec.id}
-                onclick={() => (manualActive = sec.id)}
-              >{sec.title}</button>
+              <button class="manual-tab" class:active={manualActive === sec.id}
+                      onclick={() => pickManualSection(sec.id)}>{sec.title}</button>
             {/each}
           </div>
           <div class="manual-tabs-actions">
@@ -245,7 +233,7 @@
     {/if}
 
     {#if tab === 'about'}
-      <p class="backup-note"><b>版本：</b>v3.5（Svelte 5 重构版）</p>
+      <p class="backup-note"><b>版本：</b>v3.7（Svelte 5 重构版）</p>
       <p class="backup-note">本版本使用 Svelte 5 编译时框架，运行时开销极低，产物体积缩小 60%+。</p>
     {/if}
   </div>

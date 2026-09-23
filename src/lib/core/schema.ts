@@ -10,6 +10,7 @@ export interface Product {
   id: string; name: string; prefix: string; suffix: string;
   supplier: string; customer: string; process: string;
   incomingQty: number; isSample: boolean;
+  inspectionQty: number;              // ★ v3.7 新增
   presets: string[]; groups: Group[];
 }
 export interface Customer { id: string; name: string; responsibleIds: string[]; }
@@ -38,7 +39,7 @@ export interface Settings {
   summaryTemplate: string;
   showVoice: boolean;
   showImageOcr: boolean;
-  showRecognizeTools: boolean;        // ★ v3.4 新增
+  showRecognizeTools: boolean;
   experienceLevel: 'auto' | 'elegant' | 'standard' | 'compat';
   animationLevel: 'normal' | 'reduced' | 'none';
   showZeroQtyItems: boolean;
@@ -157,6 +158,10 @@ export function cleanGroups(arr: unknown): Group[] {
 }
 
 export function normalizeProduct(p: any): Product {
+  const migratedInspection = clampInt(
+    (p?.inspectionQty != null ? p.inspectionQty : (p?.groups?.[0]?.total ?? 0)),
+    0,
+  );
   return {
     id: p?.id || uid(),
     name: typeof p?.name === 'string' && p.name.trim() ? p.name.trim() : '未命名产品',
@@ -167,6 +172,7 @@ export function normalizeProduct(p: any): Product {
     process: typeof p?.process === 'string' ? p.process : '',
     incomingQty: clampInt(p?.incomingQty, 0),
     isSample: !!p?.isSample,
+    inspectionQty: migratedInspection,
     presets: cleanStringList(p?.presets),
     groups: cleanGroups(p?.groups),
   };

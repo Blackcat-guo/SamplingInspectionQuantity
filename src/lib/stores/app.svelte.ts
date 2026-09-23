@@ -54,6 +54,7 @@ export const app = $state({
   toasts: [] as ToastItem[],
   sidebarOpen: false,
   operationLogs: [] as { id: string; text: string; at: number }[],
+  lastSavedAt: 0,
 });
 
 const history = createHistory();
@@ -125,6 +126,7 @@ export function flushSave(): void {
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
   const payload = buildPayload();
   const res = storage.savePayload(payload as any);
+  if (res.ok) app.lastSavedAt = Date.now();
   if (!res.ok && res.quota) pushToast('存储空间紧张，已清理滚动备份', 'error', 3200);
   if (app.settings.autoBackup) {
     const now = Date.now();
@@ -213,13 +215,14 @@ export function effectiveLevel(): 'auto' | 'elegant' | 'standard' | 'compat' {
 }
 
 /* ============================================================
-   分组/分类核心
+   核心操作 · 分类数量
    ============================================================ */
 export function realGroupIndex(g: Group): number { return currentGroups().indexOf(g); }
 
+/** v3.7：用产品级 inspectionQty 同步分组 total */
 export function syncSamplingToGroups(product: Product): void {
   if (!product) return;
-  const s = calcSampling(product.incomingQty || 0);
+  const s = product.inspectionQty || calcSampling(product.incomingQty || 0);
   product.groups.forEach((g) => { if (g.totalIsAuto !== false) g.total = s; });
 }
 
@@ -300,18 +303,39 @@ export function setGroupTotal(g: Group, total: number): void {
   scheduleSave();
 }
 
+/* ============================================================
+   来料数量 & 抽检数量
+   ============================================================ */
 export function setIncomingQty(qty: number): void {
   const p = currentProduct();
   if (!p) return;
   const n = clampInt(qty, 0);
   const from = p.incomingQty;
   if (from === n) return;
+  history.pushSnapshot(app.products, p.id);
   p.incomingQty = n;
-  syncSamplingToGroups(p);
-  history.push({ t: CMD.INC, pid: p.id, from, to: n, label: '修改来料数量' });
+  // ★ v3.7：修改来料数量 → 抽检数量强制重置为 AQL
+  const aql = calcSampling(n);
+  p.inspectionQty = aql;
+  p.groups.forEach((g) => { g.total = aql; g.totalIsAuto = true; });
   scheduleSave();
 }
 
+/** ★ v3.7 新增：手动设置抽检数量，同步所有分组 total */
+export function setInspectionQty(qty: number): void {
+  const p = currentProduct();
+  if (!p) return;
+  const n = clampInt(qty, 0);
+  if (p.inspectionQty === n) return;
+  history.pushSnapshot(app.products, p.id);
+  p.inspectionQty = n;
+  p.groups.forEach((g) => { g.total = n; g.totalIsAuto = false; });
+  scheduleSave();
+}
+
+/* ============================================================
+   产品字段修改
+   ============================================================ */
 export function setProductField(field: string, value: string): void {
   const p = currentProduct();
   if (!p) return;
@@ -355,7 +379,7 @@ export function addGroup(raw: string): void {
   const p = currentProduct();
   if (!p || !raw.trim()) return;
   const names = parseGroupBulk(raw);
-  const initTotal = calcSampling(p.incomingQty || 0);
+  const initTotal = p.inspectionQty || calcSampling(p.incomingQty || 0);
   const isNumeric = names.length > 1 || /^分组\d+$/.test(names[0] || '');
   history.pushSnapshot(app.products, p.id);
   if (isNumeric && names.length) {
@@ -402,7 +426,7 @@ export function addStandardGroups(): void {
   const missing = standards.filter((n) => !p.groups.some((g) => g.name === n));
   if (!missing.length) { pushToast('标准分组已全部存在', 'error'); return; }
   history.pushSnapshot(app.products, p.id);
-  const initTotal = calcSampling(p.incomingQty || 0);
+  const initTotal = p.inspectionQty || calcSampling(p.incomingQty || 0);
   missing.forEach((name) => {
     p.groups.push({ id: uid(), name, total: initTotal, totalIsAuto: true, items: [] });
   });
@@ -436,23 +460,28 @@ export function resetGroup(index: number): void {
   if (!p) return;
   const g = p.groups[index];
   if (!g) return;
-  if (!confirm(`确定重置分组「${g.name || '未命名'}」吗？（总数量与各分类数量将清零）`)) return;
+  if (!confirm(`确定重置分组「${g.name || '未命名'}」吗？（各分类数量将清零）`)) return;
   history.pushSnapshot(app.products, p.id);
-  g.total = 0;
-  g.totalIsAuto = undefined;
+  g.total = p.inspectionQty || 0;
+  g.totalIsAuto = true;
   g.items.forEach((it) => { it.qty = 0; });
   scheduleSave();
 }
 
 export function groupSum(g: Group): number { return g.items.reduce((s, it) => s + it.qty, 0); }
+
+/** ★ v3.7：不良率分母改用产品级 inspectionQty */
 export function groupRate(g: Group): string {
-  const sum = groupSum(g);
-  if (!(g.total > 0)) return '--';
-  return Math.round((sum / g.total) * 100) + '%';
+  const p = currentProduct();
+  if (!p) return '--';
+  const sum = g.items.reduce((s, it) => s + (it.qty || 0), 0);
+  const denom = p.inspectionQty > 0 ? p.inspectionQty : 0;
+  if (!denom) return '--';
+  return Math.round((sum / denom) * 100) + '%';
 }
 
 /* ============================================================
-   撤回/恢复
+   撤回 / 恢复
    ============================================================ */
 let applying = false;
 export function undo(): void {
@@ -703,18 +732,19 @@ export function groupedProducts(): { supplier: string; customer: string; list: P
 }
 
 /* ============================================================
-   输出文本
+   输出文本（v3.7：分母改用 product.inspectionQty）
    ============================================================ */
 export function buildOutputText(withLabels: boolean): string {
   const p = currentProduct();
   if (!p) return '';
   const showZero = app.settings.showZeroQtyItems !== false;
+  const denom = p.inspectionQty || 0;
   const parts: string[] = [];
   p.groups.forEach((g) => {
     const items = g.items.filter((it) => showZero || it.qty > 0).map((it) => `${it.name}${it.qty}PCS`);
     if (!items.length) return;
     const sum = g.items.reduce((s, it) => s + it.qty, 0);
-    const rate = g.total > 0 ? `不良率${Math.round((sum / g.total) * 100)}%` : sum > 0 ? '不良率--' : '不良率0%';
+    const rate = denom > 0 ? `不良率${Math.round((sum / denom) * 100)}%` : sum > 0 ? '不良率--' : '不良率0%';
     parts.push(withLabels ? `${g.name}：${items.join('，')}，${rate}` : `${items.join('，')}，${rate}`);
   });
   const body = parts.join('，');
@@ -760,7 +790,7 @@ export function buildSamplingLineFromTotals(totals: number[], withLabels: boolea
 
 export function getProductSamplingDisplay(p: Product): number {
   const totals = p.groups.map((g) => g.total).filter((t) => t > 0);
-  if (!totals.length) return 0;
+  if (!totals.length) return p.inspectionQty || 0;
   const unique = [...new Set(totals)];
   if (unique.length === 1) return unique[0];
   return totals.reduce((a, b) => a + b, 0);
@@ -769,6 +799,7 @@ export function getProductSamplingDisplay(p: Product): number {
 function computeMergedSummary(list: Product[], shouldMerge: boolean, withLabels: boolean) {
   if (!list.length) return { samplingLine: '', summaryText: '' };
   const showZero = app.settings.showZeroQtyItems !== false;
+  const denom = list[0]?.inspectionQty || 0;
   const allTotals = list.flatMap((p) => p.groups.map((g) => g.total));
   const uniqueTotals = [...new Set(allTotals.filter((t) => t > 0))];
   const sameSampling = uniqueTotals.length <= 1;
@@ -777,6 +808,7 @@ function computeMergedSummary(list: Product[], shouldMerge: boolean, withLabels:
   const totalSampling = allTotals.reduce((a, b) => a + b, 0);
   const isFull = totalIncoming > 0 && totalSampling === totalIncoming;
   let samplingLine = '', summaryText = '';
+
   if (shouldMerge) {
     if (sameSampling) {
       const samp = uniqueTotals.length ? uniqueTotals[0] : 0;
@@ -788,23 +820,31 @@ function computeMergedSummary(list: Product[], shouldMerge: boolean, withLabels:
       const sum = allTotals.reduce((a, b) => a + b, 0);
       if (sum > 0) samplingLine = isFull ? `全检合计${sum}PCS,` : `抽检合计${sum}PCS,`;
     }
-    const groupMap = new Map<string, { totalSampling: number; items: Map<string, { name: string; qty: number }>; orderedKeys: string[] }>();
+    const groupMap = new Map<
+      string,
+      { totalSampling: number; items: Map<string, { name: string; qty: number }>; orderedKeys: string[] }
+    >();
     const orderedNames: string[] = [];
-    list.forEach((p) => p.groups.forEach((g) => {
-      const gname = g.name || '未命名分组';
-      if (!groupMap.has(gname)) {
-        groupMap.set(gname, { totalSampling: 0, items: new Map(), orderedKeys: [] });
-        orderedNames.push(gname);
-      }
-      const ge = groupMap.get(gname)!;
-      ge.totalSampling += g.total || 0;
-      g.items.forEach((it) => {
-        if (!showZero && it.qty <= 0) return;
-        const k = nameKey(it.name);
-        if (!ge.items.has(k)) { ge.items.set(k, { name: it.name, qty: 0 }); ge.orderedKeys.push(k); }
-        ge.items.get(k)!.qty += it.qty;
-      });
-    }));
+    list.forEach((p) =>
+      p.groups.forEach((g) => {
+        const gname = g.name || '未命名分组';
+        if (!groupMap.has(gname)) {
+          groupMap.set(gname, { totalSampling: 0, items: new Map(), orderedKeys: [] });
+          orderedNames.push(gname);
+        }
+        const ge = groupMap.get(gname)!;
+        ge.totalSampling += g.total || 0;
+        g.items.forEach((it) => {
+          if (!showZero && it.qty <= 0) return;
+          const k = nameKey(it.name);
+          if (!ge.items.has(k)) {
+            ge.items.set(k, { name: it.name, qty: 0 });
+            ge.orderedKeys.push(k);
+          }
+          ge.items.get(k)!.qty += it.qty;
+        });
+      }),
+    );
     const lines: string[] = [];
     orderedNames.forEach((gname) => {
       const ge = groupMap.get(gname)!;
@@ -812,17 +852,25 @@ function computeMergedSummary(list: Product[], shouldMerge: boolean, withLabels:
       let totalBad = 0;
       ge.orderedKeys.forEach((k) => {
         const e = ge.items.get(k)!;
-        if (showZero || e.qty > 0) { parts.push(`${e.name}${e.qty}PCS`); totalBad += e.qty; }
+        if (showZero || e.qty > 0) {
+          parts.push(`${e.name}${e.qty}PCS`);
+          totalBad += e.qty;
+        }
       });
       if (!parts.length) return;
-      const rate = ge.totalSampling > 0 ? `不良率${Math.round((totalBad / ge.totalSampling) * 100)}%` : totalBad > 0 ? '不良率--' : '不良率0%';
+      const rate = denom > 0
+        ? `不良率${Math.round((totalBad / denom) * 100)}%`
+        : totalBad > 0 ? '不良率--' : '不良率0%';
       lines.push(withLabels ? `${gname}：${parts.join('，')}，${rate}` : `${parts.join('，')}，${rate}`);
     });
-    summaryText = lines.length ? lines.join(withLabels ? '\n' : '，') : (showZero ? '暂无分类数据' : '');
+    summaryText = lines.length
+      ? lines.join(withLabels ? '\n' : '，')
+      : (showZero ? '暂无分类数据' : '');
   } else {
     samplingLine = '';
     const lines: string[] = [];
     list.forEach((p) => {
+      const pDenom = p.inspectionQty || 0;
       const pTotals = p.groups.map((g) => g.total);
       const uniq = [...new Set(pTotals.filter((t) => t > 0))];
       const pSum = pTotals.reduce((a, b) => a + b, 0);
@@ -833,10 +881,14 @@ function computeMergedSummary(list: Product[], shouldMerge: boolean, withLabels:
       else inspectText = pFull ? `全检合计${pSum}PCS` : `抽检合计${pSum}PCS`;
       const gp: string[] = [];
       p.groups.forEach((g) => {
-        const items = g.items.filter((it) => showZero || it.qty > 0).map((it) => `${it.name}${it.qty}PCS`);
+        const items = g.items
+          .filter((it) => showZero || it.qty > 0)
+          .map((it) => `${it.name}${it.qty}PCS`);
         if (!items.length) return;
         const sum = g.items.reduce((s, it) => s + it.qty, 0);
-        const rate = g.total > 0 ? `不良率${Math.round((sum / g.total) * 100)}%` : sum > 0 ? '不良率--' : '不良率0%';
+        const rate = pDenom > 0
+          ? `不良率${Math.round((sum / pDenom) * 100)}%`
+          : sum > 0 ? '不良率--' : '不良率0%';
         gp.push(withLabels ? `${g.name}：${items.join('，')}，${rate}` : `${items.join('，')}，${rate}`);
       });
       lines.push(`${p.name}，${inspectText}，${gp.length ? gp.join('，') : '暂无分类数据'}`);
@@ -1063,7 +1115,7 @@ export function setExperience(level: Settings['experienceLevel']): void {
 }
 
 /* ============================================================
-   主题
+   主题 / 字体
    ============================================================ */
 export function applyThemeEffective(): void {
   const effective: 'light' | 'dark' = app.themeMode === 'auto'
@@ -1082,7 +1134,7 @@ export function applyFontSize(): void {
 }
 
 /* ============================================================
-   加载/初始化
+   加载 / 初始化
    ============================================================ */
 export function loadFromStorage(): void {
   const payload = storage.loadPayload();
@@ -1382,7 +1434,7 @@ export async function createGroupFromPreset(presetGroupId: string): Promise<bool
     if (!ok) return false;
   }
   history.pushSnapshot(app.products, p.id);
-  const initTotal = calcSampling(p.incomingQty || 0);
+  const initTotal = p.inspectionQty || calcSampling(p.incomingQty || 0);
   p.groups.push({
     id: uid(), name: pg.name, total: initTotal, totalIsAuto: true,
     items: finalItems.map((name) => ({ name, qty: 0 })),
@@ -1598,7 +1650,7 @@ export function toggleSpecialRespPanel(id: string): void {
 }
 
 /* ============================================================
-   模块 L：部分导出/导入
+   模块 L：部分导出 / 部分导入
    ============================================================ */
 export interface ExportOptions { products: boolean; dataPresets: boolean; settings: boolean; }
 export interface ImportOptions {
@@ -1768,9 +1820,7 @@ export function setShowRecognizeTools(v: boolean): void {
   scheduleSave();
 }
 export function setFontSize(key: 'small' | 'standard' | 'large'): void {
-  app.settings.fontSize = key;
-  applyFontSize();
-  scheduleSave();
+  app.settings.fontSize = key; applyFontSize(); scheduleSave();
 }
 export function setAnimationLevel(key: 'normal' | 'reduced' | 'none'): void {
   app.settings.animationLevel = key; scheduleSave();
@@ -1812,7 +1862,7 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
 ① 添加产品输入 <code>产品1</code><br>
 ② 添加分组输入 <code>3</code> → 得到「分组1 / 分组2 / 分组3」<br>
 ③ 在分组1 输入 <code>分类A</code> 回车<br>
-④ 数量 +1 至 5，总数量填 20<br>
+④ 数量 +1 至 5，抽检数量设为 20<br>
 ⑤ 下方「本产品汇总」自动生成：
 <pre>客户：客户A
 供应商来料：供应商A
@@ -1846,7 +1896,9 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
 或写成一行：<code>产品1, 产品2, 产品3</code><br>
 点「添加 3 个产品」→ 侧栏立刻出现 3 个产品，共用同一组「统一设置」的供应商 / 客户 / 工序。
 </blockquote>
-<h4>2.2 样品标记</h4>
+<h4>2.2 抽检数量</h4>
+<p>v3.7 起，抽检数量为<b>产品级统一值</b>，所有分组共用。可在产品信息面板直接编辑，或点 [−] [+] 微调。</p>
+<h4>2.3 样品标记</h4>
 <p>勾选后该产品参与「特殊分组」负责人联动判定（当特殊分组设置「仅样品触发」时生效）。</p>
 `,
   },
@@ -1863,26 +1915,16 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
 </ul>
 <h4>3.2 一键标准分组</h4>
 <p>点「📋 标准分组」→ 一键添加 分组A / 分组B / 分组C 三组。</p>
-<h4>3.3 ★ 从预分组一键建组（重点）</h4>
+<h4>3.3 ★ 从预分组一键建组</h4>
 <p>添加分组栏右侧「📦 预分组 ▾」→ 点击下拉项 → 立即新建一个分组，组名 = 预分组名，分类 = 预分组的 items（自动去重）。</p>
-<blockquote>📘 <b>案例：从预分组一键建组</b><br>
-① 数据预设 → 预分组 → 新增「常见分类组」，items 填入：
-<pre>分类A
-分类B
-分类C
-分类D</pre>
-② 回到主面板，添加分组栏点击「📦 预分组 ▾」<br>
-③ 点「常见分类组」→ 主面板出现一个新分组，包含 4 个分类<br>
-④ 若这 4 个分类在本产品其他分组已存在，自动跳过<br>
-⑤ 按 <kbd>Ctrl</kbd>+<kbd>Z</kbd> 可整体撤回该新组
-</blockquote>
 <h4>3.4 分组内操作</h4>
 <ul>
   <li><b>折叠</b>：点击 ▾/▸ 切换，折叠时显示分类名预览</li>
   <li><b>拖拽排序</b>：长按 ⠿ 260ms 后拖动</li>
   <li><b>键盘排序</b>：聚焦 ⠿ 按 Enter 进入，↑↓ 移动，Esc 退出</li>
   <li><b>批量改量</b>：批量删除/改量 → 勾选 → 改量（× 系数 / = 定值）</li>
-  <li><b>分类转移</b>：点 ↔ 转移到其他分组</li>
+  <li><b>分类转移</b>：点 ↔ 弹出选择弹窗，选择目标分组</li>
+  <li><b>预分类下拉</b>：从共享 + 本产品的预分类快速加入</li>
 </ul>
 `,
   },
@@ -1919,54 +1961,22 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
 <h4>4.3 共享预分类生效范围</h4>
 <p>每项共享预分类可设置：<code>null</code>（全部产品）/ <code>[]</code>（不生效）/ <code>[ids]</code>（部分产品）。</p>
 <h4>4.4 语音输入</h4>
-<p><b>环境要求</b>：HTTPS 或 localhost（HTTP 下浏览器不授权麦克风），且浏览器支持 <code>SpeechRecognition</code> API（Chrome / Edge 桌面版支持，部分内置浏览器不支持）。不满足条件时语音面板自动隐藏。</p>
-<ol>
-  <li>点「🎤 开始语音」→ 首次会请求麦克风权限</li>
-  <li>对着麦克风说话，实时文本区显示识别结果（灰色斜体为临时结果）</li>
-  <li>点「停止语音」→ 点「填入识别文本」或「生成候选列表」</li>
-</ol>
-<blockquote>📘 <b>案例：语音录入分类A</b><br>
-① 点「开始语音」，说「分类A 分类B 分类C」<br>
-② 点「停止语音」<br>
-③ 点「生成候选列表」→ 候选表出现 3 项<br>
-④ 点「应用选中的 3 项」→ 落入「识别新增」组
-</blockquote>
+<p><b>环境要求</b>：HTTPS 或 localhost，且浏览器支持 <code>SpeechRecognition</code> API。不满足条件时语音面板自动隐藏。</p>
 <h4>4.5 图片识别（OCR）</h4>
 <p>调用 OCR.space 的 HTTPS 接口（无需后端）。API Key 存 sessionStorage，关闭标签页即清除。</p>
-<ol>
-  <li>在「OCR API Key」输入框填入 Key（可留空使用 demo key，次数受限）</li>
-  <li>点「从相册选择图片」→ 可多选（建议 ≤ 2MB/张）</li>
-  <li>点「开始识别」→ 进度条走完，识别文本自动追加到下方文本区</li>
-</ol>
-<blockquote>📘 <b>案例：微信截图 OCR</b><br>
-① 从相册选择 2 张截图 → 缩略图墙显示<br>
-② 点「开始识别」→ 状态显示「完成：成功 2 张」<br>
-③ 文本区自动填入识别内容
-</blockquote>
 <h4>4.6 识别文本与候选列表</h4>
-<p>文本来源：语音 / OCR / 手动粘贴。三种拆分方式：</p>
-<ul>
-  <li><b>智能拆分</b>：换行 + 中文标点（，、；）+ 双空格；单空格保留</li>
-  <li><b>仅空格和逗号</b>：按逗号 / 顿号 / 分号 / 双空格切分</li>
-  <li><b>按行拆分</b>：每行一个分类，不做标点切分</li>
-</ul>
-<ol>
-  <li>确认文本区内容 → 选拆分方式</li>
-  <li>点「生成候选列表」→ 每项显示匹配状态</li>
-  <li>勾选 / 取消勾选 → 点「应用选中的 N 项」或「全部应用」</li>
-</ol>
+<p>文本来源：语音 / OCR / 手动粘贴。三种拆分方式：智能 / 仅空格和逗号 / 按行拆分。</p>
 <h4>4.7 完整案例：从截图到分组</h4>
 <blockquote>📘 <b>端到端流程</b><br>
 ① 微信收到不良品照片，保存到相册<br>
 ② 打开本应用 → 选中「产品1」<br>
 ③ 识别工具区 → 「从相册选择图片」→ 选 2 张<br>
 ④ 点「开始识别」→ 文本区自动填入「分类A 分类B 分类C」<br>
-⑤ 点「生成候选列表」→ 3 项全部未命中（因为产品1 还没有这些分类）<br>
+⑤ 点「生成候选列表」→ 3 项全部未命中<br>
 ⑥ 目标分组选「分组A」→ 点「应用选中的 3 项」<br>
 ⑦ 分组A 出现 3 个分类，数量均为 1<br>
 ⑧ 按 <kbd>Ctrl</kbd>+<kbd>Z</kbd> 可整体撤回
 </blockquote>
-<p><b>来源防护</b>：候选生成后如果切换产品，候选表上方会出现「⚠️ 候选生成于其他产品，请重新生成」提示，点应用会被拒绝，避免误落到错误产品。</p>
 `,
   },
   {
@@ -1980,23 +1990,6 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
   <li><b>合并描述</b>（默认）：同分组名聚合，分类合并累加</li>
   <li><b>逐料号拆分</b>：每个产品独立一行</li>
 </ul>
-<blockquote>📘 <b>案例：三产品合并输出</b><br>
-选中 3 个产品，供应商=供应商A，客户=客户A：
-<pre>产品1：来料1000，抽检20
-产品2：来料2000，抽检32
-产品3：来料500，抽检13</pre>
-合并描述输出：
-<pre>客户：客户A
-供应商来料：供应商A
-料号及来料批量：
-产品1，来料1000PCS
-产品2，来料2000PCS
-产品3，来料500PCS
-问题描述：
-各抽检20PCS,
-分组A：分类A10PCS，不良率50%
-分组B：分类B5PCS，不良率25%</pre>
-</blockquote>
 <h4>5.3 本产品汇总（独立区块）</h4>
 <p>多产品汇总下方有「本产品汇总」，只显示当前产品。支持前段 / 后段附加。</p>
 `,
@@ -2007,7 +2000,7 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
     content: `
 <h4>6.1 三个关键参数</h4>
 <ul>
-  <li>上班时间 / 下班时间（支持跨天：如 22:00 ~ 次日 06:00）</li>
+  <li>上班时间 / 下班时间（支持跨天）</li>
   <li>休息时间段（最多 10 段，自动合并重叠）</li>
   <li>加班基准：18:00 之后计为加班</li>
 </ul>
@@ -2023,8 +2016,6 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
 上班 22:00 / 下班 06:00（次日）/ 无休息<br>
 输出：总 8h，休息 0h，实际 8h，加班 0h
 </blockquote>
-<h4>6.2 复制按钮</h4>
-<p>底部三个按钮分别复制：时间段 / 加班段 / 加班时长。</p>
 `,
   },
   {
@@ -2041,14 +2032,6 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
   <li><code>.json</code>：标准格式，推荐</li>
   <li><code>.js</code>：支持 <code>export default {...}</code> / <code>const data = {...}</code> / <code>window.data = {...}</code></li>
 </ul>
-<blockquote>📘 <b>案例：备份 + 恢复</b><br>
-① 设置 → 备份与恢复 → 「💾 导出数据」<br>
-② 保持三模块全勾选 → 点「导出选中内容」<br>
-③ 下载 <code>抽检数量统计_部分数据_日期.json</code> 保存到网盘<br>
-④ 换设备后 → 「📥 导入数据」→ 选文件<br>
-⑤ 弹窗显示摘要「N 产品 · M 客户 · K 供应商 · J 特殊分组」<br>
-⑥ 保持「合并」模式 → 点「确认导入」→ Toast 提示「导入完成」
-</blockquote>
 <h4>7.3 覆盖模式</h4>
 <p>选择「覆盖」模式时会二次确认，且自动清理负责人 ID 悬空引用。</p>
 `,
@@ -2061,6 +2044,8 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
 <table style="width:100%;border-collapse:collapse">
   <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>撤回上一步操作</td></tr>
   <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td><td>恢复（重做）</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>[</kbd></td><td>折叠全部分组</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>]</kbd></td><td>展开全部分组</td></tr>
   <tr><td><kbd>Esc</kbd></td><td>关闭当前弹窗</td></tr>
 </table>
 <h4>8.2 分组内快捷键</h4>
@@ -2069,12 +2054,6 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
   <li>排序中 <kbd>↑</kbd>/<kbd>↓</kbd> → 上/下移</li>
   <li>排序中 <kbd>Esc</kbd> → 退出排序</li>
 </ul>
-<blockquote>📘 <b>案例：撤回误删</b><br>
-① 误删了「分组A」 → 立刻按 <kbd>Ctrl</kbd>+<kbd>Z</kbd><br>
-② Toast 显示「已撤回：删除分组「分组A」」<br>
-③ 分组恢复原位<br>
-④ 注意：撤回栈有容量上限（50 步 / 4MB），超限自动丢弃最早记录
-</blockquote>
 `,
   },
   {
@@ -2082,40 +2061,25 @@ export const MANUAL_SECTIONS: { id: string; title: string; content: string }[] =
     title: '第九章 · 常见问题',
     content: `
 <h4>Q1 · 撤回按钮灰着？</h4>
-<p>说明历史栈为空。<b>修改前</b>需要先保存，或者该操作本身不推历史栈（如：查看类操作）。</p>
+<p>说明历史栈为空。</p>
 <h4>Q2 · 抽检数不随来料变化？</h4>
-<p>检查该分组的「总数量」是否显示 <code>· 已手改</code>。若是，说明用户手动改过，系统不再自动同步。点击分组头 ↻ 重置该组可恢复联动。</p>
+<p>v3.7 起修改来料数量会强制重置抽检数量为 AQL；手动改过抽检数量后不会再随来料变化，除非再次修改来料数量。</p>
 <h4>Q3 · 特殊分组没带出负责人？</h4>
-<p>四种可能原因：<br>
-① 客户没绑定负责人<br>
-② 特殊分组的分类名与产品实际分类名不匹配<br>
-③ 特殊分组勾选了"仅样品触发"，但当前产品未标记为样品<br>
-④ 该负责人被用户在标签中手动 ✕ 移除（进入否决集合）</p>
+<p>四种可能：① 客户没绑定负责人；② 分类名不匹配；③ 特殊分组勾选了"仅样品触发"但产品非样品；④ 负责人被手动移除（否决集合）。</p>
 <h4>Q4 · 数据存哪？会丢吗？</h4>
-<p>存在浏览器 <code>localStorage</code>。以下情况会丢：<br>
-· 清理浏览器缓存 / 数据<br>
-· 使用隐私模式<br>
-· 换设备 / 换浏览器<br>
-· 手动「恢复出厂设置」<br>
-<b>强烈建议定期导出备份。</b></p>
+<p>存在浏览器 <code>localStorage</code>。换设备 / 清缓存会丢，<b>建议定期导出备份。</b></p>
 <h4>Q5 · 主题切换卡顿？</h4>
-<p>设置 → 显示 → 体验等级切到「兼容」关闭所有动画，或「动画强度」设为「关闭」。</p>
+<p>设置 → 显示 → 体验等级切到「兼容」关闭所有动画。</p>
 <h4>Q6 · 什么时候显示"全检"？</h4>
-<p>当产品「各分组总数量之和 = 来料数量」时，系统自动判定为全检。例如来料 100，三个分组总量分别是 30 / 40 / 30，合计 100 → 显示"全检"。</p>
+<p>当「各分组总数量之和 = 来料数量」时。</p>
 <h4>Q7 · 分享按钮怎么用？</h4>
-<p>点「📤 分享」→ 选择方式：<br>
-· 系统分享（推荐，可直接选目标 App）<br>
-· 微信 / 钉钉 / 飞书 / QQ（复制后跳转 App，需手动粘贴）<br>
-· 邮件（直接调起邮件客户端）<br>
-· 仅复制到剪贴板</p>
+<p>点「📤 分享」→ 选择方式：系统分享 / 微信 / 钉钉 / 飞书 / QQ / 邮件 / 仅复制。</p>
 <h4>Q8 · 预分组下拉从哪来？</h4>
-<p>数据预设 → 预分组 Tab。新增预分组后，添加分组栏会出现「📦 预分组 ▾」菜单项。</p>
+<p>数据预设 → 预分组 Tab。新增预分组后，添加分组栏会出现「📦 预分组 ▾」。</p>
 <h4>Q9 · 为什么有些分类在别的分组灰着？</h4>
-<p>同一产品内分类名唯一。若某分类已在其他分组存在，添加时会被拒绝，避免不良率重复统计。</p>
+<p>同一产品内分类名唯一。</p>
 <h4>Q10 · 语音 / OCR 面板不显示？</h4>
-<p>两种情况：<br>
-① 浏览器不支持（语音依赖 <code>SpeechRecognition</code>，需要 HTTPS 或 localhost）<br>
-② 设置 → 显示中关闭了「显示识别工具」开关</p>
+<p>① 浏览器不支持（语音需 HTTPS + SpeechRecognition）；② 设置 → 显示关闭了「显示识别工具」。</p>
 `,
   },
 ];
@@ -2312,7 +2276,7 @@ function findOrCreateAutoGroup(): Group | null {
   if (!p) return null;
   let g = p.groups.find((x) => x.name === AUTO_GROUP_NAME);
   if (!g) {
-    g = { id: uid(), name: AUTO_GROUP_NAME, total: 0, totalIsAuto: false, items: [] };
+    g = { id: uid(), name: AUTO_GROUP_NAME, total: p.inspectionQty || 0, totalIsAuto: false, items: [] };
     p.groups.push(g);
   }
   return g;
