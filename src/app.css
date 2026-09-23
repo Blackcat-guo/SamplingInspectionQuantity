@@ -63,7 +63,6 @@ button:active:not(:disabled){transform:scale(.97)}
 button:disabled{opacity:.5;cursor:not-allowed}
 input,select,textarea{font-family:inherit;font-size:16px;min-width:0}
 
-/* 聚焦增强 */
 :focus-visible{outline:2.5px solid var(--c-primary);outline-offset:2px;border-radius:8px;
   box-shadow:0 0 0 4px rgba(99,102,241,.18);
   transition:outline-offset .15s ease,box-shadow .15s ease}
@@ -182,14 +181,12 @@ h1{font-size:19px;margin:0 0 6px}
 .info-field label.sample-toggle span{flex-shrink:0;font-weight:600}
 .info-field label.sample-toggle small{flex:1;min-width:0;text-align:right;font-size:11.5px;font-weight:500;color:var(--c-text-3)}
 
-/* 抽样显示 */
 .sampling-display{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;
   background:var(--c-surface);border:1.5px solid var(--c-info-border);border-radius:10px;
   font-size:13px;color:var(--c-info);font-weight:600}
 .sampling-display .val{font-size:20px;font-weight:800}
 .sampling-display .sub{font-size:11px;color:var(--c-text-3);margin-top:2px;font-weight:400}
 
-/* 抽检数量卡片 */
 .sampling-control{display:inline-flex;align-items:center;gap:4px;padding:3px;background:var(--c-surface);
   border:1.5px solid var(--c-info-border);border-radius:10px}
 .sampling-step-btn{width:32px;height:32px;display:grid;place-items:center;border:none;border-radius:8px;
@@ -356,7 +353,6 @@ html[data-theme="dark"] .template-preview .ph-empty{background:#7f1d1d;color:#fe
 .group-summary .rate-val{color:#e11d48}
 .empty{padding:30px 0;text-align:center;font-size:13.5px;color:var(--c-text-3)}
 
-/* 批量栏 */
 .batch-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 11px;margin-bottom:8px;
   background:var(--c-primary-soft);border:1.5px solid var(--c-primary-border);border-radius:10px;
   font-size:12px;color:var(--c-primary-dark)}
@@ -431,7 +427,6 @@ html[data-theme="dark"] .template-preview .ph-empty{background:#7f1d1d;color:#fe
 .display-toggle span{font-weight:600;color:var(--c-text-2);flex:1}
 .display-toggle small{font-size:11px;color:var(--c-text-3)}
 
-/* Tab 行 */
 .dp-tabs-outer{display:flex;align-items:center;gap:4px;margin-bottom:16px;
   border-bottom:1.5px solid var(--c-border);padding-bottom:1px;overflow:visible;position:relative}
 .dp-tabs-scroll{flex:1;min-width:0;display:flex;gap:4px;overflow-x:auto;
@@ -507,7 +502,6 @@ html[data-theme="dark"] .template-preview .ph-empty{background:#7f1d1d;color:#fe
 .dialog-box .info-field input{width:100%;padding:10px 12px;font-size:14px;border:1.5px solid var(--c-border);
   border-radius:9px;background:var(--c-surface);color:var(--c-text);outline:none}
 
-/* 关联面板 */
 .resp-panel{background:var(--c-purple-soft);border-radius:8px;padding:12px 14px;margin:-2px 0 6px;font-size:12.5px}
 .resp-panel .panel-title{font-weight:700;color:var(--c-purple-text);margin-bottom:6px}
 .resp-panel label{display:flex;align-items:center;gap:8px;padding:5px 4px;cursor:pointer;border-radius:5px}
@@ -520,7 +514,6 @@ html[data-theme="dark"] .template-preview .ph-empty{background:#7f1d1d;color:#fe
   accent-color:var(--c-purple-text);margin:0;flex-shrink:0}
 .resp-panel .responsible-item span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-/* 负责人标签 */
 .resp-tag{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--c-primary-soft);
   border:1px solid var(--c-primary-border);border-radius:12px;font-size:12px;color:var(--c-primary-dark);font-weight:600}
 .resp-tag-x{background:none;border:none;color:inherit;cursor:pointer;padding:0;font-size:11px;line-height:1;opacity:.7}
@@ -655,7 +648,8 @@ button.share-option{width:100%;text-align:left;font-family:inherit}
    预分类下拉（N4）
    ============================================================ */
 .preset-picker-overlay{position:fixed;inset:0;z-index:var(--z-dropdown);background:transparent}
-.preset-picker-menu{position:fixed;min-width:200px;max-width:280px;max-height:320px;overflow-y:auto;
+.preset-picker-menu{position:fixed;min-width:200px;max-width:280px;overflow-y:auto;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
   padding:6px;background:var(--c-surface);border:1.5px solid var(--c-primary-border);
   border-radius:12px;box-shadow:var(--sh-lg);animation:blockEnter .22s var(--ease) both}
 .preset-picker-group-title{padding:6px 10px 4px;font-size:11px;font-weight:700;color:var(--c-text-3)}
@@ -674,13 +668,54 @@ button.share-option{width:100%;text-align:left;font-family:inherit}
    预分组下拉（fixed 定位）
    ============================================================ */
 .preset-menu-overlay{position:fixed;inset:0;z-index:var(--z-dropdown);background:transparent}
-.preset-menu-fixed{position:fixed;min-width:220px;max-width:280px;max-height:320px;overflow-y:auto;
+.preset-menu-fixed{position:fixed;min-width:220px;max-width:280px;overflow-y:auto;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
   padding:6px;background:var(--c-surface);border:1.5px solid var(--c-primary-border);border-radius:12px;
   box-shadow:var(--sh-lg);animation:blockEnter .22s var(--ease) both}
 .preset-menu-fixed button{display:block;width:100%;text-align:left;padding:8px 10px;border:none;
   background:transparent;border-radius:6px;font-size:13px;color:var(--c-text-2);cursor:pointer;
   font-family:inherit;transition:background .15s}
 .preset-menu-fixed button:hover{background:var(--c-primary-soft);color:var(--c-primary-dark)}
+
+/* ============================================================
+   combobox 下拉（v3.7.4 · fixed 定位）
+   ============================================================ */
+.combo-wrap{position:relative}
+.dialog-box .combo-wrap::after{
+  content:'▾';position:absolute;right:10px;top:50%;transform:translateY(-50%);
+  font-size:10px;color:var(--c-text-4);pointer-events:none;
+}
+.dialog-box .combo-wrap input{padding-right:30px}
+
+.combo-dropdown-fixed{
+  position:fixed;
+  z-index:var(--z-dropdown);
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  padding:4px;
+  background:var(--c-surface);
+  border:1.5px solid var(--c-primary-border);
+  border-radius:10px;
+  box-shadow:var(--sh-lg);
+  transform-origin:top center;
+  animation:dropdownEnter .18s cubic-bezier(.4,0,.2,1) both;
+}
+@keyframes dropdownEnter{
+  from{opacity:0;transform:scaleY(.9) translateY(-4px)}
+  to{opacity:1;transform:none}
+}
+.compat-mode .combo-dropdown-fixed{animation:none}
+
+.combo-hint{font-size:10.5px;color:var(--c-text-4);padding:5px 9px 3px;font-weight:700;letter-spacing:.02em}
+.combo-item{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:10px 10px;border-radius:7px;font-size:13.5px;color:var(--c-text-2);
+  cursor:pointer;transition:background .12s ease,color .12s ease;
+  -webkit-tap-highlight-color:transparent;user-select:none}
+.combo-item:hover,.combo-item.active{background:var(--c-primary-soft);color:var(--c-primary-dark)}
+.combo-item .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.combo-item .tick{color:var(--c-primary-dark);font-weight:800;font-size:13px;flex-shrink:0}
+.combo-empty{padding:14px 12px;font-size:12px;color:var(--c-text-disabled);text-align:center;font-style:italic}
 
 /* ============================================================
    识别工具（语音 + OCR）
@@ -724,35 +759,6 @@ button.share-option{width:100%;text-align:left;font-family:inherit}
 .recognize-voice-interim{color:var(--c-text-3);font-style:italic}
 
 /* ============================================================
-   combobox 下拉（v3.7.2）
-   ============================================================ */
-.combo-wrap{position:relative}
-.dialog-box .combo-wrap::after{
-  content:'▾';position:absolute;right:10px;top:50%;transform:translateY(-50%);
-  font-size:10px;color:var(--c-text-4);pointer-events:none;
-}
-.dialog-box .combo-wrap input{padding-right:30px}
-.combo-dropdown{
-  position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:60;
-  max-height:min(70vh, 520px);
-  overflow-y:auto;
-  -webkit-overflow-scrolling:touch;
-  overscroll-behavior:contain;
-  background:var(--c-surface);border:1.5px solid var(--c-primary-border);
-  border-radius:10px;box-shadow:var(--sh-md);padding:4px;
-  animation:blockEnter .2s var(--ease) both;
-}
-.combo-hint{font-size:10.5px;color:var(--c-text-4);padding:5px 9px 3px;font-weight:700;letter-spacing:.02em}
-.combo-item{display:flex;align-items:center;justify-content:space-between;gap:8px;
-  padding:10px 10px;border-radius:7px;font-size:13.5px;color:var(--c-text-2);
-  cursor:pointer;transition:background .12s ease,color .12s ease;
-  -webkit-tap-highlight-color:transparent;user-select:none}
-.combo-item:hover,.combo-item.active{background:var(--c-primary-soft);color:var(--c-primary-dark)}
-.combo-item .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.combo-item .tick{color:var(--c-primary-dark);font-weight:800;font-size:13px;flex-shrink:0}
-.combo-empty{padding:14px 12px;font-size:12px;color:var(--c-text-disabled);text-align:center;font-style:italic}
-
-/* ============================================================
    草稿保存提示（F4）
    ============================================================ */
 .save-hint{position:fixed;top:12px;right:12px;z-index:var(--z-main-actions);
@@ -773,26 +779,10 @@ html[data-theme="dark"] select:focus{
 }
 
 /* ============================================================
-   全局美化（v3.7.3 · 6 项）
+   全局美化
    ============================================================ */
-
-/* B-2 按钮三级 hover 微动效 */
 button:not(:disabled):hover{transform:translateY(-1px)}
 button:not(:disabled):active{transform:translateY(0) scale(.97)}
-
-/* B-3 Toast 升级 */
-.toast{border-radius:14px;
-  box-shadow:0 16px 40px -12px rgba(15,23,42,.7),0 2px 8px -2px rgba(15,23,42,.4);
-  backdrop-filter:blur(8px)}
-
-/* B-4 弹窗入场 */
-.dialog-box{animation:dlgEnter .28s var(--ease) both}
-@keyframes dlgEnter{from{opacity:0;transform:scale(.94) translateY(-8px)}to{opacity:1;transform:none}}
-
-/* B-6 主题过渡 */
-html{transition:background-color .35s ease,color .35s ease}
-.sidebar,.app,.box,.dialog-box,.toast{
-  transition:background-color .3s ease,border-color .3s ease,color .3s ease}
 
 /* ============================================================
    兼容 / 动画
@@ -801,7 +791,7 @@ html{transition:background-color .35s ease,color .35s ease}
   animation:none!important;transition:none!important}
 .compat-mode .preset-picker-menu,
 .compat-mode .preset-menu-fixed,
-.compat-mode .combo-dropdown{animation:none}
+.compat-mode .combo-dropdown-fixed{animation:none}
 .compat-mode .recognize-progress-inner{transition:none}
 .compat-mode .toast{animation:none}
 .compat-mode .save-hint{transition:none}
