@@ -13,6 +13,23 @@
   #boot-fallback .bf-icon{font-size:40px;line-height:1}
   #boot-fallback h3{margin:0;font-size:16px;color:#dc2626}
   #boot-fallback p{margin:0;font-size:13px;line-height:1.6;color:#475569}
+  /* ★ v3.8.0 E：深色模式首屏防白闪 */
+  @media (prefers-color-scheme: dark) {
+    html, body {
+      background: #0f172a;
+    }
+  }
+  @media (prefers-color-scheme: dark) {
+    #boot-fallback {
+      background: #0f172a;
+      color: #94a3b8;
+    }
+    #boot-fallback h1,
+    #boot-fallback h2,
+    #boot-fallback h3 {
+      color: #f87171;
+    }
+  }
 </style>
 </head>
 <body>
